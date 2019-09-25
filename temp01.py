@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-DEBUG = False
+DEBUG = True
 ALPHA = 0.01
 
 ## Rock/Paper/Scissors
