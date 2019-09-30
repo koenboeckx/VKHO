@@ -27,5 +27,20 @@ class BaseAgent:
         """
         pass
 
-    def init_agent(self, id, game_type):
-        self.id = id
+    def init_agent(self, id_, game_type):
+        self.id = id_
+    
+    def repr(self):
+        return self.type + self.id
+
+class TestAgent(BaseAgent):
+    n_agent = 0
+    def __init__(self):
+        super(TestAgent, self).__init__()
+        self.init_agent()
+    
+    def init_agent(self):
+        self.type = 'x'
+        self.id = TestAgent.n_agent
+        TestAgent.n_agent += 1
+

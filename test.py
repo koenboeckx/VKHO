@@ -1,11 +1,9 @@
-#TODO: imports don't work in terminal 
-
 import game
 from game import agents
 
 agent_list = [
-    agents.TestAgent(),
-    agents.TestAgent()
+    agents.BaseAgent(),
+    agents.BaseAgent()
 ]
 
 env =  game.make(0, agent_list)
