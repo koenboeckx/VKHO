@@ -2,7 +2,7 @@
 Contains all types of agents available
 """
 
-class BaseAgent
+class BaseAgent:
     """
     This is the base abstraction for agents. 
     All agents should inherit from this class
@@ -14,7 +14,7 @@ class BaseAgent
     def __getattr__(self, attr):
         return getattr(self, attr)
     
-    def act(self, obs, action_space):
+    def get_action(self, obs, action_space):
         """Return action to be executed by environment"""
         raise NotImplementedError()
 

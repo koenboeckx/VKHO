@@ -1,5 +1,6 @@
 """
 Initial attempt to implement EGT for symmetric games with 2 players.
+Uses general replicator dynamics.
 Visualition only enabled for 2-action games
 """
 

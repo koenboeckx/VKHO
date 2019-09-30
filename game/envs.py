@@ -20,9 +20,22 @@ class Environment:
         """
         pass
 
-    def act(self, obs, actions):
+    def act(self, observations):
+        """Return the chosen action for eac agent,
+        based on the global observation.
+        :params:
+            observations: tuple oof individual observations
+        :returns:
+            list of actions, one for each agent in agent_list
+        """
+        actions = []
+        for obs, agent in zip(observations, self.agents):
+            actions.append(agent.get_action(obs))
+        return actions
+
+    def step(self, obs, actions):
         """Perform actions, part of joint action space.
         Deconflict simultanuous execution of actions (...)
         """
         for agent, action in zip(self.agents, actions):
-            agent.act(action)
+            pass # change environemnt state based on agent action
