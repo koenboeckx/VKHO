@@ -9,5 +9,6 @@ agent_list = [
 ]
 
 env =  game.make(0, agent_list)
+env.set_init_game_state()
 
 env.render()

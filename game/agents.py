@@ -30,8 +30,8 @@ class BaseAgent:
     def init_agent(self, id_, game_type):
         self.id = id_
     
-    def repr(self):
-        return self.type + self.id
+    def __repr__(self):
+        return self.type + str(self.id)
 
 class TestAgent(BaseAgent):
     n_agent = 0
