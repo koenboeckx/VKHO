@@ -12,3 +12,8 @@ env =  game.make(0, agent_list)
 obs = env.set_init_game_state()
 
 env.render()
+
+actions = (1, 0, 0, 0)
+env.step(actions)
+
+#env.render()

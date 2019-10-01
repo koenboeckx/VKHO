@@ -6,14 +6,14 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-actions = { 0: 'do_nothing',
-            1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
-            2: 'aim2',  # prepare to fire on second enemy (1 or 3)',
-            3: 'fire',
-            4: 'move_up',
-            5: 'move_down',
-            6: 'move_left',
-            7: 'move_right'
+all_actions = { 0: 'do_nothing',
+                1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
+                2: 'aim2',  # prepare to fire on second enemy (1 or 3)',
+                3: 'fire',
+                4: 'move_up',
+                5: 'move_down',
+                6: 'move_left',
+                7: 'move_right'
 }
 
 import random   # random assignement of agent's initial positions
@@ -158,39 +158,39 @@ class Environment:
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
                 continue
-            if action == 0 or action == actions[0]: # do_nothing
+            if action == 0 or action == all_actions[0]: # do_nothing
                 pass
-            elif action == 1 or action == actions[1]: # aim1
+            elif action == 1 or action == all_actions[1]: # aim1
                 if agent.idx in [0, 1]:
                     agent.aim = 2
                 elif agent.idx in [2, 3]:
                     agent.aim = 0
-            elif action == 2 or action == actions[2]: # aim2
+            elif action == 2 or action == all_actions[2]: # aim2
                 if agent.idx in [0, 1]:
                     agent.aim = 3
                 elif agent.idx in [2, 3]:
                     agent.aim = 1
-            elif action == 3 or action == actions[3]: # fire
+            elif action == 3 or action == all_actions[3]: # fire
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
                 agent.ammo -= 1
                 agent.aim = None
-            elif action == 4 or action == actions[4]: # move_up
+            elif action == 4 or action == all_actions[4]: # move_up
                 self.board[agent.pos] = None
-                agent.pos[0] -= 1
+                agent.pos = (agent.pos[0]-1, agent.pos[1])
                 self.board[agent.pos] = agent
-            elif action == 5 or action == actions[5]: # move_down
+            elif action == 5 or action == all_actions[5]: # move_down
                 self.board[agent.pos] = None
-                agent.pos[0] += 1
+                agent.pos = (agent.pos[0]+1, agent.pos[1])
                 self.board[agent.pos] = agent
-            elif action == 6 or action == actions[6]: # move_left
+            elif action == 6 or action == all_actions[6]: # move_left
                 self.board[agent.pos] = None
-                agent.pos[1] -= 1
+                agent.pos = (agent.pos[0], agent.pos[1]-1)
                 self.board[agent.pos] = agent
-            elif action == 7 or action == actions[7]: # move_right
+            elif action == 7 or action == all_actions[7]: # move_right
                 self.board[agent.pos] = None
-                agent.pos[1] += 1
+                agent.pos = (agent.pos[0], agent.pos[1]+1)
                 self.board[agent.pos] = agent
                 
 
