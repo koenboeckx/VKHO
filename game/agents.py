@@ -27,19 +27,38 @@ class BaseAgent:
         """
         pass
 
-    def init_agent(self, id_, game_type):
-        self.id = id_
+#    def init_agent(self, id_, game_type):
+#        self.id = id_
     
     def __repr__(self):
-        return self.type + str(self.id)
+        return self.type + str(self.idx)
 
 class TestAgent(BaseAgent):
-    n_agent = 0
-    def __init__(self, id_):
+    def __init__(self, idx):
         super(TestAgent, self).__init__()
-        self.init_agent(id_)
+        self.init_agent(idx)
     
-    def init_agent(self, id_):
+    def init_agent(self, idx):
         self.type = 'x'
-        self.id = id_
+        self.idx  = idx
+
+        # specific parameters
+        self.alive = 1
+        self.ammo = 5
+        self.pos = None # initialized by environment    
+
+class Tank(BaseAgent):
+    def __init__(self, idx):
+        super(Tank, self).__init__()
+        self.init_agent(idx)
+    
+    def init_agent(self, idx):
+        self.type = 'x'
+        self.idx  = idx
+
+        # specific parameters
+        self.alive = 1
+        self.ammo = 5
+        self.pos = None     # initialized by environment
+        self.aim = None     # set by aim action  
 
