@@ -186,7 +186,7 @@ class Environment:
         #board_copy = copy.deepcopy(self.board) # use copy of board to deconflict
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
-                print('action {} not allowed for agent {}'.format(all_actions[action], agent.idx))
+                print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
                 continue
             if action == 0 or action == all_actions[0]: # do_nothing
                 pass
@@ -204,6 +204,9 @@ class Environment:
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
+                    print('Agent {} was just killed by {}'.format(
+                        str(opponent), str(agent)
+                    ))
                 agent.ammo -= 1
                 agent.aim = None
             elif action == 4 or action == all_actions[4]: # move_up

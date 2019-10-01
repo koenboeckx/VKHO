@@ -13,7 +13,8 @@ obs = env.set_init_game_state()
 
 env.render()
 
-for i in range(2):
+for i in range(1000):
     actions = env.act(obs)
+    print(actions)
     obs = env.step(actions)
     env.render()
