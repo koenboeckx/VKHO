@@ -11,8 +11,8 @@ class BaseAgent:
     def __init__(self):
         pass
 
-    def __getattr__(self, attr):
-        return getattr(self, attr)
+#    def __getattr__(self, attr):
+#        return getattr(self, attr)
     
     def get_action(self, obs, action_space):
         """Return action to be executed by environment"""
@@ -35,12 +35,11 @@ class BaseAgent:
 
 class TestAgent(BaseAgent):
     n_agent = 0
-    def __init__(self):
+    def __init__(self, id_):
         super(TestAgent, self).__init__()
-        self.init_agent()
+        self.init_agent(id_)
     
-    def init_agent(self):
+    def init_agent(self, id_):
         self.type = 'x'
-        self.id = TestAgent.n_agent
-        TestAgent.n_agent += 1
+        self.id = id_
 

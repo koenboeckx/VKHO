@@ -23,7 +23,7 @@ def flatten(board):
             if board[(i,j)] is None:
                 flattened_board.append(-1)
             else:
-                flattened_board.append(board[(i,j)].index) # TODO: define agent index ?
+                flattened_board.append(str(board[(i,j)])) # TODO: define agent index ?
     return flattened_board              
 
 
@@ -76,7 +76,7 @@ class Environment:
         # generate the observations for the 4 players
         # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team
         obs = []
-        for agent_idx, agent in self.agents:
+        for agent_idx, agent in enumerate(self.agents):
             if agent_idx in [0, 1]:
                 team_mate = 1-agent_idx
                 enemies = [2, 3]
@@ -85,12 +85,12 @@ class Environment:
                 enemies = [0, 1]
 
             observation = Observation(
-                'board' = flatten(self.board),
-                'position' = agent.pos,
-                'alive' = 1,
-                'ammo' = 5,
-                'team_mate' = team_mate,
-                'enemies' = enemies
+                board = flatten(self.board),
+                position = agent.pos,
+                alive = 1,
+                ammo = 5,
+                team_mate = team_mate,
+                enemies = enemies
             )
             obs.append(observation)
         return obs
@@ -98,11 +98,11 @@ class Environment:
 
     def render(self):
         """Represent the state of the environment"""
-        board_repr = ''
+        board_repr = ' '
         for i in range(self.board_size):
             for j in range(self.board_size):
                 if self.board[(i,j)] == None:
-                   board_repr += ' ' * 4
+                   board_repr += ' .  '
                 else:
                     board_repr += ' ' + repr(self.board[(i,j)]) + ' '
             board_repr += '\n'
