@@ -150,13 +150,6 @@ class Environment:
         return actions
 
     def check_conditions(self, agent, action):
-        """
-        Check if action can be executed by agent
-        """
-        #TODO: implement
-        return True
-
-    def check_conditions(self, agent, action):
         """Checks whether 'agent' is allowed to execute 'action'"""
         if action == 0 or action == all_actions[0]: # do_nothing
             return True                 # this action is always allowed

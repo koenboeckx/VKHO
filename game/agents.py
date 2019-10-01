@@ -2,6 +2,8 @@
 Contains all types of agents available
 """
 
+import random   # for RandomTank()
+
 class BaseAgent:
     """
     This is the base abstraction for agents. 
@@ -63,3 +65,9 @@ class Tank(BaseAgent):
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action  
 
+class RandomTank(Tank):
+    def __init__(self, idx):
+        super(RandomTank, self).__init__(idx)
+    
+    def get_action(self, obs):
+        return random.randint(0, 7)
