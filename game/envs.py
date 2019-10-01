@@ -82,13 +82,19 @@ class Environment:
            for j in range(self.board_size):
                self.board[(i,j)] = None
         
-        # Position players randomly on the board
-        for agent in self.agents:
-            i, j = random.randint(0, self.board_size-1), random.randint(0, self.board_size-1)
-            while self.board[(i,j)] is not None:
-                i, j = random.randint(0, self.board_size-1), random.randint(0, self.board_size-1)
-            agent.pos = (i, j)
-            self.board[(i,j)] = agent
+        # Position agents randomly on the board
+        #for agent in self.agents:
+        #    i, j = random.randint(0, self.board_size-1), random.randint(0, self.board_size-1)
+        #    while self.board[(i,j)] is not None:
+        #        i, j = random.randint(0, self.board_size-1), random.randint(0, self.board_size-1)
+        #    agent.pos = (i, j)
+        #    self.board[(i,j)] = agent
+
+        # Alternative: position agents on fixed initial positions
+        positions = [(4, 0), (6, 0), (4, 10), (6, 10)]
+        for agent, pos in zip(self.agents, positions):
+            agent.pos = pos
+            self.board[pos] = agent
         
         # generate the observations for the 4 players
         # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team
@@ -119,13 +125,13 @@ class Environment:
 
     def render(self):
         """Represent the state of the environment"""
-        board_repr = ' '
+        board_repr = ''
         for i in range(self.board_size):
             for j in range(self.board_size):
                 if self.board[(i,j)] == None:
-                   board_repr += ' .  '
+                   board_repr += '  .  '
                 else:
-                    board_repr += ' ' + repr(self.board[(i,j)]) + ' '
+                    board_repr += ' ' + repr(self.board[(i,j)]) + '  '
             board_repr += '\n'
         
         print(board_repr)
@@ -150,6 +156,36 @@ class Environment:
         #TODO: implement
         return True
 
+    def check_conditions(self, agent, action):
+        """Checks whether 'agent' is allowed to execute 'action'"""
+        if action == 0 or action == all_actions[0]: # do_nothing
+            return True                 # this action is always allowed
+        elif action == 1 or action == all_actions[1]: # aim1
+            return agent.alive == 1     # only allowed if agent is alive
+        elif action == 2 or action == all_actions[2]: # aim1
+            return agent.alive == 1     # only allowed if agent is alive
+        elif action == 3 or action == all_actions[3]: # fire
+            if agent.alive == 1 and agent.aim is not None and agent.ammo > 0:
+                return True
+        elif action == 4 or action == all_actions[4]: # move_up
+            if agent.alive == 1 and agent.pos[0] > 0: # stay on the board
+                if self.board[(agent.pos[0]-1, agent.pos[1])] is None: # TODO: check case above
+                    return True
+        elif action == 5 or action == all_actions[5]: # move_down
+            if agent.alive == 1 and agent.pos[0] < self.board_size-1: # stay on the board
+                if self.board[(agent.pos[0]+1, agent.pos[1])] is None: # TODO: check case below
+                    return True
+        elif action == 6 or action == all_actions[6]: # move_left
+            if agent.alive == 1 and agent.pos[1] > 0: # stay on the board
+                if self.board[(agent.pos[0], agent.pos[1]-1)] is None: # TODO: check case left
+                    return True
+        elif action == 7 or action == all_actions[7]: # move_right
+            if agent.alive == 1 and agent.pos[1] < self.board_size-1: # stay on the board
+                if self.board[(agent.pos[0], agent.pos[1]+1)] is None: # TODO: check case right
+                    return True
+        return False # default
+
+
     def step(self, actions):
         """Perform actions, part of joint action space.
         Deconflict simultanuous execution of actions (...)
@@ -157,6 +193,7 @@ class Environment:
         #board_copy = copy.deepcopy(self.board) # use copy of board to deconflict
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
+                print('action {} not allowed for agent {}'.format(all_actions[action], agent.idx))
                 continue
             if action == 0 or action == all_actions[0]: # do_nothing
                 pass
@@ -192,5 +229,11 @@ class Environment:
                 self.board[agent.pos] = None
                 agent.pos = (agent.pos[0], agent.pos[1]+1)
                 self.board[agent.pos] = agent
-                
+        
+        # generate the observations for the 4 players
+        obs = []
+        for agent in self.agents:
+            observation = self._generate_obs(agent)
+            obs.append(observation)
+        return obs
 

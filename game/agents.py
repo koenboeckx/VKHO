@@ -53,7 +53,7 @@ class Tank(BaseAgent):
         self.init_agent(idx)
     
     def init_agent(self, idx):
-        self.type = 'x'
+        self.type = 'T'
         self.idx  = idx
 
         # specific parameters
