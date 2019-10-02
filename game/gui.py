@@ -1,15 +1,19 @@
 """methods to visualize what's happening in the game"""
 
 import pygame
+from game.envs import all_actions # to display actions
+
+DEBUG = True
 
 STEP = 50 # number of pixels per case
 
 # define the RGB value for white, 
 #  green, blue colour . 
-white = (255, 255, 255) 
-green = (0, 255, 0) 
-blue = (0, 0, 128)
-black = (0, 0, 0)
+WHITE = (255, 255, 255) 
+GREEN = (0, 255, 0) 
+BLUE  = (0, 0, 128)
+BLACK = (0, 0, 0)
+RED   = (255, 0, 0)
 
 def visualize(env):
     """Takes a game environment as argument and visualizes 
@@ -23,7 +27,7 @@ def visualize(env):
 
     # create a custom event for adding a new enemy
     STEPEVENT = pygame.USEREVENT + 1
-    pygame.time.set_timer(STEPEVENT, 2000) # fire STEPEVENT event every 2000 ms
+    pygame.time.set_timer(STEPEVENT, 100) # fire STEPEVENT event every 2000 ms
     
     # create the initial game state and initialze objects
     obs = env.set_init_game_state()
@@ -39,6 +43,22 @@ def visualize(env):
                 running = False
             elif event.type == STEPEVENT:
                 actions = env.act(obs)
+                if DEBUG:
+                    print('------------------------') 
+                    parse_actions(actions)
+                
+                # draw lines between agents when aiming
+                for agent, action in zip(env.agents, actions):
+                    if action == 1:
+                        if agent.idx in [0, 1]:
+                            opponent = env.agents[2]
+                        else:
+                            opponent = env.agents[0]
+                        start = [x*STEP for x in agent.pos]
+                        stop  = [x*STEP for x in opponent.pos]
+                        pygame.draw.line(screen, WHITE, start, stop)
+                        pygame.display.flip()
+
                 obs = env.step(actions)
                 for idx, tank in enumerate(tanks):
                     pos = obs[idx].position
@@ -51,6 +71,9 @@ def visualize(env):
         # update the display
         pygame.display.update()
 
+def parse_actions(actions):
+    for idx, action in enumerate(actions):
+        print('Agent {} does {}'.format(idx, all_actions[action]))
 
 class Tank(pygame.sprite.Sprite):
     def __init__(self, idx, init_pos):
@@ -58,14 +81,14 @@ class Tank(pygame.sprite.Sprite):
         self.idx = idx
         #self.surf = pygame.Surface((STEP, STEP))
 
-        font = pygame.font.Font('freesansbold.ttf', 32) 
+        font = pygame.font.Font('freesansbold.ttf', 28) 
         #self.surf = font.render('T'+str(idx), True, blue, blue)
 
 
         if idx in [0, 1]:
-            self.surf = font.render('T'+str(idx), True, white, green)
+            self.surf = font.render('T'+str(idx), True, WHITE, RED)
         else:
-            self.surf = font.render('T'+str(idx), True, white, blue)
+            self.surf = font.render('T'+str(idx), True, WHITE, BLUE)
         self.rect = self.surf.get_rect(
             center=(init_pos[0]*STEP, init_pos[1]*STEP)
         )
