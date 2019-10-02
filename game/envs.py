@@ -151,13 +151,14 @@ class Environment:
 
     def check_conditions(self, agent, action):
         """Checks whether 'agent' is allowed to execute 'action'"""
+
         if action == 0 or action == all_actions[0]: # do_nothing
             return True                 # this action is always allowed
         elif action == 1 or action == all_actions[1]: # aim1
             return agent.alive == 1     # only allowed if agent is alive
         elif action == 2 or action == all_actions[2]: # aim1
             return agent.alive == 1     # only allowed if agent is alive
-        elif action == 3 or action == all_actions[3]: # fire
+        elif action == 3 or action == all_actions[3]: # fire TODO: check if line-of-sight is free
             if agent.alive == 1 and agent.aim is not None and agent.ammo > 0:
                 return True
         elif action == 4 or action == all_actions[4]: # move_up

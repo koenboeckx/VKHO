@@ -6,6 +6,7 @@ from game.envs import all_actions # to display actions
 DEBUG = True
 
 STEP = 50 # number of pixels per case
+PERIOD = 75 # screen update frequency
 
 # define the RGB value for white, 
 #  green, blue colour . 
@@ -14,10 +15,21 @@ GREEN = (0, 255, 0)
 BLUE  = (0, 0, 128)
 BLACK = (0, 0, 0)
 RED   = (255, 0, 0)
+GRAY  = (128, 128, 128)
 
 def visualize(env):
     """Takes a game environment as argument and visualizes 
     the different steps of the game on the screen"""
+
+    def show_aiming(agent, action):
+        if action == 1:
+            opponent = env.agents[2] if agent.idx in [0, 1] else env.agents[0]
+        elif action == 2:
+            opponent = env.agents[3] if agent.idx in [0, 1] else env.agents[1]
+        start = [x*STEP for x in agent.pos]
+        stop  = [x*STEP for x in opponent.pos]
+        pygame.draw.line(screen, WHITE, start, stop)
+        pygame.display.flip()
 
     SCREEN_HEIGHT = STEP * env.board_size
     SCREEN_WIDTH  = STEP * env.board_size
@@ -27,7 +39,7 @@ def visualize(env):
 
     # create a custom event for adding a new enemy
     STEPEVENT = pygame.USEREVENT + 1
-    pygame.time.set_timer(STEPEVENT, 100) # fire STEPEVENT event every 2000 ms
+    pygame.time.set_timer(STEPEVENT, PERIOD) # fire STEPEVENT event every PERIOD
     
     # create the initial game state and initialze objects
     obs = env.set_init_game_state()
@@ -49,15 +61,11 @@ def visualize(env):
                 
                 # draw lines between agents when aiming
                 for agent, action in zip(env.agents, actions):
-                    if action == 1:
-                        if agent.idx in [0, 1]:
-                            opponent = env.agents[2]
-                        else:
-                            opponent = env.agents[0]
-                        start = [x*STEP for x in agent.pos]
-                        stop  = [x*STEP for x in opponent.pos]
-                        pygame.draw.line(screen, WHITE, start, stop)
-                        pygame.display.flip()
+                    if agent.alive == 0:
+                        tanks[agent.idx].set_dead()
+                    if action in [1, 2]:
+                        show_aiming(agent, action)
+
 
                 obs = env.step(actions)
                 for idx, tank in enumerate(tanks):
@@ -81,18 +89,24 @@ class Tank(pygame.sprite.Sprite):
         self.idx = idx
         #self.surf = pygame.Surface((STEP, STEP))
 
-        font = pygame.font.Font('freesansbold.ttf', 28) 
+        self.font = pygame.font.Font('freesansbold.ttf', 28)
         #self.surf = font.render('T'+str(idx), True, blue, blue)
 
 
-        if idx in [0, 1]:
-            self.surf = font.render('T'+str(idx), True, WHITE, RED)
+        if self.idx in [0, 1]:
+            self.surf = self.font.render('T'+str(self.idx), True, WHITE, RED)
         else:
-            self.surf = font.render('T'+str(idx), True, WHITE, BLUE)
+            self.surf = self.font.render('T'+str(self.idx), True, WHITE, BLUE)
         self.rect = self.surf.get_rect(
             center=(init_pos[0]*STEP, init_pos[1]*STEP)
         )
     
     def update(self, pos):
         self.rect.x, self.rect.y= pos[0]*STEP, pos[1]*STEP
+    
+    def set_dead(self):
+        if self.idx in [0, 1]:
+            self.surf = self.font.render('T'+str(self.idx), True, GRAY, RED)
+        else:
+            self.surf = self.font.render('T'+str(self.idx), True, GRAY, BLUE)
 
