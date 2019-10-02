@@ -1,5 +1,6 @@
 import game
 from game import agents
+from game.gui import visualize
 
 agent_list = [
     agents.RandomTank(0), # Team 1
@@ -9,12 +10,4 @@ agent_list = [
 ]
 
 env =  game.make(0, agent_list)
-obs = env.set_init_game_state()
-
-env.render()
-
-for i in range(1000):
-    actions = env.act(obs)
-    print(actions)
-    obs = env.step(actions)
-    env.render()
+visualize(env)
