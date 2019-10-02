@@ -23,7 +23,7 @@ def visualize(env):
     tanks = []
     for idx in range(4):
         init_pos = obs[idx].position
-        tanks.append(Tank(init_pos))
+        tanks.append(Tank(idx, init_pos))
 
     running = True
     while running:
@@ -46,14 +46,18 @@ def visualize(env):
 
 
 class Tank(pygame.sprite.Sprite):
-    def __init__(self, init_pos):
+    def __init__(self, idx, init_pos):
         super(Tank, self).__init__()
-        self.surf = pygame.Surface((20, 10))
-        self.surf.fill((255, 0, 255))
+        self.idx = idx
+        self.surf = pygame.Surface((STEP, STEP))
+        if idx in [0, 1]:
+            self.surf.fill((255, 0, 255))
+        else:
+            self.surf.fill((0, 255, 255))
         self.rect = self.surf.get_rect(
             center=(init_pos[0]*STEP, init_pos[1]*STEP)
         )
     
     def update(self, pos):
-        self.rect.move((pos[0]*STEP, pos[1]*STEP))
+        self.rect.x, self.rect.y= pos[0]*STEP, pos[1]*STEP
 
