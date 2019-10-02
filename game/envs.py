@@ -60,6 +60,7 @@ class Environment:
         self.agents = []
         self.args = kwargs
         self.state = None
+        self.action_space = all_actions.copy()
 
         self.set_init_game_state()
     
@@ -233,4 +234,20 @@ class Environment:
             observation = self._generate_obs(agent)
             obs.append(observation)
         return obs
+    
+    def terminal(self):
+        """Check if game is over, i.e. when both players of same team are death.
+        Conventional:   if team 1 wins, returns  1
+                        if team 2 wins, returns -1
+                        otherwise, return 0.
+        No ties."""
+        # if both players of team 1 are death, return -1
+        if all(agent.alive == 0 for agent in self.agents[:2]):
+            return -1
+        # if both players of team 2 are death, return 1
+        if all(agent.alive == 0 for agent in self.agents[:2]):
+            return 1
+        else:
+            return 0
+        
 
