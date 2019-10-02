@@ -4,6 +4,13 @@ import pygame
 
 STEP = 50 # number of pixels per case
 
+# define the RGB value for white, 
+#  green, blue colour . 
+white = (255, 255, 255) 
+green = (0, 255, 0) 
+blue = (0, 0, 128)
+black = (0, 0, 0)
+
 def visualize(env):
     """Takes a game environment as argument and visualizes 
     the different steps of the game on the screen"""
@@ -42,18 +49,23 @@ def visualize(env):
             screen.blit(tank.surf, tank.rect)
         
         # update the display
-        pygame.display.flip()
+        pygame.display.update()
 
 
 class Tank(pygame.sprite.Sprite):
     def __init__(self, idx, init_pos):
         super(Tank, self).__init__()
         self.idx = idx
-        self.surf = pygame.Surface((STEP, STEP))
+        #self.surf = pygame.Surface((STEP, STEP))
+
+        font = pygame.font.Font('freesansbold.ttf', 32) 
+        #self.surf = font.render('T'+str(idx), True, blue, blue)
+
+
         if idx in [0, 1]:
-            self.surf.fill((255, 0, 255))
+            self.surf = font.render('T'+str(idx), True, white, green)
         else:
-            self.surf.fill((0, 255, 255))
+            self.surf = font.render('T'+str(idx), True, white, blue)
         self.rect = self.surf.get_rect(
             center=(init_pos[0]*STEP, init_pos[1]*STEP)
         )
