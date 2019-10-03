@@ -11,6 +11,7 @@
         (7) move_right
     * (maybe) provide unlimited ammo
     * no fuel attribute
+    * actions are executed simutaneously (a0, a1, a2, a3)
     * implement visulisation tool based on PyGame
 2. Implement MCTS to develop non-trivial strategies for both players
     * centralised control with shared observations
@@ -23,4 +24,9 @@
     * more evolved state / observations (e.g. partial observability?)
 
 99. Other ideas:
-    * ...
+    * MCTS: reduce the game to turn-based game:
+        * first execute team1's actions: (a0, a1, 0, 0)
+        * evaluate game to see if team 1 won
+        * then execute team2's actions:  (0, 0, a2, a3)
+        * evaluate game to see if team 2 won
+    -> otherwise, joint action space become too large (8**4 = 4096)

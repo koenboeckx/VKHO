@@ -35,8 +35,27 @@ def flatten(board):
             if board[(i,j)] is None:
                 flattened_board.append(-1)
             else:
-                flattened_board.append(str(board[(i,j)])) # TODO: define agent index ?
-    return flattened_board 
+                flattened_board.append(str(board[(i,j)]))
+    return flattened_board
+
+def unflatten(flat_board, agents):
+    """ 'Unflatten' the 'flat_board' list to create 'board' dictionary.
+    Conventionally, suffix of agent in list represent idx of agent in agent list.
+    :params:    flat_board: list of length 121 with -1 for empty case
+                agents:     list of (4) agent instances
+    :returns:   board:      board dictionary
+    """
+    board = {}
+    n = int(math.sqrt(len(flat_board))) # size of board
+    for i in range(n):
+        for j in range(n):
+            item = flat_board[n*i+j]
+            if item == -1:
+                board[(i, j)] = None
+            else:
+                idx = int(item[-1])
+                board[(i, j)] = agents[idx]
+    return board
 
 def distance(agent1, agent2):
     x1, y1 = agent1.pos
@@ -52,6 +71,15 @@ Observation = namedtuple('Observation', [
     'ammo',         # current ammo level
     'team_mate',    # which agent is teammate - 1 Int in [0,3]
     'enemies'       # which agents are this agent's enemies - 2 Ints in [0, 3]
+])
+
+# State: complete state information
+State = namedtuple('State', [
+    'board',        # flattened board - 121 Ints
+    'positions',    # tuple of position tuples for all 4 agents
+    'alive',        # tuple of alive flags for all 4 agents
+    'ammo',         # tuple of ammo level for all 4 agents
+    'aim',          # tuple of aiming for all 4 agents 
 ])
 
 class Environment:
@@ -124,15 +152,17 @@ class Environment:
         return observation
 
 
-    def render(self):
+    def render(self, board=None):
         """Represent the state of the environment"""
+        if board is None:
+            board =self.board
         board_repr = ''
         for i in range(self.board_size):
             for j in range(self.board_size):
                 if self.board[(i,j)] == None:
                    board_repr += '  .  '
                 else:
-                    board_repr += ' ' + repr(self.board[(i,j)]) + '  '
+                    board_repr += ' ' + repr(board[(i,j)]) + '  '
             board_repr += '\n'
         
         print(board_repr)
@@ -249,5 +279,25 @@ class Environment:
             return 1
         else:
             return 0
+    
+    def get_state(self):
+        """Returns complete state information"""
+        state = State(
+            board = flatten(self.board),
+            positions = list(agent.pos for agent in self.agents),
+            alive = list(agent.alive for agent in self.agents),
+            ammo = list(agent.ammo for agent in self.agents),
+            aim = list(agent.aim for agent in self.agents),
+        )
+        return state
+    
+    def set_state(self, state):
+        """Explicitely set the state of the environment (and agents)"""
+        self.board = unflatten(state.board, self.agents)
+        for idx, agent in enumerate(self.agents):
+            agent.pos = state.positions[idx]
+            agent.alive = state.alive[idx]
+            agent.ammo = state.ammo[idx]
+            agent.aim = state.aim[idx]
         
 

@@ -1,27 +1,28 @@
+"""
+Implementation with only one player, who in turn steers team1 and then
+team 2. Turns game with simultaneous actions into turn-based game.
+"""
+
 from mcts.mcts import CommandedTank, MCTSPlayer
 import game
 
 ## Dilemma: agent needs player, env needs agents, player needs reference to env
 
-player1 = MCTSPlayer()
-player2 = MCTSPlayer()
+player = MCTSPlayer()
 agent_list = [
-    CommandedTank(0, commander=player1),
-    CommandedTank(1, commander=player1),
-    CommandedTank(2, commander=player2),
-    CommandedTank(3, commander=player2),
+    CommandedTank(0, commander=player),
+    CommandedTank(1, commander=player),
+    CommandedTank(2, commander=player),
+    CommandedTank(3, commander=player),
 ]
 
 env = game.make(0, agent_list)
 
-# add this environment to both players
-for player in [player1, player2]:
-    player.set_environment(env)
-    player.init_stores()
+# add this environment to player
+player.set_environment(env)
+player.init_stores()
 
-print(len(player1.action_space))
-
-
+print(len(player.action_space))
 
 obs = env.set_init_game_state()
 

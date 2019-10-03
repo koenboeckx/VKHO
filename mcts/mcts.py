@@ -47,7 +47,8 @@ class MCTSPlayer:
         return (4, 4)
     
     def init_stores(self):
-        self.n_visits = {}
+        self.N = {} # store number of visits
+        self.V = {} # 
 
 
 
