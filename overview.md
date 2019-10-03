@@ -30,3 +30,5 @@
         * then execute team2's actions:  (0, 0, a2, a3)
         * evaluate game to see if team 2 won
     -> otherwise, joint action space become too large (8**4 = 4096)
+    * MCTS: based on FULL state information (thus not only individual observations)
+    

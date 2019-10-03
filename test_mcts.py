@@ -30,12 +30,10 @@ obs = env.set_init_game_state()
                         # this doesn't have to be used.
                         # use players to generate actions
 
-for i in range(10):
-    obs1, obs2 = obs[:2], obs[2:] # split the global observation per team
-    actions1 = player1.get_actions(obs1)
-    actions2 = player2.get_actions(obs2)
-    actions = actions1 + actions2
-    obs = env.step(actions)
+for i in range(1):
+    state = env.get_state()
+    actions1 = player.get_actions(state)
+    obs = env.step(actions1)
     result = env.terminal() # check if game is over. If yes => reward palyers
     if result == 1:
         pass

@@ -82,6 +82,20 @@ State = namedtuple('State', [
     'aim',          # tuple of aiming for all 4 agents 
 ])
 
+def string_to_state(str_state):
+    """To use a state as key to a dict, it must be
+    hashable. The easiest way to do this is to convert
+    it to a string:
+        str_state = str(state)
+    This functions reverses that operation. This is only
+    possible because of the highly structured form of
+    this string.
+    :params:    str_state: a string created from a state
+    :returns:   state: an instance of State
+    """
+    board_string = str_state[13:503]
+    # pass: put this on hold until deemed necessary
+
 class Environment:
     """The base game environment."""
     def __init__(self, **kwargs):
@@ -264,6 +278,18 @@ class Environment:
             observation = self._generate_obs(agent)
             obs.append(observation)
         return obs
+    
+    def sim_step(self, state, current_team, actions_):
+        """Simulate performing 'actions' on env in state 'state'.
+        Only for one team (thus turn-based game). current_team (0 or 1)
+        is the team making the move. Use with MCTS."""
+        if current_team == 0:
+            actions = actions_ + (0, 0)
+        else:
+            actions = (0, 0) + actions_
+        self.set_state(state)
+        _ = self.step(actions)
+        return self.get_state()
     
     def terminal(self):
         """Check if game is over, i.e. when both players of same team are death.

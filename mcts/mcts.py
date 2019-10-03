@@ -3,6 +3,8 @@ Attempt to solve - or find non-trivial tactics - for the game
 For now: only symmetric game with 2 Tanks per Player (=Commander)
 """
 
+import time
+import copy
 from itertools import product   # create joint action spaces
 
 import game
@@ -12,6 +14,10 @@ def obs_to_int(obs):
     """convert an observation to a unique integer. Here, an observation
     if the combined observation of the two agents on one team"""
     return hash(str(obs))
+
+def state_to_int(state):
+    """convert a state namedtuple to a unique integer."""
+    return hash(str(state))
 
 class CommandedTank(Tank):
     """Tank that gets actions from a commander"""
@@ -29,26 +35,61 @@ class MCTSPlayer:
     and provide best action for both tanks when requested."""
     def __init__(self):
         self.agents = []
+        self.max_search_time = 1 # max search time in seconds => proxy for search depth
 
     def add_agent(self, agent):
         self.agents.append(agent)
     
     def set_environment(self, env):
-        self.env = env
+        self.env = copy.deepcopy(env) # environment used for simulation
         self.action_space = list(product(env.action_space.keys(),
                                          env.action_space.keys()))
     
-    def get_actions(self, obs):
-        obs_int = obs_to_int(obs)
-        if obs_int in self.n_visits:
-            self.n_visits[obs_int] += 1
+    def get_actions(self, team, state):
+        """Run MCTS from state. After max time expires, return action with 
+        highest/lowest q-value depending on team"""
+        # run x iterations of MCTS starting from 'state'
+        start_time = time.time()
+        while time.time() - start_time < self.max_search_time:
+            self.one_iteration(team, state)
+        
+        # now select the best action
+        state_int = state_to_int(state)
+        if team == 0:
+            _, best_action = max([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
         else:
-            self.n_visits[obs_int] = 1
-        return (4, 4)
+            _, best_action = min([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
+        return best_action
+
+    def one_iteration(self, start_node):
+        current_state = start_node
+        while not self.is_leaf(current_state):
+            # construct list of successor states
+            successors = [self.env.sim_step(state, team, actions))
+                          for actions in self.action_space]
+            # compute UCB ans select best action
+    
+    def is_leaf(self, state):
+        return state_to_int(state) not in self.expanded    
+        
+
+
+
+
     
     def init_stores(self):
-        self.N = {} # store number of visits
-        self.V = {} # 
+        self.current_team = 0
+        self.n_visits = {} # store number of visits
+        self.value = {} # store the estimated value of a state
+                        # all values are estimated from the point
+                        # of view of team 1 (thus > 0 => team 1,
+                        #                    and  < 0 => team 2)
+        self.q_value = {}   # stores (state, action) pairs and their
+                            # estimated values
+        self.link = {}  # makes the link between hashed state and real state
+        self.expanded = [] # list of expanded nodes
+    
+    
 
 
 
