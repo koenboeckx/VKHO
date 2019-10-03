@@ -5,6 +5,7 @@ For now: only symmetric game with 2 Tanks per Player (=Commander)
 
 import time
 import copy
+import numpy as np # infinity
 from itertools import product   # create joint action spaces
 
 import game
@@ -61,22 +62,35 @@ class MCTSPlayer:
             _, best_action = min([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
         return best_action
 
-    def one_iteration(self, start_node):
+    def one_iteration(self, team, start_node):
         current_state = start_node
         while not self.is_leaf(current_state):
             # construct list of successor states
             successors = [self.env.sim_step(state, team, actions))
                           for actions in self.action_space]
             # compute UCB ans select best action
+            best = max if team == 0 else min
+            _, best_action = best([(self.ucb(state, action), action)
+                                for action in self.action_space])
+            current_state = env.sim(current_state, best_action)
+        
+        # from here: next_state is a leaf state
+        state_int = state_to_int(current_state)
+        self.expanded.append(state_int)
+
     
     def is_leaf(self, state):
-        return state_to_int(state) not in self.expanded    
-        
+        return state_to_int(state) not in self.expanded 
 
+    def ucb(self, state, action):
+        state_int = state_to_int(state)
+        if state_int not in self.n_visits:
+            return float(np.infty)
+        else:
+            ni = self.n_visits[state_int]
+            N  = sum([])
+            return self.value[state_int] +  2*math.sqrt(math.log(N)/ni)
 
-
-
-    
     def init_stores(self):
         self.current_team = 0
         self.n_visits = {} # store number of visits
