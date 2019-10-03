@@ -39,7 +39,15 @@ class MCTSPlayer:
                                          env.action_space.keys()))
     
     def get_actions(self, obs):
+        obs_int = obs_to_int(obs)
+        if obs_int in self.n_visits:
+            self.n_visits[obs_int] += 1
+        else:
+            self.n_visits[obs_int] = 1
         return (4, 4)
+    
+    def init_stores(self):
+        self.n_visits = {}
 
 
 

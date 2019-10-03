@@ -17,8 +17,11 @@ env = game.make(0, agent_list)
 # add this environment to both players
 for player in [player1, player2]:
     player.set_environment(env)
+    player.init_stores()
 
 print(len(player1.action_space))
+
+
 
 obs = env.set_init_game_state()
 
@@ -32,4 +35,7 @@ for i in range(10):
     actions2 = player2.get_actions(obs2)
     actions = actions1 + actions2
     obs = env.step(actions)
+    result = env.terminal() # check if game is over. If yes => reward palyers
+    if result == 1:
+        pass
     env.render()
