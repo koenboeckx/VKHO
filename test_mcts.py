@@ -30,6 +30,11 @@ obs = env.set_init_game_state()
                         # this doesn't have to be used.
                         # use players to generate actions
 
+state = env.get_state()
+ucb = player.ucb(state, (0, 0))
+print(ucb)
+
+"""
 for i in range(1):
     state = env.get_state()
     actions1 = player.get_actions(state)
@@ -38,3 +43,4 @@ for i in range(1):
     if result == 1:
         pass
     env.render()
+"""
