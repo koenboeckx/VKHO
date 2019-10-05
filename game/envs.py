@@ -23,7 +23,7 @@ from collections import namedtuple
 
 from . import agents
 
-DEBUG = False # set to True for verbose output
+DEBUG = True # set to True for verbose output
 
 # helper function
 def flatten(board):

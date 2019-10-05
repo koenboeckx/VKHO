@@ -131,8 +131,8 @@ class MCTSPlayer:
         while self.env.terminal_state(state) == 0: # no team has both players dead
             team = 0 if team == 1 else 1 # switch teams after each round
             # generate random action
-            action = (random.randint(0, self.env.n_actions),
-                      random.randint(0, self.env.n_actions))
+            action = (random.randint(0, self.env.n_actions-1),
+                      random.randint(0, self.env.n_actions-1))
             state = self.env.sim_step(state, team, action)
             if DEBUG:
                 self.env.render(state.board)
