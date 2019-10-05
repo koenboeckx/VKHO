@@ -13,6 +13,8 @@ from itertools import product   # create joint action spaces
 import game
 from game.agents import Tank
 
+DEBUG = False # set to True for verbose output
+
 def obs_to_int(obs):
     """convert an observation to a unique integer. Here, an observation
     if the combined observation of the two agents on one team"""
@@ -60,7 +62,7 @@ class MCTSPlayer:
         # run x iterations of MCTS starting from 'state'
         start_time = time.time()
         #while time.time() - start_time < self.max_search_time:
-        for i in range(1): # remove this line later
+        for i in range(2): # remove this line later
             self.one_iteration(team, state)
         
         # now select the best action
@@ -87,18 +89,22 @@ class MCTSPlayer:
 
         if self.n_visits[state_int] == 0: # first visit to this node => perform rollout and backprop
             reward = self.rollout(current_state, team)
+            self.n_visits[state_int] += 1
+            self.value[state_int] += reward
+
         # from here: next_state is a leaf state
         self.expanded.append(state_int)
 
     def rollout(self, state, team):
         while self.env.terminal_state(state) == 0: # no team has both players dead
-            team = 0 if team == 1 else 1 # switch teams
+            team = 0 if team == 1 else 1 # switch teams after each round
             # generate random action
             action = (random.randint(0, 7), random.randint(0, 7)) # TODO: remove hardcoded 7 
             state = self.env.sim_step(state, team, action)
-            self.env.render(state.board)
-            print('alive = ', state.alive)
-            print('ammo  = ', state.ammo)
+            if DEBUG:
+                self.env.render(state.board)
+                print('alive = ', state.alive)
+                print('ammo  = ', state.ammo)
         return self.env.terminal_state(state)
     
     def is_leaf(self, state):
@@ -125,6 +131,7 @@ class MCTSPlayer:
                             # estimated values
         self.link = {}  # makes the link between hashed state and real state
         self.expanded = [] # list of expanded nodes
+        self.children = {} # dict of state -> [(action, child_state)]
     
     
 
