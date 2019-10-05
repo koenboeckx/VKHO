@@ -31,4 +31,4 @@
         * evaluate game to see if team 2 won
     -> otherwise, joint action space become too large (8**4 = 4096)
     * MCTS: based on FULL state information (thus not only individual observations)
-    
+    * MCTS flow graph created with https://www.lucidchart.com

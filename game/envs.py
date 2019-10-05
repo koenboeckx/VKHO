@@ -23,6 +23,8 @@ from collections import namedtuple
 
 from . import agents
 
+DEBUG = False # set to True for verbose output
+
 # helper function
 def flatten(board):
     """Flatten the 'board' dictionary
@@ -167,17 +169,36 @@ class Environment:
 
 
     def render(self, board=None):
-        """Represent the state of the environment"""
+        """Represent the state of the environment. If board is None, use the current
+        game state"""
         if board is None:
             board =self.board
         board_repr = ''
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[(i,j)] == None:
-                   board_repr += '  .  '
-                else:
-                    board_repr += ' ' + repr(board[(i,j)]) + '  '
-            board_repr += '\n'
+        if type(board) == dict:
+            for i in range(self.board_size):
+                for j in range(self.board_size):
+                    if board[(i,j)] == None:
+                        board_repr += '  .  '
+                    else:
+                        board_repr += ' ' + repr(board[(i,j)]) + '  '
+                board_repr += '\n'
+        elif type(board) == list:
+            for i in range(self.board_size):
+                for j in range(self.board_size):
+                    if board[i*self.board_size+j] == -1:
+                        board_repr += '  .  '
+                    else:
+                        board_repr += ' ' + repr(board[i*self.board_size+j]) + '  '
+                board_repr += '\n'
+        elif type(board) == str:
+            board = board[1:-1].split(',')
+            for i in range(self.board_size):
+                for j in range(self.board_size):
+                    if board[self.board_size*i+j] == ' -1':
+                        board_repr += '  .  '
+                    else:
+                        board_repr += [self.board_size*i+j]
+                board_repr += '\n'    
         
         print(board_repr)
 
@@ -232,7 +253,8 @@ class Environment:
         #board_copy = copy.deepcopy(self.board) # use copy of board to deconflict
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
-                print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
+                if DEBUG:
+                    print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
                 continue
             if action == 0 or action == all_actions[0]: # do_nothing
                 pass
@@ -302,6 +324,16 @@ class Environment:
             return -1
         # if both players of team 2 are death, return 1
         if all(agent.alive == 0 for agent in self.agents[:2]):
+            return 1
+        else:
+            return 0
+    
+    def terminal_state(self, state):
+        """Check if state is terminal state, by checking alive-status of agents.
+        TODO: make similar to .terminal(self) (or vice versa)"""
+        if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
+            return -1
+        elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead
             return 1
         else:
             return 0

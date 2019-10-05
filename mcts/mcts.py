@@ -6,6 +6,7 @@ For now: only symmetric game with 2 Tanks per Player (=Commander)
 import time
 import copy
 import math # .sqrt, .log to compute UCB
+import random # for generating random moves during rollout
 import numpy as np # infinity
 from itertools import product   # create joint action spaces
 
@@ -50,13 +51,19 @@ class MCTSPlayer:
     def get_actions(self, team, state):
         """Run MCTS from state. After max time expires, return action with 
         highest/lowest q-value depending on team"""
+        state_int = state_to_int(state)
+        # if state not in self.n_visits, add it
+        if state_int not in self.n_visits:
+            self.n_visits[state_int] = 0
+            self.value[state_int] = 0
+        
         # run x iterations of MCTS starting from 'state'
         start_time = time.time()
-        while time.time() - start_time < self.max_search_time:
+        #while time.time() - start_time < self.max_search_time:
+        for i in range(1): # remove this line later
             self.one_iteration(team, state)
         
         # now select the best action
-        state_int = state_to_int(state)
         if team == 0:
             _, best_action = max([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
         else:
@@ -67,18 +74,32 @@ class MCTSPlayer:
         current_state = start_node
         while not self.is_leaf(current_state):
             # construct list of successor states
-            successors = [self.env.sim_step(current_state, team, actions)
+            child_nodes = [self.env.sim_step(current_state, team, actions)
                           for actions in self.action_space]
-            # compute UCB ans select best action
+
+            # compute UCB and select best action
             best = max if team == 0 else min
             _, best_action = best([(self.ucb(current_state, action), action)
                                 for action in self.action_space])
             current_state = self.env.sim(current_state, best_action)
         
-        # from here: next_state is a leaf state
         state_int = state_to_int(current_state)
+
+        if self.n_visits[state_int] == 0: # first visit to this node => perform rollout and backprop
+            reward = self.rollout(current_state, team)
+        # from here: next_state is a leaf state
         self.expanded.append(state_int)
 
+    def rollout(self, state, team):
+        while self.env.terminal_state(state) == 0: # no team has both players dead
+            team = 0 if team == 1 else 1 # switch teams
+            # generate random action
+            action = (random.randint(0, 7), random.randint(0, 7)) # TODO: remove hardcoded 7 
+            state = self.env.sim_step(state, team, action)
+            self.env.render(state.board)
+            print('alive = ', state.alive)
+            print('ammo  = ', state.ammo)
+        return self.env.terminal_state(state)
     
     def is_leaf(self, state):
         return state_to_int(state) not in self.expanded 

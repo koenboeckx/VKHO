@@ -31,8 +31,7 @@ obs = env.set_init_game_state()
                         # use players to generate actions
 
 state = env.get_state()
-ucb = player.ucb(state, (0, 0))
-print(ucb)
+player.get_actions(0, state)
 
 """
 for i in range(1):
