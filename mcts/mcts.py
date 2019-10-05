@@ -20,9 +20,10 @@ def obs_to_int(obs):
     if the combined observation of the two agents on one team"""
     return hash(str(obs))
 
-def state_to_int(state):
-    """convert a state namedtuple to a unique integer."""
-    return hash(str(state))
+def state_to_int(state, team):
+    """convert a state namedtuple to a unique integer.
+    Added: include team that is to play from this state"""
+    return hash(str(state)+str(team))
 
 class CommandedTank(Tank):
     """Tank that gets actions from a commander"""
@@ -53,7 +54,7 @@ class MCTSPlayer:
     def get_actions(self, team, state):
         """Run MCTS from state. After max time expires, return action with 
         highest/lowest q-value depending on team"""
-        state_int = state_to_int(state)
+        state_int = state_to_int(state, team)
         # if state not in self.n_visits, add it
         if state_int not in self.n_visits:
             self.n_visits[state_int] = 0
@@ -80,20 +81,20 @@ class MCTSPlayer:
         
         # compute UCB and select best action
         best = max if team == 0 else min
-        _, best_action, next_state = best(list(zip(self.ucb(child_nodes), self.action_space, child_nodes)))
+        _, best_action, next_state = best(list(zip(self.ucb(child_nodes, team), self.action_space, child_nodes)))
         return best_action, next_state
 
     def one_iteration(self, team, start_node):
         current_state = start_node
         visited_nodes = [current_state] # keep track of nodes visited along the way to perform backprop
-        while not self.is_leaf(current_state):
+        while not self.is_leaf(current_state, team):
             best_action, current_state = self.pick_best_action(current_state, team)
             # current_state = self.env.sim_step(current_state, best_action) # TODO: normally not needed
             visited_nodes.append(current_state)
             # switch teams after each round
             team = 0 if team == 1 else 1 
         
-        state_int = state_to_int(current_state)
+        state_int = state_to_int(current_state, team)
 
         if self.n_visits[state_int] == 0: # first visit to this node => perform rollout and backprop
             reward = self.rollout(current_state, team)
@@ -103,7 +104,7 @@ class MCTSPlayer:
             # expand node -> no longer a leaf node
             for action in self.action_space:
                 child_state = self.env.sim_step(current_state, team, action)
-                child_state_int = state_to_int(child_state)
+                child_state_int = state_to_int(child_state, team)
                 # add this child state to visited nodes with ni = 0 and value = 0
                 self.n_visits[child_state_int] = 0
                 self.value[child_state_int] = 0
@@ -122,7 +123,7 @@ class MCTSPlayer:
         """Propagate the reward signal back trough the list of visited nodes"""
         # TODO: verify if team really has no importance here
         for node in reversed(visited_nodes):
-            node_int = state_to_int(node)
+            node_int = state_to_int(node, team)
             self.n_visits[node_int] += 1
             self.value[node_int] += reward
 
@@ -140,13 +141,17 @@ class MCTSPlayer:
                 print('ammo  = ', state.ammo)
         return self.env.terminal_state(state)
     
-    def is_leaf(self, state):
-        return state_to_int(state) not in self.expanded 
+    def is_leaf(self, state, team):
+        return state_to_int(state, team) not in self.expanded 
 
-    def ucb(self, child_nodes):
+    def ucb(self, child_nodes, team):
         """Returns a list of UCB1 values for all children in child_nodes."""
-        child_nodes_int = [state_to_int(child) for child in child_nodes]
-        N = sum([self.n_visits[child] for child in child_nodes_int])
+        other_team = 1-team
+        child_nodes_int = [state_to_int(child, other_team) for child in child_nodes]
+        try:
+            N = sum([self.n_visits[child] for child in child_nodes_int])
+        except KeyError:
+            pass
         ucb_vals = []
         for child_int in child_nodes_int:
             if self.n_visits[child_int] == 0:
