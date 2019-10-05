@@ -40,7 +40,7 @@ class MCTSPlayer:
     and provide best action for both tanks when requested."""
     def __init__(self):
         self.agents = []
-        self.max_search_time = 1 # max search time in seconds => proxy for search depth
+        self.max_search_time = 10 # max search time in seconds => proxy for search depth
 
     def add_agent(self, agent):
         self.agents.append(agent)
@@ -60,46 +60,79 @@ class MCTSPlayer:
             self.value[state_int] = 0
         
         # run x iterations of MCTS starting from 'state'
+        counter = 0 # for debugging; TODO: remove later
         start_time = time.time()
-        #while time.time() - start_time < self.max_search_time:
-        for i in range(2): # remove this line later
+        while time.time() - start_time < self.max_search_time:
+        #for i in range(2): # remove this line later
+            print('Iteration = {}'.format(counter))
             self.one_iteration(team, state)
+            counter += 1
         
-        # now select the best action
-        if team == 0:
-            _, best_action = max([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
-        else:
-            _, best_action = min([(self.q_value[(state_int, a)], a) for a in self.env.action_space])
+        # now select the best action (based on UCB value TODO: check alternatives)
+        best_action, _ = self.pick_best_action(state, team)
+        
         return best_action
+
+    def pick_best_action(self, current_state, team):
+        # construct list of successor states
+        child_nodes = [self.env.sim_step(current_state, team, actions)
+                          for actions in self.action_space]
+        
+        # compute UCB and select best action
+        best = max if team == 0 else min
+        _, best_action, next_state = best(list(zip(self.ucb(child_nodes), self.action_space, child_nodes)))
+        return best_action, next_state
 
     def one_iteration(self, team, start_node):
         current_state = start_node
+        visited_nodes = [current_state] # keep track of nodes visited along the way to perform backprop
         while not self.is_leaf(current_state):
-            # construct list of successor states
-            child_nodes = [self.env.sim_step(current_state, team, actions)
-                          for actions in self.action_space]
-
-            # compute UCB and select best action
-            best = max if team == 0 else min
-            _, best_action = best([(self.ucb(current_state, action), action)
-                                for action in self.action_space])
-            current_state = self.env.sim(current_state, best_action)
+            best_action, current_state = self.pick_best_action(current_state, team)
+            # current_state = self.env.sim_step(current_state, best_action) # TODO: normally not needed
+            visited_nodes.append(current_state)
+            # switch teams after each round
+            team = 0 if team == 1 else 1 
         
         state_int = state_to_int(current_state)
 
         if self.n_visits[state_int] == 0: # first visit to this node => perform rollout and backprop
             reward = self.rollout(current_state, team)
-            self.n_visits[state_int] += 1
-            self.value[state_int] += reward
+            self.backprop(visited_nodes, team, reward)
+            
+        else:
+            # expand node -> no longer a leaf node
+            for action in self.action_space:
+                child_state = self.env.sim_step(current_state, team, action)
+                child_state_int = state_to_int(child_state)
+                # add this child state to visited nodes with ni = 0 and value = 0
+                self.n_visits[child_state_int] = 0
+                self.value[child_state_int] = 0
+            # add current node to list of expanded nodes
+            self.expanded.append(state_int)
+            # make last expanded state the current state (why last? -> convenience)
+            current_state = child_state
+            visited_nodes.append(current_state)
 
-        # from here: next_state is a leaf state
-        self.expanded.append(state_int)
+            # perform rollout and backprop on last created node = current state
+            reward = self.rollout(current_state, team)
+            self.backprop(visited_nodes, team, reward)
+            
+
+    def backprop(self, visited_nodes, team, reward):
+        """Propagate the reward signal back trough the list of visited nodes"""
+        # TODO: verify if team really has no importance here
+        for node in reversed(visited_nodes):
+            node_int = state_to_int(node)
+            self.n_visits[node_int] += 1
+            self.value[node_int] += reward
 
     def rollout(self, state, team):
+        """Perform rollout (= random simulation), starting in 'state' until game is over."""
         while self.env.terminal_state(state) == 0: # no team has both players dead
             team = 0 if team == 1 else 1 # switch teams after each round
             # generate random action
-            action = (random.randint(0, 7), random.randint(0, 7)) # TODO: remove hardcoded 7 
+            action = (random.randint(0, self.env.n_actions),
+                      random.randint(0, self.env.n_actions))
             state = self.env.sim_step(state, team, action)
             if DEBUG:
                 self.env.render(state.board)
@@ -110,15 +143,18 @@ class MCTSPlayer:
     def is_leaf(self, state):
         return state_to_int(state) not in self.expanded 
 
-    def ucb(self, state, action):
-        state_int = state_to_int(state)
-        if state_int not in self.n_visits:
-            return float(np.infty)
-        else:
-            ni = self.n_visits[state_int]
-            N  = sum([self.q_value[(state_int, a)]
-                    for a in self.env.action_space])
-            return self.value[state_int] +  2*math.sqrt(math.log(N)/ni)
+    def ucb(self, child_nodes):
+        """Returns a list of UCB1 values for all children in child_nodes."""
+        child_nodes_int = [state_to_int(child) for child in child_nodes]
+        N = sum([self.n_visits[child] for child in child_nodes_int])
+        ucb_vals = []
+        for child_int in child_nodes_int:
+            if self.n_visits[child_int] == 0:
+                 ucb_vals.append(float(np.infty))
+            else:
+                ni = self.n_visits[child_int]
+                ucb_vals.append(self.value[child_int] +  2*math.sqrt(math.log(N)/ni))
+        return ucb_vals
 
     def init_stores(self):
         self.current_team = 0

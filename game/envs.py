@@ -97,6 +97,7 @@ def string_to_state(str_state):
     """
     board_string = str_state[13:503]
     # pass: put this on hold until deemed necessary
+    # TODO: complete this function if needed
 
 class Environment:
     """The base game environment."""
@@ -105,6 +106,7 @@ class Environment:
         self.args = kwargs
         self.state = None
         self.action_space = all_actions.copy()
+        self.n_actions = len(self.action_space)
 
         self.set_init_game_state()
     
@@ -272,9 +274,10 @@ class Environment:
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
-                    print('Agent {} was just killed by {}'.format(
-                        str(opponent), str(agent)
-                    ))
+                    if DEBUG:
+                        print('Agent {} was just killed by {}'.format(
+                            str(opponent), str(agent)
+                        ))
                 agent.ammo -= 1
                 agent.aim = None
             elif action == 4 or action == all_actions[4]: # move_up
@@ -329,8 +332,9 @@ class Environment:
             return 0
     
     def terminal_state(self, state):
-        """Check if state is terminal state, by checking alive-status of agents.
-        TODO: make similar to .terminal(self) (or vice versa)"""
+        """Check if state is terminal state, by checking alive-status of agents."""
+        # TODO: make similar to .terminal(self) (or vice versa)
+        # TODO: add tie (return 0) if all agents out of ammo
         if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
             return -1
         elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead

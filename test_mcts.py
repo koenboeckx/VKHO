@@ -34,12 +34,20 @@ state = env.get_state()
 player.get_actions(0, state)
 
 """
-for i in range(1):
+# training sequence
+state = env.get_state()
+team = 0
+for i in range(10):
+    actions = player.get_actions(team, state)
+    if team == 0:
+        actions = actions + (0, 0)
+    else:
+        actions = (0, 0) + actions
+    _ = env.step(actions)
     state = env.get_state()
-    actions1 = player.get_actions(state)
-    obs = env.step(actions1)
-    result = env.terminal() # check if game is over. If yes => reward palyers
-    if result == 1:
-        pass
+    if env.terminal() != 0: # check if game is over => reset game
+        state = env.set_init_game_state()
     env.render()
+
+    team = 0 if team == 1 else 1 # switch teams
 """
