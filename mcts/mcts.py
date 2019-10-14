@@ -37,6 +37,7 @@ class Player:
     def __init__(self, id, env):
         self.id = id # 0 or 1
         self.env = env
+        self.visited  = {}
         self.n_visits = {}
         self.q_values = {}
         self.expanded = []
@@ -44,7 +45,7 @@ class Player:
         self.action_space_n = len(self.action_space)
     
     def is_leaf(self, state):
-        return state_to_int(state) in self.expanded
+        return state_to_int(state) not in self.expanded
     
     def ucb(self, state):
         """Returns the list of UCB1 values for all actions player can
@@ -83,18 +84,24 @@ class MCTS:
     """Controls the MCTS search. Contains 2 players"""
     def __init__(self, player1, player2, **kwargs):
         self.players = (player1, player2)
-        self.max_search_time = kwargs.get('max_search_time', 10)
+        
+        # for debugging
+        player1.mcts = self
+        player2.mcts = self
+
+        self.max_search_time = kwargs.get('max_search_time', 2)
 
     def other(self, player):
         """Return the other player from self.players"""
         if player.id == 0:
             return self.players[1]
         else:
-            return self.players[2]
+            return self.players[0]
     
     def get_action(self, player, state):
         state_int = state_to_int(state)
         if state_int not in player.n_visits:
+            player.visited[state_int]  = False
             player.n_visits[state_int] = [0] * player.action_space_n
             player.q_values[state_int] = [0] * player.action_space_n
         start_time = time.time()
@@ -103,9 +110,6 @@ class MCTS:
         
         return player.pick_best_action(state)
         
-            
-
-    
     def one_iteration(self, player, start_state):
         """Runs one iteration of MCTS for 'player', starting
         in state 'start_state'"""
@@ -121,27 +125,37 @@ class MCTS:
             
             current_player = self.other(current_player)
             current_state = next_state
+        
+        #visited_nodes.append((current_state, None)) # add last state without action
 
         state_int = state_to_int(current_state)
 
-        if sum(current_player.n_visits[state_int]) == 0: # first visit to this (already expanded) state
+        if not current_player.visited[state_int]: # first visit to this (already expanded) state
+            current_player.visited[state_int] = True
             reward = self.rollout(current_state, current_player)
             # TODO: add backprop here?
         else: # node already visited => expand now
-            for actions in player.action_space:
+            if DEBUG: print('expanding node')
+            for action_id in player.action_space:
+                actions = joint_actions[action_id]
                 child_state = current_player.get_next(current_state, actions)
                 child_state_int = state_to_int(child_state)
 
-                # add these nodes with initial values: ni=0, ti=0
+                # add these nodes to visited nodes with initial values: ni=0, ti=0
+                current_player.visited[state_int] = False # was state already visited?
                 current_player.n_visits[child_state_int] = [0] * player.action_space_n
-                current_player.q_values[state_int][actions] = 0 # TODO: does this work?
+                current_player.q_values[state_int][action_id] = 0 # TODO: does this work?
             
             # add current node to list of expanded nodes
             current_player.expanded.append(state_int)
+
+            # add last node to list of visited nodes
+            #visited_nodes.append((current_state, action_id)) # ? do we want this?
+
             # make last expanded state the current state
             current_state = child_state
             current_player = self.other(current_player)
-            visited_nodes.append(current_state)
+            
 
             # perform rollout from current state
             reward = self.rollout(current_state, current_player)
@@ -150,7 +164,9 @@ class MCTS:
     
     def backprop(self, nodes, player, reward):
         for state, action in reversed(nodes):
-            state_int = state_int(state)
+            state_int = state_to_int(state)
+            if DEBUG:
+                print('Updating: ', state_int, action)
             player.n_visits[state_int][action] += 1
             player.q_values[state_int][action] += reward # TODO: need to store performed action
 
@@ -160,13 +176,19 @@ class MCTS:
         while player.env.terminal_state(state) == 0: # no team has both players dead
             player = self.other(player)
             # generate random action
-            action = random.sample(joint_actions.keys(), 1)[0] 
-            state = player.env.sim_step(state, action)
+            action_idx = random.sample(joint_actions.keys(), 1)[0]
+            action = joint_actions[action_idx]
+            state = player.get_next(state, action)
+            """
             if DEBUG:
                 player.env.render(state.board)
                 print('alive = ', state.alive)
                 print('ammo  = ', state.ammo)
-        return player.env.terminal_state(state) # TODO: adapt env to be player agnostic
+            """
+        if DEBUG:
+            print('Game won by player {}'.format(player.id))
+        #return player.env.terminal_state(state) # TODO: adapt env to be player agnostic
+        return 1 if player.id == 0 else -1 # no need to analyze reward: if game ends when playermoves, he won
 
 
     

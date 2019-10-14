@@ -23,7 +23,7 @@ from collections import namedtuple
 
 from . import agents
 
-DEBUG = True # set to True for verbose output
+DEBUG_ENV = False # set to True for verbose output
 
 # helper function
 def flatten(board):
@@ -255,7 +255,7 @@ class Environment:
         #board_copy = copy.deepcopy(self.board) # use copy of board to deconflict
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
-                if DEBUG:
+                if DEBUG_ENV:
                     print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
                 continue
             if action == 0 or action == all_actions[0]: # do_nothing
@@ -274,7 +274,7 @@ class Environment:
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
-                    if DEBUG:
+                    if DEBUG_ENV:
                         print('Agent {} was just killed by {}'.format(
                             str(opponent), str(agent)
                         ))

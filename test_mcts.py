@@ -28,6 +28,8 @@ mcts = MCTS(player1, player2)
 action = mcts.get_action(player1, state)
 print(action)
 
+print('...')
+
 """
 # training sequence
 state = env.get_state()
