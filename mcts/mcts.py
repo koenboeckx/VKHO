@@ -69,7 +69,7 @@ class Player:
         ucb_vals = self.ucb(state)
         _, best_action_int = max([(val, action) 
                                   for action, val in enumerate(ucb_vals)])
-        return joint_actions[best_action_int]
+        return best_action_int
     
     def get_next(self, state, actions):
         if self.id == 0:
@@ -119,9 +119,10 @@ class MCTS:
         visited_nodes = [] # keep track of visited states and performed action in game tree
 
         while not current_player.is_leaf(current_state):
-            best_action = current_player.pick_best_action(current_state)
+            best_action_idx = current_player.pick_best_action(current_state)
+            best_action = joint_actions[best_action_idx]
             next_state = current_player.get_next(current_state, best_action)
-            visited_nodes.append((current_state, best_action))
+            visited_nodes.append((current_state, best_action_idx))
             
             current_player = self.other(current_player)
             current_state = next_state
@@ -135,7 +136,7 @@ class MCTS:
             reward = self.rollout(current_state, current_player)
             # TODO: add backprop here?
         else: # node already visited => expand now
-            if DEBUG: print('expanding node')
+            if DEBUG: print('expanding node for player {}'.format(current_player.id))
             for action_id in player.action_space:
                 actions = joint_actions[action_id]
                 child_state = current_player.get_next(current_state, actions)
@@ -143,8 +144,11 @@ class MCTS:
 
                 # add these nodes to visited nodes with initial values: ni=0, ti=0
                 current_player.visited[state_int] = False # was state already visited?
-                current_player.n_visits[child_state_int] = [0] * player.action_space_n
+                current_player.n_visits[state_int][action_id] = 0
                 current_player.q_values[state_int][action_id] = 0 # TODO: does this work?
+                # add these states to .visited of other player
+                other_player = self.other(current_player)
+                other_player.visited[child_state_int] = False # was state already visited?
             
             # add current node to list of expanded nodes
             current_player.expanded.append(state_int)
@@ -156,7 +160,6 @@ class MCTS:
             current_state = child_state
             current_player = self.other(current_player)
             
-
             # perform rollout from current state
             reward = self.rollout(current_state, current_player)
         
