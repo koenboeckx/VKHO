@@ -17,7 +17,8 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-state = env.set_init_game_state()
+_ = env.set_init_game_state()
+state = env.get_state()
 
 player1 = Player(0, env)
 player2 = Player(1, env)
