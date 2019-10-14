@@ -3,7 +3,7 @@ Implementation with only two players, who take turnst making moves.
 Turns game with simultaneous actions into turn-based game.
 """
 
-from mcts.mcts2 import CommandedTank, MCTS, Player
+from mcts.mcts import CommandedTank, MCTS, Player
 import game
 
 ## Dilemma: agent needs player, env needs agents, player needs reference to env
