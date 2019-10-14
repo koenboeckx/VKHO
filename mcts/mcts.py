@@ -1,5 +1,6 @@
 from itertools import product
 import random
+import time
 import numpy as np
 
 from game.agents import Tank
@@ -43,7 +44,7 @@ class Player:
         self.action_space_n = len(self.action_space)
     
     def is_leaf(self, state):
-        return state_to_int(state) not in self.expanded
+        return state_to_int(state) in self.expanded
     
     def ucb(self, state):
         """Returns the list of UCB1 values for all actions player can
@@ -74,7 +75,7 @@ class Player:
             actions = actions + (0, 0)
         else:
             actions = (0, 0) + actions
-        next_state = self.env.sim_step(state, self.id, actions)
+        next_state = self.env.sim_step(state, actions)
         return next_state
 
 
@@ -90,6 +91,20 @@ class MCTS:
             return self.players[1]
         else:
             return self.players[2]
+    
+    def get_action(self, player, state):
+        state_int = state_to_int(state)
+        if state_int not in player.n_visits:
+            player.n_visits[state_int] = [0] * player.action_space_n
+            player.q_values[state_int] = [0] * player.action_space_n
+        start_time = time.time()
+        while time.time() - start_time < self.max_search_time:
+            self.one_iteration(player, state)
+        
+        return player.pick_best_action(state)
+        
+            
+
     
     def one_iteration(self, player, start_state):
         """Runs one iteration of MCTS for 'player', starting

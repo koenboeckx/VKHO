@@ -17,14 +17,15 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-state = env.get_state()
+state = env.set_init_game_state()
 
 player1 = Player(0, env)
 player2 = Player(1, env)
 
 
 mcts = MCTS(player1, player2)
-mcts.one_iteration(player1, state)
+action = mcts.get_action(player1, state)
+print(action)
 
 """
 # training sequence

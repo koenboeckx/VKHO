@@ -304,14 +304,8 @@ class Environment:
             obs.append(observation)
         return obs
     
-    def sim_step(self, state, current_team, actions_):
-        """Simulate performing 'actions' on env in state 'state'.
-        Only for one team (thus turn-based game). current_team (0 or 1)
-        is the team making the move. Use with MCTS."""
-        if current_team == 0:
-            actions = actions_ + (0, 0)
-        else:
-            actions = (0, 0) + actions_
+    def sim_step(self, state, actions):
+        """Simulate performing 'actions' on env in state 'state'."""
         self.set_state(state)
         _ = self.step(actions)
         return self.get_state()
