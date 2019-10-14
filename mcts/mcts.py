@@ -145,10 +145,13 @@ class MCTS:
                 # add these nodes to visited nodes with initial values: ni=0, ti=0
                 current_player.visited[state_int] = False # was state already visited?
                 current_player.n_visits[state_int][action_id] = 0
-                current_player.q_values[state_int][action_id] = 0 # TODO: does this work?
-                # add these states to .visited of other player
+                current_player.q_values[state_int][action_id] = 0 # TODO: does this work? -> YES
+                
+                # add child states to other player # TODO: is this the right way?
                 other_player = self.other(current_player)
                 other_player.visited[child_state_int] = False # was state already visited?
+                other_player.n_visits[child_state_int] = [0] * other_player.action_space_n
+                other_player.q_values[child_state_int] = [0] * other_player.action_space_n
             
             # add current node to list of expanded nodes
             current_player.expanded.append(state_int)
@@ -182,12 +185,12 @@ class MCTS:
             action_idx = random.sample(joint_actions.keys(), 1)[0]
             action = joint_actions[action_idx]
             state = player.get_next(state, action)
-            """
+            
             if DEBUG:
-                player.env.render(state.board)
+                #player.env.render(state.board)
                 print('alive = ', state.alive)
                 print('ammo  = ', state.ammo)
-            """
+            
         if DEBUG:
             print('Game won by player {}'.format(player.id))
         #return player.env.terminal_state(state) # TODO: adapt env to be player agnostic
