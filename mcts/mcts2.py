@@ -1,5 +1,8 @@
 from itertools import product
 import random
+import numpy as np
+
+from game.agents import Tank
 
 DEBUG = True
 
@@ -18,25 +21,52 @@ def state_to_int(state):
     Added: include team that is to play from this state"""
     return hash(str(state))
 
+class CommandedTank(Tank):
+    """Tank that gets actions from a commander"""
+    def __init__(self, idx):
+        super(CommandedTank, self).__init__(idx)
+    
+    def get_action(self, obs):
+        """Asks the commander to provide an action"""
+        return self.commander.get_action(obs) # TODO: is this needed?
+
 class Player:
     """Player that commands 2 tanks. Uses MCTS to search action space
     and provide best action for both tanks when requested."""
-    def __init__(self, id, env, agent1, agent2):
+    def __init__(self, id, env):
         self.id = id # 0 or 1
         self.env = env
-        self.agents = (agent1, agent2)
         self.n_visits = {}
         self.q_values = {}
         self.expanded = []
         self.action_space = joint_actions.keys()
+        self.action_space_n = len(self.action_space)
     
     def is_leaf(self, state):
         return state_to_int(state) not in self.expanded
     
+    def ucb(self, state):
+        """Returns the list of UCB1 values for all actions player can
+        take in 'state'."""
+        state_int = state_to_int(state)
+        ucb_vals = []
+
+        N = sum(self.n_visits[state_int])
+        for action in self.action_space:
+            val = self.q_values[state_int][action]
+            ni  = self.n_visits[state_int][action]
+            if ni == 0: # action has never been performed in this state
+                ucb_vals.append(float(np.infty))
+            else:
+                ucb = val + 2*np.sqrt(np.log(N)/ni)
+                ucb_vals.append(ucb)
+        return ucb_vals
+
+    
     def pick_best_action(self, state):
-        vals = self.q_values[state_to_int(state)]
+        ucb_vals = self.ucb(state)
         _, best_action_int = max([(val, action) 
-                                  for action, val in enumerate(vals)])
+                                  for action, val in enumerate(ucb_vals)])
         return joint_actions[best_action_int]
     
     def get_next(self, state, actions):
@@ -79,7 +109,7 @@ class MCTS:
 
         state_int = state_to_int(current_state)
 
-        if current_player.n_visits[state_int] == 0: # first visit to this state
+        if sum(current_player.n_visits[state_int]) == 0: # first visit to this (already expanded) state
             reward = self.rollout(current_state, current_player)
             # TODO: add backprop here?
         else: # node already visited => expand now
@@ -88,7 +118,7 @@ class MCTS:
                 child_state_int = state_to_int(child_state)
 
                 # add these nodes with initial values: ni=0, ti=0
-                current_player.n_visits[child_state_int] = 0
+                current_player.n_visits[child_state_int] = [0] * player.action_space_n
                 current_player.q_values[state_int][actions] = 0 # TODO: does this work?
             
             # add current node to list of expanded nodes
@@ -106,8 +136,9 @@ class MCTS:
     def backprop(self, nodes, player, reward):
         for state, action in reversed(nodes):
             state_int = state_int(state)
-            player.n_visits[state_int] += 1
+            player.n_visits[state_int][action] += 1
             player.q_values[state_int][action] += reward # TODO: need to store performed action
+
     
     def rollout(self, state, player):
         """Perform rollout (= random simulation), starting in 'state' until game is over."""
