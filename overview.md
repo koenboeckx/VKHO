@@ -36,8 +36,13 @@
     * MCTS: based on FULL state information (thus not only individual observations)
     * MCTS flow graph created with https://www.lucidchart.com
 
+<<<<<<< HEAD
 1. Development summary:
     1. [15Oct19] An infinte loop in while not player.is_leaf()
+=======
+100. Development summary:
+    * An infinte loop in while not player.is_leaf() (15Oct19) 
+>>>>>>> fd50275fb2dae742a8288a14ea3ecec6be0868f3
         * rewrote envs.Environment as 'functional' class: step(state, action) -> new_state
         * study in detail the behavior of MCTS while exploring and expanding new nodes
         * rethink stores of the form store[state_int] = [val_action1, val_action2, ....] 
