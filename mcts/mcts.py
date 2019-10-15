@@ -77,7 +77,7 @@ class Player:
             actions = actions + (0, 0)
         else:
             actions = (0, 0) + actions
-        next_state = self.env.sim_step(state, actions)
+        next_state = self.env.step(state, actions)
         return next_state
 
 
@@ -189,7 +189,7 @@ class MCTS:
     def rollout(self, state, player):
         """Perform rollout (= random simulation), starting in 'state' until game is over."""
         if DEBUG: print('in rollout')
-        while player.env.terminal_state(state) == 0: # no team has both players dead
+        while player.env.terminal(state) == 0: # no team has both players dead
             player = self.other(player)
             # generate random action
             action_idx = random.sample(joint_actions.keys(), 1)[0]

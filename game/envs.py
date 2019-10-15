@@ -27,6 +27,7 @@ from collections import namedtuple
 from . import agents
 
 DEBUG_ENV = False # set to True for verbose output
+MAX_RANGE = 8 # maximum range of Agents weapon => big impact on termination speed
 
 # helper functions
 def flatten(board):
@@ -220,7 +221,7 @@ class Environment:
                     new_state.aim[agent] = 1
             elif action == 3 or action == all_actions[3]: # fire
                 opponent = state.aim[agent]
-                if distance(state, agent, opponent) < agent.max_range: # simple kill criterion
+                if distance(state, agent, opponent) < MAX_RANGE: # simple kill criterion
                     new_state.alive[opponent] = 0
                     if DEBUG_ENV:
                         print('Agent {} was just killed by {}'.format(

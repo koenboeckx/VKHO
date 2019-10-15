@@ -8,21 +8,13 @@ import game
 
 ## Dilemma: agent needs player, env needs agents, player needs reference to env
 
+from game import envs
 
-agent_list = [
-    CommandedTank(0),
-    CommandedTank(1),
-    CommandedTank(2),
-    CommandedTank(3),
-]
-
-env = game.make(0, agent_list)
-_ = env.set_init_game_state()
-state = env.get_state()
+env =  game.envs.Environment()
+state = env.get_init_game_state()
 
 player1 = Player(0, env)
 player2 = Player(1, env)
-
 
 mcts = MCTS(player1, player2, max_search_time=0.1)
 players = (player1, player2)
@@ -39,9 +31,9 @@ for i in range(100):
         actions = action + (0, 0)
     else:
         actions = (0, 0) + action
-    state = env.sim_step(state, actions)
+    state = env.step(state, actions)
     player_idx = 1-player_idx
-    env.render(state.board)
+    env.render(state)
 
 print('...')
 
