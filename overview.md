@@ -34,7 +34,7 @@
     * MCTS flow graph created with https://www.lucidchart.com
 
 100. Development summary:
-    * (15Oct19) An infinte loop in while not player.is_leaf()
+    * An infinte loop in while not player.is_leaf() (15Oct19) 
         * rewrote envs.Environment as 'functional' class: step(state, action) -> new_state
         * study in detail the behavior of MCTS while exploring and expanding new nodes
         * rethink stores of the form store[state_int] = [val_action1, val_action2, ....] 
