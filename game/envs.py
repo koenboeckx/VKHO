@@ -30,6 +30,12 @@ DEBUG_ENV = False # set to True for verbose output
 MAX_RANGE = 8 # maximum range of Agents weapon => big impact on termination speed
 
 # helper functions
+def print_state(state):
+    print('Positions = ', state.positions)
+    print('Aims = ', state.aim)
+    print('Ammo = ', state.ammo)
+    print('Alive = ', state.alive)
+
 def flatten(board):
     """Flatten the 'board' dictionary
     :params:    board: dictionary containing different elements

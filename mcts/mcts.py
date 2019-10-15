@@ -7,6 +7,7 @@ from game.agents import Tank
 
 DEBUG  = False
 DEBUG2 = True
+DEBUG3 = True
 
 
 # TODO: fix this import error
@@ -106,8 +107,12 @@ class MCTS:
             player.n_visits[state_int] = [0] * player.action_space_n
             player.q_values[state_int] = [0] * player.action_space_n
         start_time = time.time()
+
+        iter_idx = 0
         while time.time() - start_time < self.max_search_time:
+            print('Iteration {}'.format(iter_idx))
             self.one_iteration(player, state)
+            iter_idx += 1
         
         return player.pick_best_action(state)
         
@@ -120,12 +125,13 @@ class MCTS:
         visited_nodes = [] # keep track of visited states and performed action in game tree
 
         while not current_player.is_leaf(current_state):
-            if DEBUG:
+            if DEBUG3:
                 print('in tree traversal')
             best_action_idx = current_player.pick_best_action(current_state)
             best_action = joint_actions[best_action_idx]
             next_state = current_player.get_next(current_state, best_action)
             visited_nodes.append((current_state, best_action_idx))
+            print('len(visited_nodes) = ', len(visited_nodes))
             
             current_player = self.other(current_player)
             current_state = next_state

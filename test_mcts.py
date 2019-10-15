@@ -16,7 +16,7 @@ state = env.get_init_game_state()
 player1 = Player(0, env)
 player2 = Player(1, env)
 
-mcts = MCTS(player1, player2, max_search_time=0.1)
+mcts = MCTS(player1, player2, max_search_time=1.0)
 players = (player1, player2)
 
 player_idx = 0
@@ -34,24 +34,6 @@ for i in range(100):
     state = env.step(state, actions)
     player_idx = 1-player_idx
     env.render(state)
+    game.envs.print_state(state)
 
-print('...')
-
-"""
-# training sequence
-state = env.get_state()
-team = 0
-for i in range(10):
-    actions = player.get_actions(team, state)
-    if team == 0:
-        actions = actions + (0, 0)
-    else:
-        actions = (0, 0) + actions
-    _ = env.step(actions)
-    state = env.get_state()
-    if env.terminal() != 0: # check if game is over => reset game
-        state = env.set_init_game_state()
-    env.render()
-
-    team = 0 if team == 1 else 1 # switch teams
-"""
+print('... done')
