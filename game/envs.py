@@ -101,7 +101,7 @@ class Environment:
         board = {}
         for i in range(board_size):
            for j in range(board_size):
-               self.board[(i,j)] = None
+               board[(i,j)] = None
         
         # Position agents randomly on the board
         if random_pos:
@@ -131,7 +131,7 @@ class Environment:
 
     def render(self, state):
         """Represent the state of the environment."""
-        board = unflatten(state.board)
+        board = state.board
         board_size = self.args.get('size', 11)
         board_repr = ''
         if type(board) == list:
@@ -170,19 +170,23 @@ class Environment:
                 return True
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board
-                if board[(state.positions[agent][0]-1, state.positions[agent][1])] is None: # TODO: check case above
+                agent_pos = state.positions[agent]
+                if board[(agent_pos[0]-1, agent_pos[1])] is None: # TODO: check case above
                     return True
         elif action == 5 or action == all_actions[5]: # move_down
             if state.alive[agent] == 1 and state.positions[agent][0] < board_size-1: # stay on the board
-                if board[(agent.pos[0]+1, agent.pos[1])] is None: # TODO: check case below
+                agent_pos = state.positions[agent]
+                if board[(agent_pos[0]+1, agent_pos[1])] is None: # TODO: check case below
                     return True
         elif action == 6 or action == all_actions[6]: # move_left
             if state.alive[agent] == 1 and state.positions[agent][1] > 0: # stay on the board
-                if board[(agent.pos[0], agent.pos[1]-1)] is None: # TODO: check case left
+                agent_pos = state.positions[agent]
+                if board[(agent_pos[0], agent_pos[1]-1)] is None: # TODO: check case left
                     return True
         elif action == 7 or action == all_actions[7]: # move_right
             if state.alive[agent] == 1 and state.positions[agent][1] < board_size-1: # stay on the board
-                if board[(agent.pos[0], agent.pos[1]+1)] is None: # TODO: check case right
+                agent_pos = state.positions[agent]
+                if board[(agent_pos[0], agent_pos[1]+1)] is None: # TODO: check case right
                     return True
         return False # default
 
@@ -207,12 +211,12 @@ class Environment:
             elif action == 1 or action == all_actions[1]: # aim1
                 if agent in [0, 1]:
                     new_state.aim[agent] = 2
-                elif agent.idx in [2, 3]:
+                elif agent in [2, 3]:
                     new_state.aim[agent] = 0
             elif action == 2 or action == all_actions[2]: # aim2
                 if agent in [0, 1]:
                     new_state.aim[agent] = 3
-                elif agent.idx in [2, 3]:
+                elif agent in [2, 3]:
                     new_state.aim[agent] = 1
             elif action == 3 or action == all_actions[3]: # fire
                 opponent = state.aim[agent]
@@ -245,31 +249,11 @@ class Environment:
                 new_state.positions[agent] = (agent_pos[0], agent_pos[1]+1)
                 board[new_state.positions[agent]] = agent
         
-        new_state.board = board
+        board = flatten(board)
+        new_state = new_state._replace(board=board)
         return new_state
-    
-    def sim_step(self, state, actions):
-        """Simulate performing 'actions' on env in state 'state'."""
-        self.set_state(state)
-        _ = self.step(actions)
-        return self.get_state()
-    
-    def terminal(self):
-        """Check if game is over, i.e. when both players of same team are death.
-        Conventional:   if team 1 wins, returns  1
-                        if team 2 wins, returns -1
-                        otherwise, return 0.
-        No ties."""
-        # if both players of team 1 are death, return -1
-        if all(agent.alive == 0 for agent in self.agents[:2]):
-            return -1
-        # if both players of team 2 are death, return 1
-        if all(agent.alive == 0 for agent in self.agents[:2]):
-            return 1
-        else:
-            return 0
-    
-    def terminal_state(self, state):
+
+    def terminal(self, state):
         """Check if state is terminal state, by checking alive-status of agents."""
         # TODO: make similar to .terminal(self) (or vice versa)
         # TODO: add tie (return 0) if all agents out of ammo
@@ -279,16 +263,3 @@ class Environment:
             return 1
         else:
             return 0
-    
-    
-    
-    def set_state(self, state):
-        """Explicitely set the state of the environment (and agents)"""
-        self.board = unflatten(state.board, self.agents)
-        for idx, agent in enumerate(self.agents):
-            agent.pos = state.positions[idx]
-            agent.alive = state.alive[idx]
-            agent.ammo = state.ammo[idx]
-            agent.aim = state.aim[idx]
-        
-
