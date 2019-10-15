@@ -48,7 +48,7 @@ def flatten(board):
                 flattened_board.append(-1)
             else:
                 flattened_board.append(str(board[(i,j)]))
-    return flattened_board
+    return tuple(flattened_board)
 
 def unflatten(state):
     """ 'Unflatten' the 'flat_board' list in state.board to create a 'board' dictionary.
@@ -141,7 +141,7 @@ class Environment:
         board = state.board
         board_size = self.args.get('size', 11)
         board_repr = ''
-        if type(board) == list:
+        if type(board) in [list, tuple]:
             for i in range(board_size):
                 for j in range(board_size):
                     if board[i*board_size+j] == -1:
