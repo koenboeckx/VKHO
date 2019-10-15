@@ -63,7 +63,9 @@ def unflatten(state):
                 board[(i, j)] = idx
     return board
 
-def distance(pos1, pos2):
+def distance(state, agent1, agent2):
+    pos1 = state.positions[agent1]
+    pos2 = state.positions[agent2]
     x1, y1 = pos1
     x2, y2 = pos2
     return math.sqrt((x1-x2)**2 + (y1-y2)**2)             
@@ -193,6 +195,8 @@ class Environment:
         board_size = self.args.get('size', 11)
         agents = (0, 1, 2, 3)
 
+        new_state = copy.deepcopy(state) # adapt and  return
+
         for agent, action in zip(agents, actions):
             if not self.check_conditions(state, agent, action): # if conditions not met => move on to next agent
                 if DEBUG_ENV:
@@ -201,48 +205,48 @@ class Environment:
             if action == 0 or action == all_actions[0]: # do_nothing
                 pass
             elif action == 1 or action == all_actions[1]: # aim1
-                if agent.idx in [0, 1]:
-                    agent.aim = 2
+                if agent in [0, 1]:
+                    new_state.aim[agent] = 2
                 elif agent.idx in [2, 3]:
-                    agent.aim = 0
+                    new_state.aim[agent] = 0
             elif action == 2 or action == all_actions[2]: # aim2
-                if agent.idx in [0, 1]:
-                    agent.aim = 3
+                if agent in [0, 1]:
+                    new_state.aim[agent] = 3
                 elif agent.idx in [2, 3]:
-                    agent.aim = 1
+                    new_state.aim[agent] = 1
             elif action == 3 or action == all_actions[3]: # fire
-                opponent = self.agents[agent.aim]
-                if distance(agent, opponent) < agent.max_range:
-                    opponent.alive = 0
+                opponent = state.aim[agent]
+                if distance(state, agent, opponent) < agent.max_range: # simple kill criterion
+                    new_state.alive[opponent] = 0
                     if DEBUG_ENV:
                         print('Agent {} was just killed by {}'.format(
                             str(opponent), str(agent)
                         ))
-                agent.ammo -= 1
-                agent.aim = None
+                new_state.ammo[agent] -= 1
+                new_state.aim[agent] = None
             elif action == 4 or action == all_actions[4]: # move_up
-                self.board[agent.pos] = None
-                agent.pos = (agent.pos[0]-1, agent.pos[1])
-                self.board[agent.pos] = agent
+                agent_pos = state.positions[agent]
+                board[state.positions[agent]] = None
+                new_state.positions[agent] = (agent_pos[0]-1, agent_pos[1])
+                board[new_state.positions[agent]] = agent
             elif action == 5 or action == all_actions[5]: # move_down
-                self.board[agent.pos] = None
-                agent.pos = (agent.pos[0]+1, agent.pos[1])
-                self.board[agent.pos] = agent
+                agent_pos = state.positions[agent]
+                board[state.positions[agent]] = None
+                new_state.positions[agent] = (agent_pos[0]+1, agent_pos[1])
+                board[new_state.positions[agent]] = agent
             elif action == 6 or action == all_actions[6]: # move_left
-                self.board[agent.pos] = None
-                agent.pos = (agent.pos[0], agent.pos[1]-1)
-                self.board[agent.pos] = agent
+                agent_pos = state.positions[agent]
+                board[state.positions[agent]] = None
+                new_state.positions[agent] = (agent_pos[0], agent_pos[1]-1)
+                board[new_state.positions[agent]] = agent
             elif action == 7 or action == all_actions[7]: # move_right
-                self.board[agent.pos] = None
-                agent.pos = (agent.pos[0], agent.pos[1]+1)
-                self.board[agent.pos] = agent
+                agent_pos = state.positions[agent]
+                board[state.positions[agent]] = None
+                new_state.positions[agent] = (agent_pos[0], agent_pos[1]+1)
+                board[new_state.positions[agent]] = agent
         
-        # generate the observations for the 4 players
-        obs = []
-        for agent in self.agents:
-            observation = self._generate_obs(agent)
-            obs.append(observation)
-        return obs
+        new_state.board = board
+        return new_state
     
     def sim_step(self, state, actions):
         """Simulate performing 'actions' on env in state 'state'."""
