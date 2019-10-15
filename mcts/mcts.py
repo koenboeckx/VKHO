@@ -5,7 +5,8 @@ import numpy as np
 
 from game.agents import Tank
 
-DEBUG = True
+DEBUG  = False
+DEBUG2 = True
 
 
 # TODO: fix this import error
@@ -119,6 +120,8 @@ class MCTS:
         visited_nodes = [] # keep track of visited states and performed action in game tree
 
         while not current_player.is_leaf(current_state):
+            if DEBUG:
+                print('in tree traversal')
             best_action_idx = current_player.pick_best_action(current_state)
             best_action = joint_actions[best_action_idx]
             next_state = current_player.get_next(current_state, best_action)
@@ -135,8 +138,10 @@ class MCTS:
             current_player.visited[state_int] = True
             reward = self.rollout(current_state, current_player)
             # TODO: add backprop here?
+
         else: # node already visited => expand now
-            if DEBUG: print('expanding node for player {}'.format(current_player.id))
+            if DEBUG2: print('expanding node {} for player {}'.format(state_to_int(current_state),
+                                                                      current_player.id))
             for action_id in player.action_space:
                 actions = joint_actions[action_id]
                 child_state = current_player.get_next(current_state, actions)
@@ -169,6 +174,10 @@ class MCTS:
         self.backprop(visited_nodes, player, reward)
     
     def backprop(self, nodes, player, reward):
+        if DEBUG:
+            print('in backprop')
+            print('nodes = ', nodes)
+
         for state, action in reversed(nodes):
             state_int = state_to_int(state)
             if DEBUG:
@@ -179,6 +188,7 @@ class MCTS:
     
     def rollout(self, state, player):
         """Perform rollout (= random simulation), starting in 'state' until game is over."""
+        if DEBUG: print('in rollout')
         while player.env.terminal_state(state) == 0: # no team has both players dead
             player = self.other(player)
             # generate random action
