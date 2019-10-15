@@ -39,15 +39,14 @@ class Player:
     def __init__(self, id, env):
         self.id = id # 0 or 1
         self.env = env
-        self.visited  = {}
         self.n_visits = {}
         self.q_values = {}
-        self.expanded = []
+        self.children = {}
         self.action_space = joint_actions.keys()
         self.action_space_n = len(self.action_space)
     
     def is_leaf(self, state):
-        return state_to_int(state) not in self.expanded
+        return state_to_int(state) not in self.children
     
     def ucb(self, state):
         """Returns the list of UCB1 values for all actions player can
@@ -55,10 +54,10 @@ class Player:
         state_int = state_to_int(state)
         ucb_vals = []
 
-        N = sum(self.n_visits[state_int])
-        for action in self.action_space:
-            val = self.q_values[state_int][action]
-            ni  = self.n_visits[state_int][action]
+        N = self.n_visits[state_int]
+        for child_int in self.children[state_int]:c
+            val = self.q_values[child_int]
+            ni  = self.n_visits[child_int]
             if ni == 0: # action has never been performed in this state
                 ucb_vals.append(float(np.infty))
             else:

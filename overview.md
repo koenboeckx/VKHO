@@ -41,3 +41,4 @@
         * rewrote envs.Environment as 'functional' class: step(state, action) -> new_state
         * study in detail the behavior of MCTS while exploring and expanding new nodes
         * rethink stores of the form store[state_int] = [val_action1, val_action2, ....] 
+        * if stores are reformed (currently in works) => how to deal with Min-Max ?
