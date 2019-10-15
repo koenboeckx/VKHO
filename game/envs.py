@@ -130,9 +130,9 @@ class Environment:
         state = State(
             board = flatten(board),
             positions = positions,
-            alive = [1, 1, 1, 1], 
-            ammo = [5000, 5000, 5000, 5000],
-            aim = [None, None, None, None],
+            alive = (1, 1, 1, 1), 
+            ammo = (5000, 5000, 5000, 5000),
+            aim = (None, None, None, None),
         )
         return state
 
