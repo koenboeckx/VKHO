@@ -24,7 +24,7 @@
     
 1. Extend game to more realistic situations with
     * richer action space
-    * more evolved state / observations (e.g. partial observability?)
+    * more evolved sta te / observations (e.g. partial observability?)
 
 1. Other ideas:
     * MCTS: reduce the game to turn-based game:
