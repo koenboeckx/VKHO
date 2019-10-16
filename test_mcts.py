@@ -13,9 +13,9 @@ from game import envs
 env =  game.envs.Environment()
 state = env.get_init_game_state()
 
-mcts = MCTS(env, max_search_time=1.0)
+mcts = MCTS(env, max_search_time=5.0)
 
-for i in range(10):
+for i in range(1000):
     action_idx = mcts.get_action(state)
     action = joint_actions[action_idx]
     print('Player {} plays {} - # visited nodes = {}'.format(

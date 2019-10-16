@@ -74,15 +74,20 @@ class MCTS:
             val = self.v_values[child]
             ni  = self.n_visits[child]
             if ni == 0: # action has never been performed in this state
-                ucb_vals.append(float(np.infty))
+                if state.player == 0: # TODO: check validity off this
+                    ucb_vals.append(float(np.infty))
+                else:
+                    ucb_vals.append(-float(np.infty))
             else:
-                ucb = val + 2*np.sqrt(np.log(N)/ni)
+                if state.player == 0: # TODO: check validity off this
+                    ucb = val + 2*np.sqrt(np.log(N)/ni)
+                else:
+                    ucb = val - 2*np.sqrt(np.log(N)/ni)
                 ucb_vals.append(ucb)
         return ucb_vals
     
     def get_next(self, state, actions):
-        player = state.player
-        if player == 0:
+        if state.player == 0:
             actions = actions + (0, 0)
         else:
             actions = (0, 0) + actions
@@ -102,7 +107,6 @@ class MCTS:
             best_action = joint_actions[best_action_idx]
             next_state = self.get_next(current_state, best_action)
             visited_nodes.append((current_state, best_action_idx))
-            print('len(visited_nodes) = ', len(visited_nodes))
             
             current_state = next_state
             counter += 1
@@ -110,6 +114,7 @@ class MCTS:
                 print('hold')
         
         visited_nodes.append((current_state, None)) # add last state without action
+        print('len(visited_nodes) = ', len(visited_nodes))
 
         if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
             reward = self.rollout(current_state)
