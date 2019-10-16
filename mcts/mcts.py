@@ -54,10 +54,27 @@ class MCTS:
         
         return self.pick_best_action(state)
     
+    def check_actions(self, state, action):
+        """Check if joint action (0..63) is allowed in state.
+        Uses env.check_condtion(.). Goal: remove actions that
+        produce no 'new' children."""
+        actions = joint_actions[action]
+        if state.player == 1:
+            for agent, action in zip([0, 1], actions):
+                if not self.env.check_conditions(state, agent, action):
+                    return False
+        else: # player 1
+            for agent, action in zip([2, 3], actions):
+                if not self.env.check_conditions(state, agent, action):
+                    return False
+        return True
+    
     def pick_best_action(self, state):
         ucb_vals = self.ucb(state)
+        # TODO: remove actions that are not allowed 
         _, best_action_idx = max([(val, action) 
-                                    for action, val in enumerate(ucb_vals)])
+                                    for action, val in enumerate(ucb_vals)
+                                    if self.check_actions(state, action)])                                   
         return best_action_idx
     
     def ucb(self, state):
@@ -100,6 +117,8 @@ class MCTS:
             best_action = joint_actions[best_action_idx]
             next_state = self.get_next(current_state, best_action)
             visited_nodes.append((current_state, best_action_idx))
+            if len(visited_nodes) > 100:
+                print('...loop...')
             
             current_state = next_state
         

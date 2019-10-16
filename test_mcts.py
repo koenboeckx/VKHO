@@ -14,7 +14,7 @@ from game import envs
 env =  game.envs.Environment()
 state = env.get_init_game_state()
 
-mcts = MCTS(env, max_search_time=1.0)
+mcts = MCTS(env, max_search_time=2.0)
 
 for i in range(1000):
     action_idx = mcts.get_action(state)
@@ -25,6 +25,6 @@ for i in range(1000):
 
     state = mcts.get_next(state, action)
     env.render(state)
-    #game.envs.print_state(state)
+    game.envs.print_state(state)
 
 print('... done')
