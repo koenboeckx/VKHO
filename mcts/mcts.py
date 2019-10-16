@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 from game.agents import Tank
+from game.envs import print_state
 
 DEBUG  = False
 DEBUG2 = True
@@ -66,11 +67,12 @@ class MCTS:
 
         N = self.n_visits[state]
         if N == 0:
+            print_state(state)
             raise ValueError('Division by zero')
         for child in self.children[state]:
             val = self.v_values[child]
             ni  = self.n_visits[child]
-            if ni == 0: # action has never been performed in this state
+            if ni == 0: # this action has never been performed in this state
                 ucb = float(np.infty)
             else:
                 ucb = val + 2*np.sqrt(np.log(N)/ni)
@@ -92,7 +94,7 @@ class MCTS:
 
         visited_nodes = [] # keep track of visited states and performed action in game tree
 
-        counter = 0 # for debugging
+        # TODO: take into account terminal states
         while not self.is_leaf(current_state): # walk through existing game tree until leaf
             best_action_idx = self.pick_best_action(current_state)
             best_action = joint_actions[best_action_idx]
@@ -100,9 +102,6 @@ class MCTS:
             visited_nodes.append((current_state, best_action_idx))
             
             current_state = next_state
-            counter += 1
-            #if counter > 100:
-            #    print('hold')
         
         visited_nodes.append((current_state, None)) # add last state without action
         #print('len(visited_nodes) = ', len(visited_nodes))
@@ -117,17 +116,17 @@ class MCTS:
                 actions = joint_actions[action_idx]
                 child_state = self.get_next(current_state, actions)
 
-                # add these nodes to visited nodes with initial values: ni=0, ti=0
+                # add these nodes to visited nodes with initial values: ni=0, ti=0 if not already present
                 self.children[current_state].append(child_state)
-                self.n_visits[child_state] = 0
-                self.v_values[child_state] = 0      
+                if child_state not in self.n_visits:
+                    self.n_visits[child_state] = 0
+                    self.v_values[child_state] = 0      
 
             # make last expanded state the current state
             current_state = child_state
             
             # perform rollout from current state
             reward = self.rollout(current_state)
-        
             self.backprop(visited_nodes, reward)
     
     def backprop(self, nodes, reward):
