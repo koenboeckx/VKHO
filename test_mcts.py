@@ -6,11 +6,8 @@ from datetime import date
 
 from mcts.mcts import MCTS, joint_actions
 import game
-from game.envs import all_actions
-
-## Dilemma: agent needs player, env needs agents, player needs reference to env
-
 from game import envs
+from game.envs import all_actions
 
 env =  game.envs.Environment()
 state = env.get_init_game_state()
@@ -18,9 +15,9 @@ state = env.get_init_game_state()
 mcts = MCTS(env, max_search_time=10.0)
 
 filename = 'mcts_{}.p'.format(date.today())
-mcts.load(filename)
+#mcts.load(filename)
 
-for it in range(5):
+for it in range(100):
     print('iteration {}'.format(it))
     action_idx = mcts.get_action(state)
     action = joint_actions[action_idx]
@@ -31,6 +28,9 @@ for it in range(5):
     state = mcts.get_next(state, action)
     env.render(state)
     game.envs.print_state(state)
+
+    if env.terminal(state):
+        state = env.get_init_game_state()
 
 
 mcts.save(filename)

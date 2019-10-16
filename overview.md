@@ -45,3 +45,4 @@
         * Division by Zero in UCB: consequence of reintitialising node after identified as a child node (effectively: reset of .n_visits[state] = 0). *Solution*: check if node is already present in store before (re)setting initial values.
         * if stores are reformed (currently in works) => how to deal with Min-Max ?: *solution*: this doesn't solve the core problem (see next point). However, alternatively updating v_values in function of wich player (`v_values[state] += or -= reward`, accordingly)
         * How to handle loops in behavior (returning to same state after X actions) -> leads to loop where we never find a leaf node = **core of the problem**
+        * Added to MCTS: save and load methods that store/recover the 3 essential stores of the object: .n_visits, .v_values, .children
