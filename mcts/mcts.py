@@ -1,6 +1,7 @@
 from itertools import product
 import random
 import time
+import pickle
 import numpy as np
 
 from game.agents import Tank
@@ -81,10 +82,10 @@ class MCTS:
     
     def pick_best_action(self, state, visited_nodes=[]):
         ucb_vals = self.ucb(state)
-        _, best_action_idx = max_random([(val, action) 
+        _, best_action_idx = max([(val, action) 
                                     for action, val in enumerate(ucb_vals)
-                                    if self.check_actions(state, action)
-                                    and self.children[state][action] not in visited_nodes])                                   
+                                    #if self.check_actions(state, action)
+                                    if self.children[state][action] not in visited_nodes])                                   
         return best_action_idx
     
     def ucb(self, state):
@@ -178,6 +179,15 @@ class MCTS:
             state = self.get_next(state, action)
             
         return 1 if state.player == 0 else -1 # if game ends when player moved, he won
+    
+    def save(self, filename):
+        with open(filename, "wb" ) as file:
+            pickle.dump([self.n_visits, self.v_values, self.children], file)
+        
+    def load(self, filename):
+        with open(filename, "rb" ) as file:
+            stores = pickle.load(file)
+            self.n_visits, self.v_values, self.children = stores
 
 
     

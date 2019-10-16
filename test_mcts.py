@@ -2,6 +2,7 @@
 Implementation with only two players, who take turnst making moves.
 Turns game with simultaneous actions into turn-based game.
 """
+from datetime import date
 
 from mcts.mcts import MCTS, joint_actions
 import game
@@ -14,9 +15,13 @@ from game import envs
 env =  game.envs.Environment()
 state = env.get_init_game_state()
 
-mcts = MCTS(env, max_search_time=2.0)
+mcts = MCTS(env, max_search_time=10.0)
 
-for i in range(1000):
+filename = 'mcts_{}.p'.format(date.today())
+mcts.load(filename)
+
+for it in range(5):
+    print('iteration {}'.format(it))
     action_idx = mcts.get_action(state)
     action = joint_actions[action_idx]
     print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
@@ -27,4 +32,6 @@ for i in range(1000):
     env.render(state)
     game.envs.print_state(state)
 
+
+mcts.save(filename)
 print('... done')
