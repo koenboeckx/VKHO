@@ -79,11 +79,12 @@ class MCTS:
                     return False
         return True
     
-    def pick_best_action(self, state):
+    def pick_best_action(self, state, visited_nodes=[]):
         ucb_vals = self.ucb(state)
         _, best_action_idx = max_random([(val, action) 
-                                    for action, val in enumerate(ucb_vals)])
-                                    #if self.check_actions(state, action)])                                   
+                                    for action, val in enumerate(ucb_vals)
+                                    if self.check_actions(state, action)
+                                    and self.children[state][action] not in visited_nodes])                                   
         return best_action_idx
     
     def ucb(self, state):
@@ -122,10 +123,10 @@ class MCTS:
 
         # TODO: take into account terminal states
         while not self.is_leaf(current_state): # walk through existing game tree until leaf
-            best_action_idx = self.pick_best_action(current_state)
+            best_action_idx = self.pick_best_action(current_state, visited_nodes) # force next state to be a new state
             best_action = joint_actions[best_action_idx]
             next_state = self.get_next(current_state, best_action)
-            visited_nodes.append((current_state, best_action_idx))
+            visited_nodes.append(current_state)
             
             # TODO: loop is present where we keep hopping between
             # the same two states, because the best actions are those
@@ -133,7 +134,7 @@ class MCTS:
             
             current_state = next_state
         
-        visited_nodes.append((current_state, None)) # add last state without action
+        visited_nodes.append(current_state) # add last state without action
         #print('len(visited_nodes) = ', len(visited_nodes))
 
         if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
@@ -161,7 +162,7 @@ class MCTS:
     
     def backprop(self, nodes, reward):
         """Perform backup of reward over nodes in 'nodes' list.""" 
-        for state, action in reversed(nodes):
+        for state in reversed(nodes):
             self.n_visits[state] += 1
             if state.player == 0:
                 self.v_values[state] += reward
