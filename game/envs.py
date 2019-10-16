@@ -29,12 +29,23 @@ from . import agents
 DEBUG_ENV = False # set to True for verbose output
 MAX_RANGE = 8 # maximum range of Agents weapon => big impact on termination speed
 
+# State: complete state information, including next player
+State = namedtuple('State', [
+    'board',        # flattened board - 121 Ints
+    'positions',    # tuple of position tuples for all 4 agents
+    'alive',        # tuple of alive flags for all 4 agents
+    'ammo',         # tuple of ammo level for all 4 agents
+    'aim',          # tuple of aiming for all 4 agents 
+    'player',       # player to move in this state
+])
+
 # helper functions
 def print_state(state):
     print('Positions = ', state.positions)
     print('Aims = ', state.aim)
     print('Ammo = ', state.ammo)
     print('Alive = ', state.alive)
+    print('Player = ', state.player)
 
 def flatten(board):
     """Flatten the 'board' dictionary
@@ -77,15 +88,6 @@ def distance(state, agent1, agent2):
     x2, y2 = pos2
     return math.sqrt((x1-x2)**2 + (y1-y2)**2)             
 
-# State: complete state information
-State = namedtuple('State', [
-    'board',        # flattened board - 121 Ints
-    'positions',    # tuple of position tuples for all 4 agents
-    'alive',        # tuple of alive flags for all 4 agents
-    'ammo',         # tuple of ammo level for all 4 agents
-    'aim',          # tuple of aiming for all 4 agents 
-])
-
 class Environment:
     """The base game environment."""
     def __init__(self, **kwargs):
@@ -125,14 +127,15 @@ class Environment:
             for agent, pos in zip(agents, positions):
                 board[pos] = agent
         
-        # generate the state for the 4 players
-        # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team
+        # generate the state 
+        # by default, player 0 begins to play
         state = State(
             board = flatten(board),
             positions = tuple(positions),
             alive = (1, 1, 1, 1), 
             ammo = (5000, 5000, 5000, 5000),
             aim = (None, None, None, None),
+            player = 0,
         )
         return state
 
@@ -264,7 +267,8 @@ class Environment:
                         positions=tuple(positions),
                         alive=tuple(alive),
                         ammo=tuple(ammo),
-                        aim=tuple(aim))
+                        aim=tuple(aim),
+                        player=1-state.player) # switch player
         return new_state
 
     def terminal(self, state):

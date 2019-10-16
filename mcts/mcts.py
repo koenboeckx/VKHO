@@ -41,7 +41,7 @@ class MCTS:
     def is_leaf(self, state):
         return state not in self.children # state hasn't been expanded
     
-    def get_action(self, player, state):
+    def get_action(self, state):
         if state not in self.n_visits:
             self.n_visits[state] = 0
             self.v_values[state] = 0
@@ -49,12 +49,13 @@ class MCTS:
         start_time = time.time()
 
         while time.time() - start_time < self.max_search_time:
-            self.one_iteration(player, state)
+            self.one_iteration(state)
         
-        return self.pick_best_action(player, state)
+        return self.pick_best_action(state)
     
-    def pick_best_action(self, player, state):
+    def pick_best_action(self, state):
         ucb_vals = self.ucb(state)
+        player = state.player
         if player == 0: # pick highest UCB
             _, best_action_idx = max([(val, action) 
                                     for action, val in enumerate(ucb_vals)])
@@ -79,7 +80,8 @@ class MCTS:
                 ucb_vals.append(ucb)
         return ucb_vals
     
-    def get_next(self, player, state, actions):
+    def get_next(self, state, actions):
+        player = state.player
         if player == 0:
             actions = actions + (0, 0)
         else:
@@ -87,35 +89,37 @@ class MCTS:
         next_state = self.env.step(state, actions)
         return next_state
         
-    def one_iteration(self, player, start_state):
+    def one_iteration(self, start_state):
         """Runs one iteration of MCTS for 'player', starting
         in state 'start_state'"""
         current_state = start_state
-        current_player = player
 
         visited_nodes = [] # keep track of visited states and performed action in game tree
 
-        while not self.is_leaf(current_state):
-            best_action_idx = self.pick_best_action(current_player, current_state)
+        counter = 0 # for debugging
+        while not self.is_leaf(current_state): # walk through existing game tree until leaf
+            best_action_idx = self.pick_best_action(current_state)
             best_action = joint_actions[best_action_idx]
-            next_state = self.get_next(player, current_state, best_action)
-            visited_nodes.append((current_state, player, best_action_idx))
+            next_state = self.get_next(current_state, best_action)
+            visited_nodes.append((current_state, best_action_idx))
             print('len(visited_nodes) = ', len(visited_nodes))
             
-            current_player = self.other(current_player)
             current_state = next_state
+            counter += 1
+            if counter > 100:
+                print('hold')
         
-        visited_nodes.append((current_state, player, None)) # add last state without action
+        visited_nodes.append((current_state, None)) # add last state without action
 
         if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
-            reward = self.rollout(current_state, current_player)
-            # TODO: add backprop here?
+            reward = self.rollout(current_state)
+            self.backprop(visited_nodes, reward)
 
         else: # node already visited => expand now
             self.children[current_state] = []
-            for action_id in self.action_space:
-                actions = joint_actions[action_id]
-                child_state = self.get_next(current_player, current_state, actions)
+            for action_idx in self.action_space:
+                actions = joint_actions[action_idx]
+                child_state = self.get_next(current_state, actions)
 
                 # add these nodes to visited nodes with initial values: ni=0, ti=0
                 self.children[current_state].append(child_state)
@@ -124,31 +128,27 @@ class MCTS:
 
             # make last expanded state the current state
             current_state = child_state
-            current_player = self.other(current_player)
             
             # perform rollout from current state
-            reward = self.rollout(current_state, current_player)
+            reward = self.rollout(current_state)
         
-        self.backprop(visited_nodes, player, reward)
+            self.backprop(visited_nodes, reward)
     
-    def backprop(self, nodes, player, reward):
+    def backprop(self, nodes, reward):
         """Perform backup of reward over nodes in 'nodes' list.""" 
-        for state, player, action in reversed(nodes):
+        for state, action in reversed(nodes):
             self.n_visits[state] += 1
             self.v_values[state] += reward
     
-    def rollout(self, state, player):
+    def rollout(self, state):
         """Perform rollout (= random simulation), starting in 'state' until game is over."""
         while self.env.terminal(state) == 0: # no team has both players dead
             # generate random action
             action_idx = random.sample(joint_actions.keys(), 1)[0]
             action = joint_actions[action_idx]
-            state = self.get_next(player, state, action)
-            player = self.other(player)
+            state = self.get_next(state, action)
             
-        if DEBUG:
-            print('Game won by player {}'.format(player.id))
-        return 1 if player == 0 else -1 # if game ends when player moved, he won
+        return 1 if state.player == 0 else -1 # if game ends when player moved, he won
 
 
     
