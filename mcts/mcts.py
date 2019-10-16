@@ -20,12 +20,13 @@ DEBUG3 = True
 joint_actions =  dict(enumerate(product(range(8),
                                          range(8))))
 
-def max_random(items):
+def max_random(val_actions):
     """Returns maximum value. If multiple: select randomly."""
+    items = [val for val, action in val_actions]
     max_val = max(items)
     idxs = [idx for idx, val in enumerate(items) if val == max_val]
     rand_idx = random.sample(idxs, 1)[0]
-    return items[rand_idx]
+    return val_actions[rand_idx]
 
 
 class MCTS:
@@ -66,6 +67,7 @@ class MCTS:
         """Check if joint action (0..63) is allowed in state.
         Uses env.check_condtion(.). Goal: remove actions that
         produce no 'new' children."""
+        return True # TODO: remove to activate function
         actions = joint_actions[action]
         if state.player == 1:
             for agent, action in zip([0, 1], actions):
@@ -79,10 +81,9 @@ class MCTS:
     
     def pick_best_action(self, state):
         ucb_vals = self.ucb(state)
-        # TODO: remove actions that are not allowed 
         _, best_action_idx = max_random([(val, action) 
-                                    for action, val in enumerate(ucb_vals)
-                                    if self.check_actions(state, action)])                                   
+                                    for action, val in enumerate(ucb_vals)])
+                                    #if self.check_actions(state, action)])                                   
         return best_action_idx
     
     def ucb(self, state):
@@ -126,11 +127,18 @@ class MCTS:
             next_state = self.get_next(current_state, best_action)
             visited_nodes.append((current_state, best_action_idx))
             
-            # TODO: loop is presented when we keep hopping between
+            # TODO: loop is present where we keep hopping between
             # the same two states, because the best actions are those
             # that don't change state for the player
             if len(visited_nodes) > 100:
-                print('...loop...')
+                for idx in [-1]:
+                    print_state(visited_nodes[idx][0])
+                    print("best action = ", visited_nodes[idx][1])
+                items = self.ucb(visited_nodes[-1][0])
+                max_val = max(items)
+                idxs = [idx for idx, val in enumerate(items) if val == max_val]
+                print("idxs = ", idxs)
+                print("... best action = ", self.pick_best_action(visited_nodes[idx][0]))
             
             current_state = next_state
         
