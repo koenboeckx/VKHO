@@ -129,7 +129,7 @@ class Environment:
         # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team
         state = State(
             board = flatten(board),
-            positions = positions,
+            positions = tuple(positions),
             alive = (1, 1, 1, 1), 
             ammo = (5000, 5000, 5000, 5000),
             aim = (None, None, None, None),
@@ -206,7 +206,10 @@ class Environment:
         board_size = self.args.get('size', 11)
         agents = (0, 1, 2, 3)
 
-        new_state = copy.deepcopy(state) # adapt and  return
+        aim = list(state.aim)
+        alive = list(state.alive)
+        ammo = list(state.ammo)
+        positions = list(state.positions)
 
         for agent, action in zip(agents, actions):
             if not self.check_conditions(state, agent, action): # if conditions not met => move on to next agent
@@ -217,47 +220,51 @@ class Environment:
                 pass
             elif action == 1 or action == all_actions[1]: # aim1
                 if agent in [0, 1]:
-                    new_state.aim[agent] = 2
+                    aim[agent] = 2
                 elif agent in [2, 3]:
-                    new_state.aim[agent] = 0
+                    aim[agent] = 0
             elif action == 2 or action == all_actions[2]: # aim2
                 if agent in [0, 1]:
-                    new_state.aim[agent] = 3
+                    aim[agent] = 3
                 elif agent in [2, 3]:
-                    new_state.aim[agent] = 1
+                    aim[agent] = 1
             elif action == 3 or action == all_actions[3]: # fire
                 opponent = state.aim[agent]
                 if distance(state, agent, opponent) < MAX_RANGE: # simple kill criterion
-                    new_state.alive[opponent] = 0
+                    alive[opponent] = 0
                     if DEBUG_ENV:
                         print('Agent {} was just killed by {}'.format(
                             str(opponent), str(agent)
                         ))
-                new_state.ammo[agent] -= 1
-                new_state.aim[agent] = None
+                ammo[agent] -= 1
+                aim[agent] = None
             elif action == 4 or action == all_actions[4]: # move_up
                 agent_pos = state.positions[agent]
                 board[state.positions[agent]] = None
-                new_state.positions[agent] = (agent_pos[0]-1, agent_pos[1])
-                board[new_state.positions[agent]] = agent
+                positions[agent] = (agent_pos[0]-1, agent_pos[1])
+                board[positions[agent]] = agent
             elif action == 5 or action == all_actions[5]: # move_down
                 agent_pos = state.positions[agent]
                 board[state.positions[agent]] = None
-                new_state.positions[agent] = (agent_pos[0]+1, agent_pos[1])
-                board[new_state.positions[agent]] = agent
+                positions[agent] = (agent_pos[0]+1, agent_pos[1])
+                board[positions[agent]] = agent
             elif action == 6 or action == all_actions[6]: # move_left
                 agent_pos = state.positions[agent]
                 board[state.positions[agent]] = None
-                new_state.positions[agent] = (agent_pos[0], agent_pos[1]-1)
-                board[new_state.positions[agent]] = agent
+                positions[agent] = (agent_pos[0], agent_pos[1]-1)
+                board[positions[agent]] = agent
             elif action == 7 or action == all_actions[7]: # move_right
                 agent_pos = state.positions[agent]
                 board[state.positions[agent]] = None
-                new_state.positions[agent] = (agent_pos[0], agent_pos[1]+1)
-                board[new_state.positions[agent]] = agent
+                positions[agent] = (agent_pos[0], agent_pos[1]+1)
+                board[positions[agent]] = agent
         
         board = flatten(board)
-        new_state = new_state._replace(board=board)
+        new_state = State(board=board,
+                        positions=tuple(positions),
+                        alive=tuple(alive),
+                        ammo=tuple(ammo),
+                        aim=tuple(aim))
         return new_state
 
     def terminal(self, state):

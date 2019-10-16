@@ -113,9 +113,9 @@ class MCTS:
 
         else: # node already visited => expand now
             self.children[current_state] = []
-            for action_id in player.action_space:
+            for action_id in self.action_space:
                 actions = joint_actions[action_id]
-                child_state = self.get_next(current_state, current_player, actions)
+                child_state = self.get_next(current_player, current_state, actions)
 
                 # add these nodes to visited nodes with initial values: ni=0, ti=0
                 self.children[current_state].append(child_state)
