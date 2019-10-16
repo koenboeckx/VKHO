@@ -130,15 +130,6 @@ class MCTS:
             # TODO: loop is present where we keep hopping between
             # the same two states, because the best actions are those
             # that don't change state for the player
-            if len(visited_nodes) > 100:
-                for idx in [-1]:
-                    print_state(visited_nodes[idx][0])
-                    print("best action = ", visited_nodes[idx][1])
-                items = self.ucb(visited_nodes[-1][0])
-                max_val = max(items)
-                idxs = [idx for idx, val in enumerate(items) if val == max_val]
-                print("idxs = ", idxs)
-                print("... best action = ", self.pick_best_action(visited_nodes[idx][0]))
             
             current_state = next_state
         

@@ -10,8 +10,8 @@ Limitations:
 """
 
 all_actions = { 0: 'do_nothing',
-                1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
-                2: 'aim2',  # prepare to fire on second enemy (1 or 3)',
+                1: 'aim0',  # prepare to fire on first  enemy (0 or 2)
+                2: 'aim1',  # prepare to fire on second enemy (1 or 3)',
                 3: 'fire',
                 4: 'move_up',
                 5: 'move_down',

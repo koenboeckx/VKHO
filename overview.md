@@ -39,6 +39,9 @@
 1. Development summary:
     1. [15Oct19] An infinte loop in while not player.is_leaf()
         * rewrote envs.Environment as 'functional' class: step(state, action) -> new_state
-        * study in detail the behavior of MCTS while exploring and expanding new nodes
-        * rethink stores of the form store[state_int] = [val_action1, val_action2, ....] 
-        * if stores are reformed (currently in works) => how to deal with Min-Max ?
+        * study in detail the behavior of MCTS while exploring and expanding new nodes: **ok**
+        * rethink stores of the form store[state_int] = [val_action1, val_action2, ....]. *For now*: back to single stores store[state] = value
+        * **Change**: 'State' is now immutable => can be used as hash key. Also: include player to play in State.
+        * Division by Zero in UCB: consequence of reintitialising node after identified as a child node (effectively: reset of .n_visits[state] = 0). *Solution*: check if node is already present in store before (re)setting initial values.
+        * if stores are reformed (currently in works) => how to deal with Min-Max ?: *solution*: this doesn't solve the core problem (see next point). However, alternatively updating v_values in function of wich player (`v_values[state] += or -= reward`, accordingly)
+        * How to handle loops in behavior (returning to same state after X actions) -> leads to loop where we never find a leaf node = **core of the problem**
