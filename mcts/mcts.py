@@ -20,6 +20,14 @@ DEBUG3 = True
 joint_actions =  dict(enumerate(product(range(8),
                                          range(8))))
 
+def max_random(items):
+    """Returns maximum value. If multiple: select randomly."""
+    max_val = max(items)
+    idxs = [idx for idx, val in enumerate(items) if val == max_val]
+    rand_idx = random.sample(idxs, 1)[0]
+    return items[rand_idx]
+
+
 class MCTS:
     """Controls the MCTS search. Contains 2 players"""
     def __init__(self, env, **kwargs):
@@ -72,7 +80,7 @@ class MCTS:
     def pick_best_action(self, state):
         ucb_vals = self.ucb(state)
         # TODO: remove actions that are not allowed 
-        _, best_action_idx = max([(val, action) 
+        _, best_action_idx = max_random([(val, action) 
                                     for action, val in enumerate(ucb_vals)
                                     if self.check_actions(state, action)])                                   
         return best_action_idx
@@ -117,6 +125,10 @@ class MCTS:
             best_action = joint_actions[best_action_idx]
             next_state = self.get_next(current_state, best_action)
             visited_nodes.append((current_state, best_action_idx))
+            
+            # TODO: loop is presented when we keep hopping between
+            # the same two states, because the best actions are those
+            # that don't change state for the player
             if len(visited_nodes) > 100:
                 print('...loop...')
             
