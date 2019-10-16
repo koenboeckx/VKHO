@@ -26,6 +26,6 @@ for i in range(1000):
         actions = (0, 0) + action
     state = env.step(state, actions)
     env.render(state)
-    game.envs.print_state(state)
+    #game.envs.print_state(state)
 
 print('... done')

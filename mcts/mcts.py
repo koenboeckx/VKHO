@@ -55,12 +55,7 @@ class MCTS:
     
     def pick_best_action(self, state):
         ucb_vals = self.ucb(state)
-        player = state.player
-        if player == 0: # pick highest UCB
-            _, best_action_idx = max([(val, action) 
-                                    for action, val in enumerate(ucb_vals)])
-        elif player == 1: # pick lowest UCB; TODO: quid variance?
-            _, best_action_idx = min([(val, action) 
+        _, best_action_idx = max([(val, action) 
                                     for action, val in enumerate(ucb_vals)])
         return best_action_idx
     
@@ -70,20 +65,16 @@ class MCTS:
         ucb_vals = []
 
         N = self.n_visits[state]
+        if N == 0:
+            raise ValueError('Division by zero')
         for child in self.children[state]:
             val = self.v_values[child]
             ni  = self.n_visits[child]
             if ni == 0: # action has never been performed in this state
-                if state.player == 0: # TODO: check validity off this
-                    ucb_vals.append(float(np.infty))
-                else:
-                    ucb_vals.append(-float(np.infty))
+                ucb = float(np.infty)
             else:
-                if state.player == 0: # TODO: check validity off this
-                    ucb = val + 2*np.sqrt(np.log(N)/ni)
-                else:
-                    ucb = val - 2*np.sqrt(np.log(N)/ni)
-                ucb_vals.append(ucb)
+                ucb = val + 2*np.sqrt(np.log(N)/ni)
+            ucb_vals.append(ucb)
         return ucb_vals
     
     def get_next(self, state, actions):
@@ -110,11 +101,11 @@ class MCTS:
             
             current_state = next_state
             counter += 1
-            if counter > 100:
-                print('hold')
+            #if counter > 100:
+            #    print('hold')
         
         visited_nodes.append((current_state, None)) # add last state without action
-        print('len(visited_nodes) = ', len(visited_nodes))
+        #print('len(visited_nodes) = ', len(visited_nodes))
 
         if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
             reward = self.rollout(current_state)
@@ -143,7 +134,10 @@ class MCTS:
         """Perform backup of reward over nodes in 'nodes' list.""" 
         for state, action in reversed(nodes):
             self.n_visits[state] += 1
-            self.v_values[state] += reward
+            if state.player == 0:
+                self.v_values[state] += reward
+            if state.player == 1:
+                self.v_values[state] -= reward
     
     def rollout(self, state):
         """Perform rollout (= random simulation), starting in 'state' until game is over."""
