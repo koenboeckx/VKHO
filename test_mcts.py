@@ -10,28 +10,30 @@ from game import envs
 from game.envs import all_actions
 
 env =  game.envs.Environment()
-state = env.get_init_game_state()
+
 
 mcts = MCTS(env, max_search_time=10.0)
 
-filename = 'mcts_{}.p'.format(date.today())
+#filename = 'mcts_{}.p'.format(date.today())
+filename = 'mcts_temp.p'
 #mcts.load(filename)
 
-for it in range(100):
-    print('iteration {}'.format(it))
-    action_idx = mcts.get_action(state)
-    action = joint_actions[action_idx]
-    print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
-        state.player, all_actions[action[0]],
-        all_actions[action[1]], len(mcts.n_visits)))
+for jt in range(1):
+    state = env.get_init_game_state()
+    for it in range(10):
+        print('iteration {}'.format(it))
+        action_idx = mcts.get_action(state)
+        action = joint_actions[action_idx]
+        print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
+            state.player, all_actions[action[0]],
+            all_actions[action[1]], len(mcts.n_visits)))
 
-    state = mcts.get_next(state, action)
-    env.render(state)
-    game.envs.print_state(state)
+        state = mcts.get_next(state, action)
+        env.render(state)
+        game.envs.print_state(state)
 
-    if env.terminal(state):
-        state = env.get_init_game_state()
+        if env.terminal(state):
+            state = env.get_init_game_state()
+    mcts.save(filename)
 
-
-mcts.save(filename)
 print('... done')

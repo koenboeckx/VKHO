@@ -68,7 +68,7 @@ class MCTS:
         """Check if joint action (0..63) is allowed in state.
         Uses env.check_condtion(.). Goal: remove actions that
         produce no 'new' children."""
-        return True # TODO: remove to activate function
+        #return True # TODO: remove to activate function
         actions = joint_actions[action]
         if state.player == 1:
             for agent, action in zip([0, 1], actions):
@@ -81,17 +81,17 @@ class MCTS:
         return True
     
     def pick_best_action(self, state, visited_nodes=[]):
-        ucb_vals = self.ucb(state)
+        uct_vals = self.uct(state)
         _, best_action_idx = max([(val, action) 
-                                    for action, val in enumerate(ucb_vals)
-                                    #if self.check_actions(state, action)
-                                    if self.children[state][action] not in visited_nodes])                                   
+                                    for action, val in enumerate(uct_vals)
+                                    if self.check_actions(state, action)
+                                    and self.children[state][action] not in visited_nodes])                                   
         return best_action_idx
     
-    def ucb(self, state):
-        """Returns the list of UCB1 values for all actions player can
+    def uct(self, state):
+        """Returns the list of UCT (UCB applied to Trees) values for all actions player can
         take in 'state'."""
-        ucb_vals = []
+        uct_vals = []
 
         N = self.n_visits[state]
         if N == 0:
@@ -101,11 +101,11 @@ class MCTS:
             val = self.v_values[child]
             ni  = self.n_visits[child]
             if ni == 0: # this action has never been performed in this state
-                ucb = float(np.infty)
+                uct = float(np.infty)
             else:
-                ucb = val + 2*np.sqrt(np.log(N)/ni)
-            ucb_vals.append(ucb)
-        return ucb_vals
+                uct = val/ni + 2*np.sqrt(np.log(N)/ni)
+            uct_vals.append(uct)
+        return uct_vals
     
     def get_next(self, state, actions):
         if state.player == 0:
