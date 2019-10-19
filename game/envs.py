@@ -52,9 +52,10 @@ def flatten(board):
     :params:    board: dictionary containing different elements
     :return:    flattened_board: 121 Ints
     """
+    n = int(math.sqrt(len(board)))
     flattened_board = []
-    for i in range(11):
-        for j in range(11):
+    for i in range(n):
+        for j in range(n):
             if board[(i,j)] is None:
                 flattened_board.append(-1)
             else:
@@ -123,7 +124,9 @@ class Environment:
                 board[(i,j)] = agent
         else:
             # Alternative: position agents on fixed initial positions
-            positions = [(4, 0), (6, 0), (4, 10), (6, 10)]
+            high = board_size//2 - 1
+            low  = board_size//2 + 1
+            positions = [(high, 0), (low, 0), (high, board_size-1), (low, board_size-1)]
             for agent, pos in zip(agents, positions):
                 board[pos] = agent
         
@@ -148,9 +151,9 @@ class Environment:
             for i in range(board_size):
                 for j in range(board_size):
                     if board[i*board_size+j] == -1:
-                        board_repr += '  .  '
+                        board_repr += ' . '
                     else:
-                        board_repr += ' ' + repr(board[i*board_size+j]) + '  '
+                        board_repr += ' ' + board[i*board_size+j] + ' '
                 board_repr += '\n'
         elif type(board) == str:
             board = board[1:-1].split(',')

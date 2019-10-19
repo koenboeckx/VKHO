@@ -9,18 +9,17 @@ import game
 from game import envs
 from game.envs import all_actions
 
-env =  game.envs.Environment()
+env =  game.envs.Environment(size=5)
 
+mcts = MCTS(env, max_search_time=2.0)
 
-mcts = MCTS(env, max_search_time=10.0)
-
-#filename = 'mcts_{}.p'.format(date.today())
-filename = 'mcts_temp.p'
+#filename = 'mcts_{}_2.p'.format(date.today())
+#filename = 'mcts_temp.p'
 #mcts.load(filename)
 
-for jt in range(1):
+for jt in range(5):
     state = env.get_init_game_state()
-    for it in range(10):
+    for it in range(200):
         print('iteration {}'.format(it))
         action_idx = mcts.get_action(state)
         action = joint_actions[action_idx]
