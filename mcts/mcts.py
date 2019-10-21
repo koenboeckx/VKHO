@@ -1,181 +1,241 @@
-"""
-Attempt to solve - or find non-trivial tactics - for the game
-For now: only symmetric game with 2 Tanks per Player (=Commander)
-"""
-
+from itertools import product
+import random
 import time
-import copy
-import math # .sqrt, .log to compute UCB
-import random # for generating random moves during rollout
-import numpy as np # infinity
-from itertools import product   # create joint action spaces
+import pickle
+import numpy as np
 
-import game
 from game.agents import Tank
+from game.envs import print_state
 
-DEBUG = False # set to True for verbose output
+DEBUG  = False
+DEBUG2 = True
+DEBUG3 = True
 
-def obs_to_int(obs):
-    """convert an observation to a unique integer. Here, an observation
-    if the combined observation of the two agents on one team"""
-    return hash(str(obs))
 
-def state_to_int(state, team):
-    """convert a state namedtuple to a unique integer.
-    Added: include team that is to play from this state"""
-    return hash(str(state)+str(team))
+# TODO: fix this import error
+#from envs import all_actions
 
-class CommandedTank(Tank):
-    """Tank that gets actions from a commander"""
-    def __init__(self, idx, commander):
-        super(CommandedTank, self).__init__(idx)
-        self.commander = commander
-        self.commander.add_agent(self)
-    
-    def get_action(self, obs):
-        """Asks the commander to provide an action"""
-        return self.commander.get_action(obs) # TODO: is this needed?
+#joint_actions =  dict(enumerate((product(all_actions.keys(),
+#                                         all_actions.keys())))) 
 
-class MCTSPlayer:
-    """Player that commands 2 tanks. Uses MCTS to search action space
-    and provide best action for both tanks when requested."""
-    def __init__(self):
-        self.agents = []
-        self.max_search_time = 10 # max search time in seconds => proxy for search depth
+joint_actions =  dict(enumerate(product(range(8),
+                                         range(8))))
 
-    def add_agent(self, agent):
-        self.agents.append(agent)
-    
-    def set_environment(self, env):
-        self.env = copy.deepcopy(env) # environment used for simulation
-        self.action_space = list(product(env.action_space.keys(),
-                                         env.action_space.keys()))
-    
-    def get_actions(self, team, state):
-        """Run MCTS from state. After max time expires, return action with 
-        highest/lowest q-value depending on team"""
-        state_int = state_to_int(state, team)
-        # if state not in self.n_visits, add it
-        if state_int not in self.n_visits:
-            self.n_visits[state_int] = 0
-            self.value[state_int] = 0
+def max_random(val_actions):
+    """Returns maximum value. If multiple: select randomly."""
+    items = [val for val, action in val_actions]
+    max_val = max(items)
+    idxs = [idx for idx, val in enumerate(items) if val == max_val]
+    rand_idx = random.sample(idxs, 1)[0]
+    return val_actions[rand_idx]
+
+
+class MCTS:
+    """Controls the MCTS search. Contains 2 players"""
+    def __init__(self, env, **kwargs):
         
-        # run x iterations of MCTS starting from 'state'
-        counter = 0 # for debugging; TODO: remove later
+        self.env = env
+        self.args = kwargs
+        self.max_search_time = kwargs.get('max_search_time', 2)
+
+        self.n_visits = {}
+        self.v_values = {}
+        self.children = {}
+
+        self.action_space = joint_actions.keys()
+        self.action_space_n = len(self.action_space)
+
+    def other(self, player):
+        """Return the other player from self.players"""
+        return 1 if player == 0 else 0
+    
+    def is_leaf(self, state):
+        return state not in self.children # state hasn't been expanded
+    
+    def get_action(self, state):
+        if state not in self.n_visits:
+            self.n_visits[state] = 0
+            self.v_values[state] = 0
+        
         start_time = time.time()
+
         while time.time() - start_time < self.max_search_time:
-        #for i in range(2): # remove this line later
-            print('Iteration = {}'.format(counter))
-            self.one_iteration(team, state)
-            counter += 1
+            self.one_iteration(state)
         
-        # now select the best action (based on UCB value TODO: check alternatives)
-        best_action, _ = self.pick_best_action(state, team)
-        
-        return best_action
-
-    def pick_best_action(self, current_state, team):
-        # construct list of successor states
-        child_nodes = [self.env.sim_step(current_state, team, actions)
-                          for actions in self.action_space]
-        
-        # compute UCB and select best action
-        best = max if team == 0 else min
-        _, best_action, next_state = best(list(zip(self.ucb(child_nodes, team), self.action_space, child_nodes)))
-        return best_action, next_state
-
-    def one_iteration(self, team, start_node):
-        current_state = start_node
-        visited_nodes = [current_state] # keep track of nodes visited along the way to perform backprop
-        while not self.is_leaf(current_state, team):
-            best_action, current_state = self.pick_best_action(current_state, team)
-            # current_state = self.env.sim_step(current_state, best_action) # TODO: normally not needed
-            visited_nodes.append(current_state)
-            # switch teams after each round
-            team = 0 if team == 1 else 1 
-        
-        state_int = state_to_int(current_state, team)
-
-        if self.n_visits[state_int] == 0: # first visit to this node => perform rollout and backprop
-            reward = self.rollout(current_state, team)
-            self.backprop(visited_nodes, team, reward)
-            
-        else:
-            # expand node -> no longer a leaf node
-            for action in self.action_space:
-                child_state = self.env.sim_step(current_state, team, action)
-                child_state_int = state_to_int(child_state, team)
-                # add this child state to visited nodes with ni = 0 and value = 0
-                self.n_visits[child_state_int] = 0
-                self.value[child_state_int] = 0
-            # add current node to list of expanded nodes
-            self.expanded.append(state_int)
-            # make last expanded state the current state (why last? -> convenience)
-            current_state = child_state
-            visited_nodes.append(current_state)
-
-            # perform rollout and backprop on last created node = current state
-            reward = self.rollout(current_state, team)
-            self.backprop(visited_nodes, team, reward)
-            
-
-    def backprop(self, visited_nodes, team, reward):
-        """Propagate the reward signal back trough the list of visited nodes"""
-        # TODO: verify if team really has no importance here
-        for node in reversed(visited_nodes):
-            node_int = state_to_int(node, team)
-            self.n_visits[node_int] += 1
-            self.value[node_int] += reward
-
-    def rollout(self, state, team):
-        """Perform rollout (= random simulation), starting in 'state' until game is over."""
-        while self.env.terminal_state(state) == 0: # no team has both players dead
-            team = 0 if team == 1 else 1 # switch teams after each round
-            # generate random action
-            action = (random.randint(0, self.env.n_actions-1),
-                      random.randint(0, self.env.n_actions-1))
-            state = self.env.sim_step(state, team, action)
-            if DEBUG:
-                self.env.render(state.board)
-                print('alive = ', state.alive)
-                print('ammo  = ', state.ammo)
-        return self.env.terminal_state(state)
+        return self.pick_best_action(state)
     
-    def is_leaf(self, state, team):
-        return state_to_int(state, team) not in self.expanded 
-
-    def ucb(self, child_nodes, team):
-        """Returns a list of UCB1 values for all children in child_nodes."""
-        other_team = 1-team
-        child_nodes_int = [state_to_int(child, other_team) for child in child_nodes]
+    def check_actions(self, state, action):
+        """Check if joint action (0..63) is allowed in state.
+        Uses env.check_condtion(.). Goal: remove actions that
+        produce no 'new' children."""
+        #return True # TODO: remove to activate function
+        actions = joint_actions[action]
+        if state.player == 0:
+            for agent, action in zip([0, 1], actions):
+                if not self.env.check_conditions(state, agent, action):
+                    return False
+        else: # player 1
+            for agent, action in zip([2, 3], actions):
+                if not self.env.check_conditions(state, agent, action):
+                    return False
+        return True
+    
+    def pick_best_action(self, state, visited_nodes=[]):
+        uct_vals = self.uct(state)
+        vals_actions = [(val, action) for action, val in enumerate(uct_vals)]
+        # filter away all actions that are not allowed:
+        vals_actions = list(filter(lambda va: self.check_actions(state, va[1]), vals_actions))
+        # filter away all actions that lead to previously visited states (avoids infinite loops):
+        vals_actions = list(filter(lambda va: self.children[state][va[1]] not in visited_nodes, vals_actions)) 
+        # pick now the best value-action pair (and discard value)
         try:
-            N = sum([self.n_visits[child] for child in child_nodes_int])
-        except KeyError:
+            _, best_action_idx = max(vals_actions)
+        except ValueError:
+            print('ValueError: max() arg is an empty sequence')
             pass
-        ucb_vals = []
-        for child_int in child_nodes_int:
-            if self.n_visits[child_int] == 0:
-                 ucb_vals.append(float(np.infty))
+        return best_action_idx
+    
+    def uct(self, state):
+        """Returns the list of UCT (UCB applied to Trees) values for all actions player can
+        take in 'state'.
+        :params: state: state for which all UCT values are computed (one per child (action))
+        :return: list of uct values (one per potential action)
+        """
+        uct_vals = []
+
+        N = self.n_visits[state]
+        if N == 0:
+            print_state(state)
+            raise ValueError('Division by zero')
+        for child in self.children[state]:
+            val = self.v_values[child]
+            ni  = self.n_visits[child]
+            if ni == 0: # this action has never been performed in this state
+                uct = float(np.infty)
             else:
-                ni = self.n_visits[child_int]
-                ucb_vals.append(self.value[child_int] +  2*math.sqrt(math.log(N)/ni))
-        return ucb_vals
-
-    def init_stores(self):
-        self.current_team = 0
-        self.n_visits = {} # store number of visits
-        self.value = {} # store the estimated value of a state
-                        # all values are estimated from the point
-                        # of view of team 1 (thus > 0 => team 1,
-                        #                    and  < 0 => team 2)
-        self.q_value = {}   # stores (state, action) pairs and their
-                            # estimated values
-        self.link = {}  # makes the link between hashed state and real state
-        self.expanded = [] # list of expanded nodes
-        self.children = {} # dict of state -> [(action, child_state)]
+                uct = val/ni + 2*np.sqrt(np.log(N)/ni) # TODO: how to handle this in minimax?
+            uct_vals.append(uct)
+        return uct_vals
     
+    def get_next(self, state, actions):
+        """
+        Get next state from environment, by performing action in state.
+        Action is performed for state.player = current player.
+        :params: state:   current state, instance of State
+                 actions: tuple (action_1, action_2) with action_i in [0..7]
+        :return: next state
+        """
+        if state.player == 0:
+            actions = actions + (0, 0)
+        else:
+            actions = (0, 0) + actions
+        next_state = self.env.step(state, actions)
+        return next_state
+
+    def find_leaf(self, state):
+        """
+        Traverse existing game tree, each time picking node with highest UCT for allowed action,
+        until a non-expanded node (= leaf node) is found.
+        :params: state : State tuple from wich the search starts
+        :return: (state, visited_nodes): leaf state, nodes encoutered during search, for backprop.
+        """
+        visited_nodes = [] # keep track of visited states and performed action in game tree
+        # TODO: take into account terminal states
+        while not self.is_leaf(state): # walk through existing game tree until leaf
+            best_action_idx = self.pick_best_action(state, visited_nodes) # force next state to be a new state
+            best_action = joint_actions[best_action_idx]
+            next_state = self.get_next(state, best_action)
+            visited_nodes.append(state)
+                       
+            state = next_state
+        
+        visited_nodes.append(state) # add last state without action
+        return state, visited_nodes
+
+    def one_iteration(self, start_state):
+        """Runs one iteration of MCTS for 'player', starting
+        in state 'start_state'"""
+
+        # find first leaf node while descending the game tree
+        current_state, visited_nodes = self.find_leaf(start_state)
+
+        if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
+            reward = self.rollout(current_state)
+            self.backprop(visited_nodes, reward)
+
+        else: # node already visited => expand now
+            self.children[current_state] = []
+            for action_idx in self.action_space:
+                actions = joint_actions[action_idx]
+                child_state = self.get_next(current_state, actions)
+
+                # add these nodes to visited nodes with initial values: ni=0, ti=0 if not already present
+                self.children[current_state].append(child_state)
+                if child_state not in self.n_visits:
+                    self.n_visits[child_state] = 0
+                    self.v_values[child_state] = 0      
+
+            # make last expanded state the current state
+            current_state = child_state
+            
+            # perform rollout from current state
+            reward = self.rollout(current_state)
+            self.backprop(visited_nodes, reward)
     
+    def backprop(self, nodes, reward):
+        """Perform backup of reward over nodes in 'nodes' list.""" 
+        for state in reversed(nodes):
+            self.n_visits[state] += 1
+            if state.player == 0:
+                self.v_values[state] += reward
+            if state.player == 1:
+                self.v_values[state] -= reward
+    
+    def rollout(self, state):
+        """Perform rollout (= random simulation), starting in 'state' until game is over."""
+        while self.env.terminal(state) == 0: # no team has both players dead
+            # generate random action
+            action_idx = random.sample(joint_actions.keys(), 1)[0]
+            action = joint_actions[action_idx]
+            state = self.get_next(state, action)
+            
+        return -1 if state.player == 0 else 1 # if game ends when player moved, he won
+                                              # BUT: state.player == player to move! thus other player won
+                                              # TODO: check if this reasoning is correct
+    
+    def save(self, filename):
+        with open(filename, "wb" ) as file:
+            pickle.dump([self.n_visits, self.v_values, self.children], file)
+        
+    def load(self, filename):
+        with open(filename, "rb" ) as file:
+            stores = pickle.load(file)
+            self.n_visits, self.v_values, self.children = stores
+            
 
+# TODO: adapt MCTS so that selection is done by other player
+# mcts1 = MCTS(player=1)
+# mcts2 = MCTS(player=2)
+# mcts1.set_opponent(mcts2)
+# mcts2.set_opponent(mcts1)            
+def  play_game(env, filename=None):
+    """Play a single game"""
+    mcts_stores = (MCTS(env), MCTS(env))
 
+    state = env.get_init_game_state()
+    result = env.terminal(state)
+    while result == 0: # nobody has won
+        current_player = state.player
+        action_idx = mcts_stores[current_player].get_action(state)
+        action = joint_actions[action_idx]
+        print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
+            current_player, all_actions[action[0]],
+            all_actions[action[1]], len(mcts_stores[current_player].n_visits)))
+    print('UCT for state = ', sorted(mcts_stores[current_player].uct(state),
+         reverse=True))
 
+    state = mcts_stores[current_player].get_next(state, action)
+    env.render(state)
+    print_state(state)
 
+    result = env.terminal(state)

@@ -1,53 +1,42 @@
 """
-Implementation with only one player, who in turn steers team1 and then
-team 2. Turns game with simultaneous actions into turn-based game.
+Implementation with only two players, who take turnst making moves.
+Turns game with simultaneous actions into turn-based game.
 """
+from datetime import date
 
-from mcts.mcts import CommandedTank, MCTSPlayer
+from mcts.mcts import MCTS, joint_actions
 import game
+from game import envs
+from game.envs import all_actions
 
-## Dilemma: agent needs player, env needs agents, player needs reference to env
+env =  game.envs.Environment(size=5, max_range=3)
 
-player = MCTSPlayer()
-agent_list = [
-    CommandedTank(0, commander=player),
-    CommandedTank(1, commander=player),
-    CommandedTank(2, commander=player),
-    CommandedTank(3, commander=player),
-]
+mcts = MCTS(env, max_search_time=2.0)
 
-env = game.make(0, agent_list)
+filename = 'mcts_{}.p'.format(date.today())
+#filename = 'mcts_temp.p'
+try:
+    mcts.load(filename)
+except FileNotFoundError:
+    pass
 
-# add this environment to player
-player.set_environment(env)
-player.init_stores()
+state = env.get_init_game_state()
+for it in range(200):
+    print('iteration {}'.format(it))
+    action_idx = mcts.get_action(state)
+    action = joint_actions[action_idx]
+    print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
+        state.player, all_actions[action[0]],
+        all_actions[action[1]], len(mcts.n_visits)))
+    print('UCT for state = ', sorted(mcts.uct(state), reverse=True))
 
-print(len(player.action_space))
+    state = mcts.get_next(state, action)
+    env.render(state)
+    game.envs.print_state(state)
 
-obs = env.set_init_game_state()
+    if env.terminal(state):
+        print('Game won by player {}'.format(state.player))
+        state = env.get_init_game_state()
+mcts.save(filename)
 
-#actions = env.act(obs) # env.act returns tuple of actions
-                        # this doesn't have to be used.
-                        # use players to generate actions
-
-state = env.get_state()
-player.get_actions(0, state)
-
-"""
-# training sequence
-state = env.get_state()
-team = 0
-for i in range(10):
-    actions = player.get_actions(team, state)
-    if team == 0:
-        actions = actions + (0, 0)
-    else:
-        actions = (0, 0) + actions
-    _ = env.step(actions)
-    state = env.get_state()
-    if env.terminal() != 0: # check if game is over => reset game
-        state = env.set_init_game_state()
-    env.render()
-
-    team = 0 if team == 1 else 1 # switch teams
-"""
+print('... done')
