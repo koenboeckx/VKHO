@@ -70,7 +70,7 @@ class MCTS:
         produce no 'new' children."""
         #return True # TODO: remove to activate function
         actions = joint_actions[action]
-        if state.player == 1:
+        if state.player == 0:
             for agent, action in zip([0, 1], actions):
                 if not self.env.check_conditions(state, agent, action):
                     return False
@@ -82,15 +82,25 @@ class MCTS:
     
     def pick_best_action(self, state, visited_nodes=[]):
         uct_vals = self.uct(state)
-        _, best_action_idx = max([(val, action) 
-                                    for action, val in enumerate(uct_vals)
-                                    if self.check_actions(state, action)
-                                    and self.children[state][action] not in visited_nodes])                                   
+        vals_actions = [(val, action) for action, val in enumerate(uct_vals)]
+        # filter away all actions that are not allowed:
+        vals_actions = list(filter(lambda va: self.check_actions(state, va[1]), vals_actions))
+        # filter away all actions that lead to previously visited states (avoids infinite loops):
+        vals_actions = list(filter(lambda va: self.children[state][va[1]] not in visited_nodes, vals_actions)) 
+        # pick now the best value-action pair (and discard value)
+        try:
+            _, best_action_idx = max(vals_actions)
+        except ValueError:
+            print('ValueError: max() arg is an empty sequence')
+            pass
         return best_action_idx
     
     def uct(self, state):
         """Returns the list of UCT (UCB applied to Trees) values for all actions player can
-        take in 'state'."""
+        take in 'state'.
+        :params: state: state for which all UCT values are computed (one per child (action))
+        :return: list of uct values (one per potential action)
+        """
         uct_vals = []
 
         N = self.n_visits[state]
@@ -103,40 +113,51 @@ class MCTS:
             if ni == 0: # this action has never been performed in this state
                 uct = float(np.infty)
             else:
-                uct = val/ni + 2*np.sqrt(np.log(N)/ni)
+                uct = val/ni + 2*np.sqrt(np.log(N)/ni) # TODO: how to handle this in minimax?
             uct_vals.append(uct)
         return uct_vals
     
     def get_next(self, state, actions):
+        """
+        Get next state from environment, by performing action in state.
+        Action is performed for state.player = current player.
+        :params: state:   current state, instance of State
+                 actions: tuple (action_1, action_2) with action_i in [0..7]
+        :return: next state
+        """
         if state.player == 0:
             actions = actions + (0, 0)
         else:
             actions = (0, 0) + actions
         next_state = self.env.step(state, actions)
         return next_state
+
+    def find_leaf(self, state):
+        """
+        Traverse existing game tree, each time picking node with highest UCT for allowed action,
+        until a non-expanded node (= leaf node) is found.
+        :params: state : State tuple from wich the search starts
+        :return: (state, visited_nodes): leaf state, nodes encoutered during search, for backprop.
+        """
+        visited_nodes = [] # keep track of visited states and performed action in game tree
+        # TODO: take into account terminal states
+        while not self.is_leaf(state): # walk through existing game tree until leaf
+            best_action_idx = self.pick_best_action(state, visited_nodes) # force next state to be a new state
+            best_action = joint_actions[best_action_idx]
+            next_state = self.get_next(state, best_action)
+            visited_nodes.append(state)
+                       
+            state = next_state
         
+        visited_nodes.append(state) # add last state without action
+        return state, visited_nodes
+
     def one_iteration(self, start_state):
         """Runs one iteration of MCTS for 'player', starting
         in state 'start_state'"""
-        current_state = start_state
 
-        visited_nodes = [] # keep track of visited states and performed action in game tree
-
-        # TODO: take into account terminal states
-        while not self.is_leaf(current_state): # walk through existing game tree until leaf
-            best_action_idx = self.pick_best_action(current_state, visited_nodes) # force next state to be a new state
-            best_action = joint_actions[best_action_idx]
-            next_state = self.get_next(current_state, best_action)
-            visited_nodes.append(current_state)
-            
-            # TODO: loop is present where we keep hopping between
-            # the same two states, because the best actions are those
-            # that don't change state for the player
-            
-            current_state = next_state
-        
-        visited_nodes.append(current_state) # add last state without action
-        #print('len(visited_nodes) = ', len(visited_nodes))
+        # find first leaf node while descending the game tree
+        current_state, visited_nodes = self.find_leaf(start_state)
 
         if self.n_visits[current_state] == 0: # first visit to this (already expanded) state
             reward = self.rollout(current_state)
@@ -178,7 +199,9 @@ class MCTS:
             action = joint_actions[action_idx]
             state = self.get_next(state, action)
             
-        return 1 if state.player == 0 else -1 # if game ends when player moved, he won
+        return -1 if state.player == 0 else 1 # if game ends when player moved, he won
+                                              # BUT: state.player == player to move! thus other player won
+                                              # TODO: check if this reasoning is correct
     
     def save(self, filename):
         with open(filename, "wb" ) as file:
@@ -188,6 +211,31 @@ class MCTS:
         with open(filename, "rb" ) as file:
             stores = pickle.load(file)
             self.n_visits, self.v_values, self.children = stores
+            
 
+# TODO: adapt MCTS so that selection is done by other player
+# mcts1 = MCTS(player=1)
+# mcts2 = MCTS(player=2)
+# mcts1.set_opponent(mcts2)
+# mcts2.set_opponent(mcts1)            
+def  play_game(env, filename=None):
+    """Play a single game"""
+    mcts_stores = (MCTS(env), MCTS(env))
 
-    
+    state = env.get_init_game_state()
+    result = env.terminal(state)
+    while result == 0: # nobody has won
+        current_player = state.player
+        action_idx = mcts_stores[current_player].get_action(state)
+        action = joint_actions[action_idx]
+        print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
+            current_player, all_actions[action[0]],
+            all_actions[action[1]], len(mcts_stores[current_player].n_visits)))
+    print('UCT for state = ', sorted(mcts_stores[current_player].uct(state),
+         reverse=True))
+
+    state = mcts_stores[current_player].get_next(state, action)
+    env.render(state)
+    print_state(state)
+
+    result = env.terminal(state)

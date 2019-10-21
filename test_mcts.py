@@ -33,6 +33,6 @@ for jt in range(5):
 
         if env.terminal(state):
             state = env.get_init_game_state()
-    mcts.save(filename)
+    #mcts.save(filename)
 
 print('... done')
