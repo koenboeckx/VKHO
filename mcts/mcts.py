@@ -155,7 +155,7 @@ class MCTS:
         visited_nodes = [] # keep track of visited states and performed action in game tree
         # TODO: take into account terminal states
         while not self.is_leaf(state): # walk through existing game tree until leaf
-            best_action_idx = self.pick_best_action(state, visited_nodes) # force next state to be a new state
+            best_action_idx = self.pick_best_action(state, [v for v, _ in visited_nodes]) # force next state to be a new state
             best_action = joint_actions[best_action_idx]
             next_state = self.get_next(state, best_action)
             visited_nodes.append((state, best_action_idx))
