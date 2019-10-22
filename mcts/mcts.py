@@ -119,7 +119,7 @@ class MCTS:
             if ni == 0: # this action has never been performed in this state
                 uct = float(np.infty)
             else:
-                uct = val/ni + 2*np.sqrt(np.log(N)/ni)
+                uct = val/ni# + 2*np.sqrt(np.log(N)/ni)
             uct_vals.append(uct)
         return uct_vals
     
@@ -229,10 +229,10 @@ class MCTS:
             self.n_visits, self.v_values, self.children = stores
             
          
-def  play_game(env, filename=None):
+def  play_game(env, max_search_time=2.0, filename=None):
     """Play a single game"""
     mcts_stores = (MCTSStore(), MCTSStore())
-    mcts = MCTS(mcts_stores, env, max_search_time=2.0)
+    mcts = MCTS(mcts_stores, env, max_search_time=max_search_time)
 
     state = env.get_init_game_state()
     result = env.terminal(state)
@@ -255,4 +255,4 @@ def  play_game(env, filename=None):
 
 if __name__ == '__main__':
     env =  envs.Environment(size=5, max_range=3)
-    play_game(env)
+    play_game(env, max_search_time=10.0)
