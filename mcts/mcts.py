@@ -70,8 +70,21 @@ class MCTS:
         #for i in range(20):
             self.one_iteration(state)
         
-        return self.pick_best_action(state)
+               
+        best_action = self.pick_best_action(state)
+        #self.reset() # reset stores
+
+        return best_action
     
+    def reset(self):
+        """Rest all stores."""
+        # TODO: think about :clear intelligently -> retain everything
+        #   oroginating form state result of best action
+        for store in self.stores:
+            store.n_visits.clear()
+            store.v_values.clear()
+        self.children.clear()
+
     def check_actions(self, state, action):
         """Check if joint action (0..63) is allowed in state.
         Uses env.check_condtion(.). Goal: remove actions that
@@ -90,24 +103,20 @@ class MCTS:
     
     def pick_best_action(self, state, visited_nodes=[]):
         uct_vals = self.uct(state)
+        for action in range(self.action_space_n):
+            if not self.check_actions(state, action):           # filter away all actions that are not allowed
+                uct_vals[action] = -np.infty
+            if self.children[state][action] in visited_nodes:   # filter away all actions that lead to previously visited states (avoids infinite loops)
+                uct_vals[action] = -np.infty
 
         vals_actions = [(val, action) for action, val in enumerate(uct_vals)]
-        # filter away all actions that are not allowed:
-        vals_actions = list(filter(lambda va: self.check_actions(state, va[1]), vals_actions))
-        # filter away all actions that lead to previously visited states (avoids infinite loops):
-        vals_actions = list(filter(lambda va: self.children[state][va[1]] not in visited_nodes, vals_actions)) 
-        # pick now the best value-action pair (and discard value)
-        #vals_actions = [(val, action) for action, val in enumerate(uct_vals)
-        #                if self.check_actions(state, action)                    # filter away all actions that are not allowed
-        #                and self.children[state][action] not in visited_nodes   # filter away all actions that lead to previously visited states (avoids infinite loops)
-        #                ]
-
         # pick now the best value-action pair (and discard value)
         try:
-            _, best_action_idx = max(vals_actions)
+            val, best_action_idx = max(vals_actions)
         except ValueError:
             print('ValueError: max() arg is an empty sequence')
             pass
+
         return best_action_idx
     
     def uct(self, state):

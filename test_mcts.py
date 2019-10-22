@@ -17,14 +17,16 @@ def  play_game(env, max_search_time=2.0, filename=None):
             current_player, all_actions[action[0]],
             all_actions[action[1]], len(mcts_stores[current_player].n_visits)))
     
-        print('UCT for state = ', sorted(mcts.uct(state),
-            reverse=True))
+        print('UCT for state = ', mcts.uct(state))
+        print('State visites = ', mcts.stores[current_player].n_visits[state])
 
         state = mcts.get_next(state, action)
         env.render(state)
         print_state(state)
 
+        mcts.reset() # clear stores
+
     result = env.terminal(state)
 
 env =  envs.Environment(size=5, max_range=3)
-play_game(env, max_search_time=5.0)
+play_game(env, max_search_time=10.0)
