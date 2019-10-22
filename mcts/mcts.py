@@ -114,7 +114,8 @@ class MCTS:
         if N == 0:
             print_state(state)
             raise ValueError('Division by zero')
-        for ni, val in zip(self.stores[p_idx].n_visits[state], self.stores[p_idx].v_values[state]):
+        for ni, val in zip(self.stores[state.player].n_visits[state],
+                           self.stores[state.player].v_values[state]):
             if ni == 0: # this action has never been performed in this state
                 uct = float(np.infty)
             else:
@@ -167,6 +168,7 @@ class MCTS:
 
         if sum(self.stores[current_player].n_visits[current_state]) == 0: # first visit to this (already expanded) state
             reward = self.rollout(current_player, current_state)
+            visited_nodes.append((current_state, 0)) # choose arbitrarily first action to update
             self.backprop(current_player, visited_nodes, reward)
 
         else: # node already visited => expand now
@@ -197,8 +199,8 @@ class MCTS:
                 reward: numerical reward obtained during rollout from viewpoint of player
         """
         for state, action in reversed(nodes):
-            self.stores[player].n_visits[state][action] += 1
-            self.stores[player].v_values[state][action] += reward
+            self.stores[state.player].n_visits[state][action] += 1 # TODO: state.player instead of player
+            self.stores[state.player].v_values[state][action] += reward
             
             reward = -reward
             player = 1 if player == 0 else 0
@@ -241,12 +243,13 @@ def  play_game(env, filename=None):
         print('Player {} plays ({}, {}) - # visited nodes = {}'.format(
             current_player, all_actions[action[0]],
             all_actions[action[1]], len(mcts_stores[current_player].n_visits)))
-    print('UCT for state = ', sorted(mcts_stores[current_player].uct(state),
-         reverse=True))
+    
+        print('UCT for state = ', sorted(mcts.uct(state),
+            reverse=True))
 
-    state = mcts_stores[current_player].get_next(state, action)
-    env.render(state)
-    print_state(state)
+        state = mcts.get_next(state, action)
+        env.render(state)
+        print_state(state)
 
     result = env.terminal(state)
 
