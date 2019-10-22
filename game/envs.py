@@ -107,7 +107,7 @@ class Environment:
         self.set_init_game_state()
     
     def add_agent(self, id_, agent):
-        assert isinstance(agent, agents.BaseAgent)
+        #assert isinstance(agent, agents.BaseAgent)
         self.agents.append(agent)
     
     def set_init_game_state(self):
