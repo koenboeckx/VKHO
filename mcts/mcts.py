@@ -89,10 +89,17 @@ class MCTS:
     
     def pick_best_action(self, state, visited_nodes=[]):
         uct_vals = self.uct(state)
-        vals_actions = [(val, action) for action, val in enumerate(uct_vals)
-                        if self.check_actions(state, action)                    # filter away all actions that are not allowed
-                        and self.children[state][action] not in visited_nodes   # filter away all actions that lead to previously visited states (avoids infinite loops)
-                        ]
+
+        vals_actions = [(val, action) for action, val in enumerate(uct_vals)]
+        # filter away all actions that are not allowed:
+        vals_actions = list(filter(lambda va: self.check_actions(state, va[1]), vals_actions))
+        # filter away all actions that lead to previously visited states (avoids infinite loops):
+        vals_actions = list(filter(lambda va: self.children[state][va[1]] not in visited_nodes, vals_actions)) 
+        # pick now the best value-action pair (and discard value)
+        #vals_actions = [(val, action) for action, val in enumerate(uct_vals)
+        #                if self.check_actions(state, action)                    # filter away all actions that are not allowed
+        #                and self.children[state][action] not in visited_nodes   # filter away all actions that lead to previously visited states (avoids infinite loops)
+        #                ]
 
         # pick now the best value-action pair (and discard value)
         try:
