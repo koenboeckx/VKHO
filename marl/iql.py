@@ -68,7 +68,7 @@ def preprocess(state):
         for j in range(size):
             if board[size*i + j] != -1:
                 result[0, 0, i,j] = int(board[size*i + j][-1]) + 1
-    return torch.from_numpy(result)
+    return torch.from_numpy(result).type('torch.FloatTensor')
 
 def train(env, agent, n_steps=10, epsilon=1.0):
     """Train the first agent in agent_list"""

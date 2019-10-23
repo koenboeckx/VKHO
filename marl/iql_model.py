@@ -29,5 +29,6 @@ class IQL(nn.Module):
 
     
     def forward(self, x):
+        #x = x.double()
         conv_out = self.conv(x).view(x.size()[0], -1)
         return self.fc(conv_out)    
