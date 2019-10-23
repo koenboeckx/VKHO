@@ -3,6 +3,7 @@ Independent Q-Learning.
 """
 
 import random
+from . import iql_model
 
 class BaseAgent:
     """
@@ -44,7 +45,22 @@ class IQLAgent(BaseAgent):
         self.max_range = 4
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
+        self.set_model()
+    
+    def set_model(self):
+        agent.model = iql_model.IQL((1,8,8), 8)
 
     def get_action(self, obs):
         return random.randint(0, 7)  
+
+def train(env, agent, n_steps=10, epsilon=1.0):
+    if not hasattr(agent, 'model'):
+        input_shape = (1, env.board_size, env.board_size)
+        model = iql_model.IQL(input_shape, env.action_space_n)
+        agent.model = model
+    buffer = []
+    state = env.set_init_game_state()
+    for step in range(n_steps):
+        action = eps_greedy()
+
 

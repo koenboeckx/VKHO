@@ -103,6 +103,7 @@ class Environment:
         self.args = kwargs
         self.state = None
         self.action_space = all_actions.copy()
+        self.action_space_n = len(self.action_space)
 
         self.set_init_game_state()
     

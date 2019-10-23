@@ -1,7 +1,7 @@
 import game
 from game import agents
 from game.gui import visualize
-from marl import iql
+from marl import iql, iql_model
 
 from game.envs import unflatten, State
 
@@ -15,8 +15,10 @@ agent_list = [
 env = game.make(0, agent_list)
 obs = env.set_init_game_state()
 
-for i in range(10):
+for i in range(1):
     actions = env.act(obs)
     print(actions)
     env.step(actions)
     env.render()
+
+iql.train(env, agent_list[0])
