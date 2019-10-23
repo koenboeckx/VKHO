@@ -7,7 +7,7 @@ from game.envs import unflatten, State
 
 agent_list = [
     iql.IQLAgent(0), # Team 1
-    iql.IQLAgent(1), # Team 1
+    agents.RandomTank(1), # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]

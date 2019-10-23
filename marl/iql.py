@@ -49,36 +49,37 @@ class IQLAgent(BaseAgent):
         self.max_range = 4
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
-        self.set_model()
     
-    def set_model(self):
-        self.model = iql_model.IQL((1,8,8), 8)
+    def set_model(self, input_shape):
+        self.model = iql_model.IQL(input_shape, 8)
 
     def get_action(self, state, epsilon):
         values = self.model(preprocess(state))
-        print('ok') 
+        if random.random() < epsilon:
+            return random.sample(range(8), 1)[0]
+        else:
+            return torch.argmax(values).item()
 
 def preprocess(state):
     """process the 'state' such thzt it can serve
     as input to the NN model."""
     board = state.board
     size = int(np.sqrt(len(board)))
-    result = np.zeros((1, 1, size, size))
+    result = np.zeros((1, size, size))
     for i in range(size):
         for j in range(size):
             if board[size*i + j] != -1:
-                result[0, 0, i,j] = int(board[size*i + j][-1]) + 1
-    return torch.from_numpy(result).type('torch.FloatTensor')
-
+                result[0, i, j] = int(board[size*i + j][-1]) + 1
+    return torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
+ 
 def train(env, agent, n_steps=10, epsilon=1.0):
     """Train the first agent in agent_list"""
-    if not hasattr(agent, 'model'):
-        input_shape = (1, env.board_size, env.board_size)
-        model = iql_model.IQL(input_shape, env.action_space_n)
-        agent.model = model
+    input_shape = (1, env.board_size, env.board_size)
+    agent.set_model(input_shape)
     buffer = []
     state = env.set_init_game_state()
     for step in range(n_steps):
-        action = agent.get_action(state[0], epsilon)
+        action = agent.get_action(state[0], epsilon=0.5)
+        for agent in # TODO : add somehow other agents
 
 

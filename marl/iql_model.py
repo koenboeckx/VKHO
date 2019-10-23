@@ -13,10 +13,10 @@ class IQL(nn.Module):
             nn.ReLU(),
         )
 
-        conv_out_size = self._get_conv_out(input_shape)
+        self.conv_out_size = self._get_conv_out(input_shape)
         
         self.fc = nn.Sequential(
-            nn.Linear(conv_out_size, 512),
+            nn.Linear(self.conv_out_size, 512),
             nn.ReLU(),
             nn.Linear(512, n_actions)
         )
@@ -29,6 +29,5 @@ class IQL(nn.Module):
 
     
     def forward(self, x):
-        #x = x.double()
         conv_out = self.conv(x).view(x.size()[0], -1)
         return self.fc(conv_out)    
