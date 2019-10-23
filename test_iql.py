@@ -13,12 +13,4 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-obs = env.set_init_game_state()
-
-for i in range(1):
-    actions = env.act(obs)
-    print(actions)
-    env.step(actions)
-    env.render()
-
 iql.train(env, agent_list[0])

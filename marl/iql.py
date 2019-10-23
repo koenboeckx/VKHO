@@ -3,6 +3,10 @@ Independent Q-Learning.
 """
 
 import random
+import numpy as np
+import torch
+
+
 from . import iql_model
 
 class BaseAgent:
@@ -48,12 +52,26 @@ class IQLAgent(BaseAgent):
         self.set_model()
     
     def set_model(self):
-        agent.model = iql_model.IQL((1,8,8), 8)
+        self.model = iql_model.IQL((1,8,8), 8)
 
-    def get_action(self, obs):
-        return random.randint(0, 7)  
+    def get_action(self, state, epsilon):
+        values = self.model(preprocess(state))
+        print('ok') 
+
+def preprocess(state):
+    """process the 'state' such thzt it can serve
+    as input to the NN model."""
+    board = state.board
+    size = int(np.sqrt(len(board)))
+    result = np.zeros((1, 1, size, size))
+    for i in range(size):
+        for j in range(size):
+            if board[size*i + j] != -1:
+                result[0, 0, i,j] = int(board[size*i + j][-1]) + 1
+    return torch.from_numpy(result)
 
 def train(env, agent, n_steps=10, epsilon=1.0):
+    """Train the first agent in agent_list"""
     if not hasattr(agent, 'model'):
         input_shape = (1, env.board_size, env.board_size)
         model = iql_model.IQL(input_shape, env.action_space_n)
@@ -61,6 +79,6 @@ def train(env, agent, n_steps=10, epsilon=1.0):
     buffer = []
     state = env.set_init_game_state()
     for step in range(n_steps):
-        action = eps_greedy()
+        action = agent.get_action(state[0], epsilon)
 
 
