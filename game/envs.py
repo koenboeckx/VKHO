@@ -307,6 +307,11 @@ class Environment:
         else:
             return 0
     
+    def get_reward(self):
+        """Return tuple of rewards, one for each agent."""
+        reward = self.terminal()
+        return (reward, reward, -reward, -reward)
+    
     def get_state(self):
         """Returns complete state information"""
         state = State(
