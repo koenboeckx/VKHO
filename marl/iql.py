@@ -89,20 +89,31 @@ class ReplayBuffer:
         assert len(self.contents) >= N
         return random.sample(self.contents, N)
  
-def train(env, agent, n_steps=20, epsilon=1.0, mini_batch_size=5, gamma=0.9):
-    """Train the first agent in agent_list"""
+def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10,
+gamma=0.9):
+    """Train two agents in agent_list"""
+    # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
     agent.set_model(input_shape)
-    buffer = ReplayBuffer(10)
+
+    buffer = ReplayBuffer(buffer_size)
     state = env.set_init_game_state()
-    for _ in range(n_steps):
-        action = agent.get_action(state[0], epsilon=0.5)
-        actions = (action, )
-        for other_agent in env.agents[1:]:
-            actions += (other_agent.get_action(state),)
+    for _ in range(int(n_steps)):
+        action = agent.get_action(state[0], epsilon=epsilon) # TODO: implement temperature schedule for epsilon
+        actions = [0, 0, 0, 0]
+        for agent_ in env.agents:
+            if agent_ == agent:
+                actions[agent.idx] = action
+            else:
+                actions[agent_.idx] = agent_.get_action(state)
         next_state = env.step(actions)
         reward = env.get_reward()
-        buffer.insert((state[0], action, reward[0], next_state[0]))
+
+        print('actions = ', actions)
+        env.render()
+        if env.terminal():
+           next_state =  env.set_init_game_state()
+        buffer.insert((state[agent.idx], action, reward[agent.idx], next_state[agent.idx]))
     
         if len(buffer) > mini_batch_size: # = minibatch size
             loss = torch.Tensor([0])
@@ -117,7 +128,6 @@ def train(env, agent, n_steps=20, epsilon=1.0, mini_batch_size=5, gamma=0.9):
             # perform training step 
             loss.backward()
             agent.model.optim.step()
-
 
 
 

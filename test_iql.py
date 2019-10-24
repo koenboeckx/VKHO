@@ -5,12 +5,16 @@ from marl import iql, iql_model
 
 from game.envs import unflatten, State
 
+agent = iql.IQLAgent(0)
+
 agent_list = [
-    iql.IQLAgent(0), # Team 1
+    agent, # Team 1
     agents.RandomTank(1), # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]
 
 env = game.make(0, agent_list)
-iql.train(env, agent_list[0])
+iql.train(env, agent, n_steps=1e5, 
+            mini_batch_size=128,
+            buffer_size = 256)
