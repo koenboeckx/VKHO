@@ -5,9 +5,12 @@ Independent Q-Learning.
 import random
 import numpy as np
 import torch
+import copy
 
 
 from . import iql_model
+
+SYNC_RATE = 10 # when copy model to target?
 
 class BaseAgent:
     """
@@ -51,7 +54,12 @@ class IQLAgent(BaseAgent):
         self.aim = None     # set by aim action
     
     def set_model(self, input_shape):
-        self.model = iql_model.IQL(input_shape, 8)
+        self.model  = iql_model.IQL(input_shape, 8) # TODO: implement target network
+        self.target = copy.deepcopy(self.model)
+    
+    def sync_models(self):
+        self.target.load_state_dict(self.model.state_dict())
+
 
     def get_action(self, state, epsilon):
         values = self.model(preprocess(state))
@@ -111,7 +119,7 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
     for step_idx in range(int(n_steps)):
         eps = get_epsilon(step_idx)
         print('epsilon = ', eps)
-        action = agent.get_action(state[0], epsilon=eps) # TODO: implement temperature schedule for epsilon
+        action = agent.get_action(state[0], epsilon=eps)
         actions = [0, 0, 0, 0]
         for agent_ in env.agents:
             if agent_ == agent:
@@ -130,16 +138,20 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
         if len(buffer) > mini_batch_size: # = minibatch size
             loss = torch.Tensor([0])
             minibatch = buffer.sample(mini_batch_size)
+            # TODO: transform part below to do update on total
             for s, a, r, next_s in minibatch:
                 if r != 0: # next_s is terminal
                     y = r
                 else:
-                    y = r + gamma * torch.max(agent.model(preprocess(next_s))).item()
+                    y = r + gamma * torch.max(agent.target(preprocess(next_s))).item()
                 loss += (agent.model(preprocess(next_s))[0][a] - y)**2
             
             # perform training step 
             loss.backward()
             agent.model.optim.step()
+        
+        if step_idx > 0 and step_idx % SYNC_RATE == 0:
+            agent.sync_models()
 
 
 
