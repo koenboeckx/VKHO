@@ -88,18 +88,30 @@ class ReplayBuffer:
     def sample(self, N):
         assert len(self.contents) >= N
         return random.sample(self.contents, N)
+
+def create_temp_schedule(start, stop, max_steps):
+    def get_epsilon(step_idx):
+        if step_idx < max_steps:
+            return start - step_idx * (start-stop) / max_steps
+        else:
+            return stop
+    return get_epsilon
  
 def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10,
-gamma=0.9):
+            gamma=0.9):
     """Train two agents in agent_list"""
     # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
     agent.set_model(input_shape)
 
+    get_epsilon = create_temp_schedule(1.0, 0.05, 1000)
+
     buffer = ReplayBuffer(buffer_size)
     state = env.set_init_game_state()
-    for _ in range(int(n_steps)):
-        action = agent.get_action(state[0], epsilon=epsilon) # TODO: implement temperature schedule for epsilon
+    for step_idx in range(int(n_steps)):
+        eps = get_epsilon(step_idx)
+        print('epsilon = ', eps)
+        action = agent.get_action(state[0], epsilon=eps) # TODO: implement temperature schedule for epsilon
         actions = [0, 0, 0, 0]
         for agent_ in env.agents:
             if agent_ == agent:
