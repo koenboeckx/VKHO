@@ -2,7 +2,6 @@ import game
 from game import agents
 from game.gui import visualize
 from marl import iql, iql_model
-
 from game.envs import unflatten, State
 
 agent = iql.IQLAgent(0)
@@ -15,6 +14,8 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-iql.train(env, agent, n_steps=1e5, 
-            mini_batch_size=128,
-            buffer_size = 256)
+
+iql.train(env, agent, n_steps=1e3, 
+            mini_batch_size=5,
+            buffer_size = 20)
+

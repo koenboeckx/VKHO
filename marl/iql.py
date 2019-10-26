@@ -5,12 +5,14 @@ Independent Q-Learning.
 import random
 import numpy as np
 import torch
+from torch import nn
 import copy
 
 
 from . import iql_model
 
 SYNC_RATE = 10 # when copy model to target?
+BOARD_SIZE = 11
 
 class BaseAgent:
     """
@@ -133,25 +135,32 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
         env.render()
         if env.terminal():
            next_state =  env.set_init_game_state()
+        print('Alive = ', [o.alive for o in state])
         buffer.insert((state[agent.idx], action, reward[agent.idx], next_state[agent.idx]))
     
         if len(buffer) > mini_batch_size: # = minibatch size
             loss = torch.Tensor([0])
             minibatch = buffer.sample(mini_batch_size)
             # TODO: transform part below to do update on total
-            for s, a, r, next_s in minibatch:
-                if r != 0: # next_s is terminal
-                    y = r
-                else:
-                    y = r + gamma * torch.max(agent.target(preprocess(next_s))).item()
-                loss += (agent.model(preprocess(next_s))[0][a] - y)**2
+            states_v  = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
+            next_v    = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
+            actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
+            rewards_v = torch.zeros(len(minibatch))
+            dones_v   = torch.zeros(len(minibatch))
+            for idx, (s, a, r, next_s) in enumerate(minibatch):
+                states_v[idx, 0, :, :] = preprocess(s)
+                next_v[idx, 0, :, :]   = preprocess(next_s)
+                actions_v[idx] = int(a)
+                rewards_v[idx] = r
+                dones_v[idx] = abs(r)
+            next_q_v = agent.target(next_v)
+            targets_v = rewards_v + (1-dones_v) * torch.max(agent.target(next_v), dim=1)[0]
+            values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+            loss = nn.MSELoss()(targets_v, values_v)
             
             # perform training step 
             loss.backward()
             agent.model.optim.step()
-        
+
         if step_idx > 0 and step_idx % SYNC_RATE == 0:
             agent.sync_models()
-
-
-
