@@ -15,7 +15,7 @@ agent_list = [
 
 env = game.make(0, agent_list)
 
-iql.train(env, agent, n_steps=1e3, 
-            mini_batch_size=5,
-            buffer_size = 20)
+iql.train(env, agent)
+
+
 

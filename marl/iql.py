@@ -11,7 +11,6 @@ import copy
 
 from . import iql_model
 
-SYNC_RATE = 10 # when copy model to target?
 BOARD_SIZE = 11
 
 class BaseAgent:
@@ -107,9 +106,14 @@ def create_temp_schedule(start, stop, max_steps):
             return stop
     return get_epsilon
  
-def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10,
-            gamma=0.9):
+def train(env, agent, **kwargs):
     """Train two agents in agent_list"""
+    n_steps = kwargs.get('n_steps', 1024)
+    mini_batch_size = kwargs.get('mini_batch_size', 32)
+    buffer_size = kwargs.get('buffer_size', 128)
+    gamma = kwargs.get('gamma', 0.9)
+    sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
+    
     # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
     agent.set_model(input_shape)
@@ -119,6 +123,7 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
     buffer = ReplayBuffer(buffer_size)
     state = env.set_init_game_state()
     for step_idx in range(int(n_steps)):
+        print('----------------\n iteration {} \n -----------------'.format(step_idx))
         eps = get_epsilon(step_idx)
         print('epsilon = ', eps)
         action = agent.get_action(state[0], epsilon=eps)
@@ -154,7 +159,7 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
                 rewards_v[idx] = r
                 dones_v[idx] = abs(r)
             next_q_v = agent.target(next_v)
-            targets_v = rewards_v + (1-dones_v) * torch.max(agent.target(next_v), dim=1)[0]
+            targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
             values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
             loss = nn.MSELoss()(targets_v, values_v)
             
@@ -162,5 +167,6 @@ def train(env, agent, n_steps=20, epsilon=0.1, mini_batch_size=5, buffer_size=10
             loss.backward()
             agent.model.optim.step()
 
-        if step_idx > 0 and step_idx % SYNC_RATE == 0:
+        if step_idx > 0 and step_idx % sync_rate == 0:
             agent.sync_models()
+
