@@ -10,4 +10,4 @@ agent_list = [
 ]
 
 env =  game.make(0, agent_list)
-visualize(env)
+visualize(env, period=1.)

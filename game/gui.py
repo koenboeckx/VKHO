@@ -1,6 +1,7 @@
 """methods to visualize what's happening in the game"""
 
 import pygame
+import time
 from game.envs import all_actions # to display actions
 
 DEBUG = True
@@ -17,9 +18,14 @@ BLACK = (0, 0, 0)
 RED   = (255, 0, 0)
 GRAY  = (128, 128, 128)
 
-def visualize(env):
+def visualize(env, period=None):
     """Takes a game environment as argument and visualizes 
-    the different steps of the game on the screen"""
+    the different steps of the game on the screen. Period = update delay in seconds"""
+
+    if period is None:
+        period = 75 # ms
+    else:
+        period = int(period * 1000) # in ms
 
     def show_aiming(agent, action):
         if action == 1:
@@ -39,7 +45,7 @@ def visualize(env):
 
     # create a custom event for adding a new enemy
     STEPEVENT = pygame.USEREVENT + 1
-    pygame.time.set_timer(STEPEVENT, PERIOD) # fire STEPEVENT event every PERIOD
+    pygame.time.set_timer(STEPEVENT, period) # fire STEPEVENT event every period
     
     # create the initial game state and initialze objects
     obs = env.set_init_game_state()
@@ -65,7 +71,6 @@ def visualize(env):
                         tanks[agent.idx].set_dead()
                     if action in [1, 2]:
                         show_aiming(agent, action)
-
 
                 obs = env.step(actions)
                 for idx, tank in enumerate(tanks):
