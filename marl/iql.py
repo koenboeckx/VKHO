@@ -11,8 +11,6 @@ import copy
 
 from . import iql_model
 
-BOARD_SIZE = 11
-
 class BaseAgent:
     """
     This is the base abstraction for agents. 
@@ -155,8 +153,8 @@ def train(env, agents, **kwargs):
         if len(buffers[0]) > mini_batch_size: # = minibatch size
             for agent_idx, agent in enumerate(agents):
                 minibatch = buffers[agent_idx].sample(mini_batch_size)
-                states_v  = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
-                next_v    = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
+                states_v  = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
+                next_v    = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
                 actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
                 rewards_v = torch.zeros(len(minibatch))
                 dones_v   = torch.zeros(len(minibatch))

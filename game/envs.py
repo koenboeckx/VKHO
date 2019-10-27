@@ -146,6 +146,7 @@ class Environment:
         # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team
         obs = []
         for agent in self.agents:
+            agent.alive = 1
             observation = self._generate_obs(agent)
             obs.append(observation)
         return obs
