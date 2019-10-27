@@ -8,8 +8,9 @@ import torch
 from torch import nn
 import copy
 
-
 from . import iql_model
+
+DEBUG_IQL = True
 
 class BaseAgent:
     """
@@ -141,7 +142,7 @@ def train(env, agents, **kwargs):
 
         #env.render()
         if env.terminal():
-            print('@ iteration {}: episode terminated'.format(step_idx))
+            #if DEBUG_IQL: print('@ iteration {}: episode terminated'.format(step_idx))
             n_terminated += 1
             reward_sum += reward[0]
             next_state =  env.set_init_game_state()
@@ -164,23 +165,23 @@ def train(env, agents, **kwargs):
                     actions_v[idx] = int(a)
                     rewards_v[idx] = r
                     dones_v[idx] = abs(r)
-                next_q_v = agent.target(next_v)
                 targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)
+                if DEBUG_IQL: print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
             
                 # perform training step 
                 loss.backward()
                 agent.model.optim.step()
 
                 if step_idx > 0 and step_idx % sync_rate == 0:
+                    if DEBUG_IQL: print('iteration {} - syncing ...'.format(step_idx))
                     agent.sync_models()
 
                  
         if step_idx > 0 and step_idx % print_rate == 0:
-
-                    print('----------------\n iteration {} \n -----------------'.format(step_idx))
-                    print('Average reward team 0: {}'.format(reward_sum/sync_rate))
-                    reward_sum = 0
-                    print('Number of terminated episodes = {}'.format(n_terminated))
-
+            if n_terminated > 0:
+                print('Iteration {} - Average reward team 0: {}'.format(
+                        step_idx, reward_sum/n_terminated))
+            reward_sum = 0
+            n_terminated = 0

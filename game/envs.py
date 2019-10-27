@@ -254,9 +254,10 @@ class Environment:
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
-                    print('Agent {} was just killed by {}'.format(
-                        str(opponent), str(agent)
-                    ))
+                    if DEBUG_ENV:
+                        print('Agent {} was just killed by {}'.format(
+                            str(opponent), str(agent)
+                        ))
                 agent.ammo -= 1
                 agent.aim = None
             elif action == 4 or action == all_actions[4]: # move_up
