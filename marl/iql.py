@@ -106,7 +106,7 @@ def create_temp_schedule(start, stop, max_steps):
             return stop
     return get_epsilon
  
-def train(env, agent, **kwargs):
+def train(env, agents, **kwargs):
     """Train two agents in agent_list"""
     n_steps = kwargs.get('n_steps', 1024)
     mini_batch_size = kwargs.get('mini_batch_size', 32)
@@ -116,23 +116,24 @@ def train(env, agent, **kwargs):
     
     # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
-    agent.set_model(input_shape)
+    for agent in agents:
+        agent.set_model(input_shape)
 
     get_epsilon = create_temp_schedule(1.0, 0.05, 1000)
 
-    buffer = ReplayBuffer(buffer_size)
+    buffers = [ReplayBuffer(buffer_size) for _ in agents]
     state = env.set_init_game_state()
     for step_idx in range(int(n_steps)):
         print('----------------\n iteration {} \n -----------------'.format(step_idx))
         eps = get_epsilon(step_idx)
         print('epsilon = ', eps)
-        action = agent.get_action(state[0], epsilon=eps)
         actions = [0, 0, 0, 0]
-        for agent_ in env.agents:
-            if agent_ == agent:
-                actions[agent.idx] = action
+        for agent in env.agents:
+            if agent in agents:
+                actions[agent.idx] = agent.get_action(state[0], epsilon=eps)
             else:
-                actions[agent_.idx] = agent_.get_action(state)
+                actions[agent.idx] = agent.get_action(state)
+        
         next_state = env.step(actions)
         reward = env.get_reward()
 
@@ -141,32 +142,34 @@ def train(env, agent, **kwargs):
         if env.terminal():
            next_state =  env.set_init_game_state()
         print('Alive = ', [o.alive for o in state])
-        buffer.insert((state[agent.idx], action, reward[agent.idx], next_state[agent.idx]))
-    
-        if len(buffer) > mini_batch_size: # = minibatch size
-            loss = torch.Tensor([0])
-            minibatch = buffer.sample(mini_batch_size)
-            # TODO: transform part below to do update on total
-            states_v  = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
-            next_v    = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
-            actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
-            rewards_v = torch.zeros(len(minibatch))
-            dones_v   = torch.zeros(len(minibatch))
-            for idx, (s, a, r, next_s) in enumerate(minibatch):
-                states_v[idx, 0, :, :] = preprocess(s)
-                next_v[idx, 0, :, :]   = preprocess(next_s)
-                actions_v[idx] = int(a)
-                rewards_v[idx] = r
-                dones_v[idx] = abs(r)
-            next_q_v = agent.target(next_v)
-            targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
-            values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-            loss = nn.MSELoss()(targets_v, values_v)
-            
-            # perform training step 
-            loss.backward()
-            agent.model.optim.step()
 
-        if step_idx > 0 and step_idx % sync_rate == 0:
-            agent.sync_models()
+        for idx, agent in enumerate(agents):
+            buffers[idx].insert((state[agent.idx], actions[agent.idx],
+                                 reward[agent.idx], next_state[agent.idx]))
+    
+        if len(buffers[0]) > mini_batch_size: # = minibatch size
+            for agent_idx, agent in enumerate(agents):
+                minibatch = buffers[agent_idx].sample(mini_batch_size)
+                states_v  = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
+                next_v    = torch.zeros((len(minibatch), 1, BOARD_SIZE, BOARD_SIZE))
+                actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
+                rewards_v = torch.zeros(len(minibatch))
+                dones_v   = torch.zeros(len(minibatch))
+                for idx, (s, a, r, next_s) in enumerate(minibatch):
+                    states_v[idx, 0, :, :] = preprocess(s)
+                    next_v[idx, 0, :, :]   = preprocess(next_s)
+                    actions_v[idx] = int(a)
+                    rewards_v[idx] = r
+                    dones_v[idx] = abs(r)
+                next_q_v = agent.target(next_v)
+                targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
+                values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+                loss = nn.MSELoss()(targets_v, values_v)
+            
+                # perform training step 
+                loss.backward()
+                agent.model.optim.step()
+
+                if step_idx > 0 and step_idx % sync_rate == 0:
+                    agent.sync_models()
 
