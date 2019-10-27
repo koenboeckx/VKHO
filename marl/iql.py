@@ -113,6 +113,7 @@ def train(env, agents, **kwargs):
     buffer_size = kwargs.get('buffer_size', 128)
     gamma = kwargs.get('gamma', 0.9)
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
+    print_rate = kwargs.get('print_rate', 100) # print frequency
     
     # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
@@ -121,27 +122,31 @@ def train(env, agents, **kwargs):
 
     get_epsilon = create_temp_schedule(1.0, 0.05, 1000)
 
+    reward_sum = 0 # keep track of average reward
+    n_terminated = 0
+
     buffers = [ReplayBuffer(buffer_size) for _ in agents]
     state = env.set_init_game_state()
+    
     for step_idx in range(int(n_steps)):
-        print('----------------\n iteration {} \n -----------------'.format(step_idx))
+        
         eps = get_epsilon(step_idx)
-        print('epsilon = ', eps)
         actions = [0, 0, 0, 0]
         for agent in env.agents:
             if agent in agents:
-                actions[agent.idx] = agent.get_action(state[0], epsilon=eps)
+                actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=eps)
             else:
                 actions[agent.idx] = agent.get_action(state)
         
         next_state = env.step(actions)
         reward = env.get_reward()
 
-        print('actions = ', actions)
-        env.render()
+        #env.render()
         if env.terminal():
-           next_state =  env.set_init_game_state()
-        print('Alive = ', [o.alive for o in state])
+            print('@ iteration {}: episode terminated'.format(step_idx))
+            n_terminated += 1
+            reward_sum += reward[0]
+            next_state =  env.set_init_game_state()
 
         for idx, agent in enumerate(agents):
             buffers[idx].insert((state[agent.idx], actions[agent.idx],
@@ -172,4 +177,12 @@ def train(env, agents, **kwargs):
 
                 if step_idx > 0 and step_idx % sync_rate == 0:
                     agent.sync_models()
+
+                 
+        if step_idx > 0 and step_idx % print_rate == 0:
+
+                    print('----------------\n iteration {} \n -----------------'.format(step_idx))
+                    print('Average reward team 0: {}'.format(reward_sum/sync_rate))
+                    reward_sum = 0
+                    print('Number of terminated episodes = {}'.format(n_terminated))
 

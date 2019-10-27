@@ -6,6 +6,8 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
+DEBUG_ENV = False
+
 all_actions = { 0: 'do_nothing',
                 1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
                 2: 'aim2',  # prepare to fire on second enemy (1 or 3)',
@@ -233,7 +235,7 @@ class Environment:
         #board_copy = copy.deepcopy(self.board) # use copy of board to deconflict
         for agent, action in zip(self.agents, actions):
             if not self.check_conditions(agent, action): # if conditions not met => move on to next agent
-                print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
+                if DEBUG_ENV: print('action {} not allowed for agent {}'.format(all_actions[action], str(agent)))
                 continue
             if action == 0 or action == all_actions[0]: # do_nothing
                 pass
