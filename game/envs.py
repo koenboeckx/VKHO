@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = False
+DEBUG_ENV = True
 
 all_actions = { 0: 'do_nothing',
                 1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
