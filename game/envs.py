@@ -65,11 +65,12 @@ def print_state(state):
 def flatten(board):
     """Flatten the 'board' dictionary
     :params:    board: dictionary containing different elements
-    :return:    flattened_board: 121 Ints
+    :return:    flattened_board: N*N Ints
     """
+    board_size = int(math.sqrt(len(board)))
     flattened_board = []
-    for i in range(11):
-        for j in range(11):
+    for i in range(board_size):
+        for j in range(board_size):
             if board[(i,j)] is None:
                 flattened_board.append(-1)
             else:
@@ -100,20 +101,6 @@ def distance(agent1, agent2):
     x2, y2 = agent2.pos
     return math.sqrt((x1-x2)**2 + (y1-y2)**2)             
 
-def string_to_state(str_state):
-    """To use a state as key to a dict, it must be
-    hashable. The easiest way to do this is to convert
-    it to a string:
-        str_state = str(state)
-    This functions reverses that operation. This is only
-    possible because of the highly structured form of
-    this string.
-    :params:    str_state: a string created from a state
-    :returns:   state: an instance of State
-    """
-    board_string = str_state[13:503]
-    # pass: put this on hold until deemed necessary
-
 class Environment:
     """The base game environment."""
     def __init__(self, **kwargs):
@@ -123,6 +110,7 @@ class Environment:
         self.action_space = all_actions.copy()
         self.action_space_n = len(self.action_space)
 
+        self.board_size = self.args.get('board_size', 11) # board size fixed on 11x11
         self.set_init_game_state()
     
     def add_agent(self, id_, agent):
@@ -138,7 +126,6 @@ class Environment:
 
         :returns: a list of observations for the 4 agents
         """
-        self.board_size = self.args.get('size', 11) # board size fixed on 11x11
         self.board = {}
         for i in range(self.board_size):
            for j in range(self.board_size):
@@ -152,11 +139,14 @@ class Environment:
         #    agent.pos = (i, j)
         #    self.board[(i,j)] = agent
 
-        # Alternative: position agents on fixed initial positions
-        positions = [(4, 0), (6, 0), (4, 10), (6, 10)]
+        high = self.board_size//2 - 1
+        low  = self.board_size//2 + 1
+        positions = [(high, 0), (low, 0),
+                     (high, self.board_size-1), (low, self.board_size-1)]
         for agent, pos in zip(self.agents, positions):
             agent.pos = pos
             self.board[pos] = agent
+
         
         # generate the observations for the 4 players
         # by default: player 0 & 1 are 1 team, players 2 & 3 are the other team

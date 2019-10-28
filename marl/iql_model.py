@@ -5,14 +5,20 @@ import numpy as np
 
 class IQL(nn.Module):
     """Defines and learns the behavior of a single agent"""
-    def __init__(self, input_shape, n_actions, lr=0.01):
+    def __init__(self, input_shape, n_actions, lr=0.01, board_size=11):
         super(IQL, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=4, stride=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1),
-            nn.ReLU(),
-        )
+        if board_size > 10:
+            self.conv = nn.Sequential(
+                nn.Conv2d(input_shape[0], 32, kernel_size=4, stride=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=3, stride=1),
+                nn.ReLU(),
+            )
+        else:
+            self.conv = nn.Sequential(
+                nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
+                nn.ReLU(),
+            )
 
         self.conv_out_size = self._get_conv_out(input_shape)
         

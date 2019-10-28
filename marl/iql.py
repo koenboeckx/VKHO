@@ -38,8 +38,9 @@ class BaseAgent:
         return self.type + str(self.idx)
 
 class IQLAgent(BaseAgent):
-    def __init__(self, idx):
+    def __init__(self, idx, board_size=11):
         super(IQLAgent, self).__init__()
+        self.board_size = board_size
         self.init_agent(idx)
     
     def init_agent(self, idx):
@@ -49,12 +50,12 @@ class IQLAgent(BaseAgent):
         # specific parameters
         self.alive = 1
         self.ammo = 5000
-        self.max_range = 9
+        self.max_range = 4
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
     
     def set_model(self, input_shape):
-        self.model  = iql_model.IQL(input_shape, 8) # TODO: implement target network
+        self.model  = iql_model.IQL(input_shape, 8, board_size=self.board_size)
         self.target = copy.deepcopy(self.model)
     
     def sync_models(self):
@@ -171,7 +172,7 @@ def train(env, agents, **kwargs):
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)
                 #if DEBUG_IQL: 
-                #    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
+                #print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
             
                 # perform training step 
                 loss.backward()
