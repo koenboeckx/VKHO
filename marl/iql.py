@@ -10,7 +10,7 @@ import copy
 
 from . import iql_model
 
-DEBUG_IQL = True
+DEBUG_IQL = False
 
 class BaseAgent:
     """
@@ -48,8 +48,8 @@ class IQLAgent(BaseAgent):
 
         # specific parameters
         self.alive = 1
-        self.ammo = 5
-        self.max_range = 4
+        self.ammo = 5000
+        self.max_range = 9
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
     

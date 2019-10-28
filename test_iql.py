@@ -2,7 +2,7 @@ import game
 from game import agents
 from game.gui import visualize
 from marl import iql, iql_model
-from game.envs import unflatten, State
+from game.envs import unflatten, State, print_obs
 
 agent0 = iql.IQLAgent(0)
 agent1 = iql.IQLAgent(1)
@@ -16,7 +16,7 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-mini_batch_size = 2048
+mini_batch_size = 128
 iql.train(env, [agent0, agent1],
                 mini_batch_size = mini_batch_size,
                 buffer_size = 4*mini_batch_size,

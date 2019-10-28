@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = True
+DEBUG_ENV = False
 
 all_actions = { 0: 'do_nothing',
                 1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
@@ -25,7 +25,42 @@ from collections import namedtuple
 
 from . import agents
 
-# helper function
+# helper functions
+
+# Observation: what does each agent know/see?
+Observation = namedtuple('Observation', [
+    'board',        # flattened board - 121 Ints
+    'position',     # position of agent in grid - 2 Ints in [0, 10]
+    'alive',        # is agent alive? - Int in [0,1]
+    'ammo',         # current ammo level
+    'team_mate',    # which agent is teammate - 1 Int in [0,3]
+    'enemies'       # which agents are this agent's enemies - 2 Ints in [0, 3]
+])
+
+def print_obs(obs):
+    print('Board = ', obs.board)
+    print('Positions = ', obs.position)
+    print('Ammo = ', obs.ammo)
+    print('Alive = ', obs.alive)
+    print('team mate = ', obs.team_mate)
+    print('enemies = ', obs.enemies)
+
+# State: complete state information
+State = namedtuple('State', [
+    'board',        # flattened board - 121 Ints
+    'positions',    # tuple of position tuples for all 4 agents
+    'alive',        # tuple of alive flags for all 4 agents
+    'ammo',         # tuple of ammo level for all 4 agents
+    'aim',          # tuple of aiming for all 4 agents 
+])
+
+def print_state(state):
+    print('Positions = ', state.positions)
+    print('Aims = ', state.aim)
+    print('Ammo = ', state.ammo)
+    print('Alive = ', state.alive)
+    print('Player = ', state.player)
+
 def flatten(board):
     """Flatten the 'board' dictionary
     :params:    board: dictionary containing different elements
@@ -63,26 +98,6 @@ def distance(agent1, agent2):
     x1, y1 = agent1.pos
     x2, y2 = agent2.pos
     return math.sqrt((x1-x2)**2 + (y1-y2)**2)             
-
-
-# Observation: what does each agent know/see?
-Observation = namedtuple('Observation', [
-    'board',        # flattened board - 121 Ints
-    'position',     # position of agent in grid - 2 Ints in [0, 10]
-    'alive',        # is agent alive? - Int in [0,1]
-    'ammo',         # current ammo level
-    'team_mate',    # which agent is teammate - 1 Int in [0,3]
-    'enemies'       # which agents are this agent's enemies - 2 Ints in [0, 3]
-])
-
-# State: complete state information
-State = namedtuple('State', [
-    'board',        # flattened board - 121 Ints
-    'positions',    # tuple of position tuples for all 4 agents
-    'alive',        # tuple of alive flags for all 4 agents
-    'ammo',         # tuple of ammo level for all 4 agents
-    'aim',          # tuple of aiming for all 4 agents 
-])
 
 def string_to_state(str_state):
     """To use a state as key to a dict, it must be
