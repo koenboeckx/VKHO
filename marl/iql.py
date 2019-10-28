@@ -10,7 +10,7 @@ import copy
 
 from . import iql_model
 
-DEBUG_IQL = True
+DEBUG_IQL = False
 
 class BaseAgent:
     """
@@ -113,6 +113,7 @@ def train(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.9)
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
+    save = kwargs.get('save', False) # print frequency
     
     # create and initialize model for agent
     input_shape = (1, env.board_size, env.board_size)
@@ -142,7 +143,7 @@ def train(env, agents, **kwargs):
 
         #env.render()
         if env.terminal():
-            #if DEBUG_IQL: print('@ iteration {}: episode terminated'.format(step_idx))
+            if DEBUG_IQL: print('@ iteration {}: episode terminated'.format(step_idx))
             n_terminated += 1
             reward_sum += reward[0]
             next_state =  env.set_init_game_state()
@@ -185,5 +186,11 @@ def train(env, agents, **kwargs):
             if n_terminated > 0:
                 print('Iteration {} - Average reward team 0: {}'.format(
                         step_idx, reward_sum/n_terminated))
+            else:
+                print('Iteration {} - no terminations'.format(step_idx))
             reward_sum = 0
             n_terminated = 0
+    
+    if save:
+        for agent in agents:
+            torch.save(agent.model.state_dict(), './marl/models/iql_agent_{}.torch'.format(agent.idx))
