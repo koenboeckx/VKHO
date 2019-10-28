@@ -16,12 +16,12 @@ agent_list = [
 ]
 
 env = game.make(0, agent_list)
-mini_batch_size = 128
+mini_batch_size = 4
 iql.train(env, [agent0, agent1],
                 mini_batch_size = mini_batch_size,
                 buffer_size = 4*mini_batch_size,
                 sync_rate = 16*mini_batch_size,
-                print_rate=1000,
+                print_rate=1,
                 n_steps=1e10)
 
 # TODO: train an smaller board

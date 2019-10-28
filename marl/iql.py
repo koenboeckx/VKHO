@@ -10,7 +10,7 @@ import copy
 
 from . import iql_model
 
-DEBUG_IQL = False
+DEBUG_IQL = True
 
 class BaseAgent:
     """
@@ -169,8 +169,8 @@ def train(env, agents, **kwargs):
                 targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)
-                if DEBUG_IQL: 
-                    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
+                #if DEBUG_IQL: 
+                #    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
             
                 # perform training step 
                 loss.backward()
