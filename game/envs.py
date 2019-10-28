@@ -7,6 +7,7 @@ Limitations:
 """
 
 DEBUG_ENV = False
+DEBUG_ENV_2 = False
 
 all_actions = { 0: 'do_nothing',
                 1: 'aim1',  # prepare to fire on first  enemy (0 or 2)
@@ -269,7 +270,7 @@ class Environment:
                 opponent = self.agents[agent.aim]
                 if distance(agent, opponent) < agent.max_range:
                     opponent.alive = 0
-                    if DEBUG_ENV:
+                    if DEBUG_ENV_2:
                         print('Agent {} was just killed by {}'.format(
                             str(opponent), str(agent)
                         ))
@@ -321,7 +322,7 @@ class Environment:
         if all(agent.alive == 0 for agent in self.agents[:2]):
             return -1
         # if both players of team 2 are death, return 1
-        if all(agent.alive == 0 for agent in self.agents[:2]):
+        if all(agent.alive == 0 for agent in self.agents[2:]):
             return 1
         else:
             return 0

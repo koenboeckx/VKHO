@@ -184,8 +184,8 @@ def train(env, agents, **kwargs):
                  
         if step_idx > 0 and step_idx % print_rate == 0:
             if n_terminated > 0:
-                print('Iteration {} - Average reward team 0: {}'.format(
-                        step_idx, reward_sum/n_terminated))
+                print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
+                        step_idx, reward_sum/n_terminated, n_terminated))
             else:
                 print('Iteration {} - no terminations'.format(step_idx))
             reward_sum = 0
