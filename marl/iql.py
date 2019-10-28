@@ -3,6 +3,7 @@ Independent Q-Learning.
 """
 
 import random
+import time
 import numpy as np
 import torch
 from torch import nn
@@ -74,6 +75,8 @@ class IQLAgent(BaseAgent):
 def preprocess(state):
     """process the 'state' such thzt it can serve
     as input to the NN model."""
+    # TODO: change this to (only!) allow list of states => more efficient / avoids weird construction in line 67 (get_action)
+    # and output can serve directly as input to model
     board = state.board
     size = int(np.sqrt(len(board)))
     result = np.zeros((1, size, size))
@@ -167,11 +170,7 @@ def train(env, agents, **kwargs):
                 rewards_v = torch.Tensor(minibatch[2])
                 dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
                 next_v = torch.Tensor([preprocess(state) for state in minibatch[3]])
-                #states_v  = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
-                #next_v    = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
-                #actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
-                #rewards_v = torch.zeros(len(minibatch))
-                #dones_v   = torch.zeros(len(minibatch))
+                # Above is equivalent to
                 #for idx, (s, a, r, next_s) in enumerate(minibatch):
                 #    states_v[idx, 0, :, :] = preprocess(s)
                 #    next_v[idx, 0, :, :]   = preprocess(next_s)
@@ -204,4 +203,36 @@ def train(env, agents, **kwargs):
     
     if save:
         for agent in agents:
-            torch.save(agent.model.state_dict(), './marl/models/iql_agent_{}.torch'.format(agent.idx))
+            rand_int = random.randint(1000, 2000)
+            filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
+            torch.save(agent.model.state_dict(), filename)
+
+def test(env, agents, filenames=None):
+    if filenames is not None:
+        # create and initialize model for agent
+        input_shape = (1, env.board_size, env.board_size)
+        for agent, filename in zip(agents, filenames):
+            agent.set_model(input_shape)
+            agent.model.load_state_dict(torch.load(filename))
+            agent.model.eval()
+    
+    state = env.set_init_game_state()
+
+    done = False
+    while not done:
+        actions = [0, 0, 0, 0]
+        for agent in env.agents:
+            if agent in agents:
+                actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=0.0) # pick best action
+            else:
+                actions[agent.idx] = agent.get_action(state)
+        
+        print(actions)
+        next_state = env.step(actions)
+        reward = env.get_reward()
+        time.sleep(1.)
+
+        if reward[0] != 0:
+            done = True
+
+        env.render()
