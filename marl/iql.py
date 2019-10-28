@@ -63,7 +63,9 @@ class IQLAgent(BaseAgent):
 
 
     def get_action(self, state, epsilon):
-        values = self.model(preprocess(state))
+        result = preprocess(state)
+        state_v = torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
+        values = self.model(state_v)
         if random.random() < epsilon:
             return random.sample(range(8), 1)[0]
         else:
@@ -79,7 +81,8 @@ def preprocess(state):
         for j in range(size):
             if board[size*i + j] != -1:
                 result[0, i, j] = int(board[size*i + j][-1]) + 1
-    return torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
+    #return torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
+    return result
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -136,6 +139,7 @@ def train(env, agents, **kwargs):
         for agent in env.agents:
             if agent in agents:
                 actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=eps)
+                #actions[agent.idx] = random.randint(0, 7)
             else:
                 actions[agent.idx] = agent.get_action(state)
         
@@ -157,17 +161,23 @@ def train(env, agents, **kwargs):
             for agent_idx, agent in enumerate(agents):
                 # TODO: do this more efficiently / cleaner (e.g. zip(minibatch))
                 minibatch = buffers[agent_idx].sample(mini_batch_size)
-                states_v  = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
-                next_v    = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
-                actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
-                rewards_v = torch.zeros(len(minibatch))
-                dones_v   = torch.zeros(len(minibatch))
-                for idx, (s, a, r, next_s) in enumerate(minibatch):
-                    states_v[idx, 0, :, :] = preprocess(s)
-                    next_v[idx, 0, :, :]   = preprocess(next_s)
-                    actions_v[idx] = int(a)
-                    rewards_v[idx] = r
-                    dones_v[idx] = abs(r)
+                minibatch = list(zip(*minibatch))
+                states_v = torch.Tensor([preprocess(state) for state in minibatch[0]])
+                actions_v = torch.LongTensor(minibatch[1])
+                rewards_v = torch.Tensor(minibatch[2])
+                dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
+                next_v = torch.Tensor([preprocess(state) for state in minibatch[3]])
+                #states_v  = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
+                #next_v    = torch.zeros((len(minibatch), 1, env.board_size, env.board_size))
+                #actions_v = torch.LongTensor(np.zeros(len(minibatch))) # one-hot or not?
+                #rewards_v = torch.zeros(len(minibatch))
+                #dones_v   = torch.zeros(len(minibatch))
+                #for idx, (s, a, r, next_s) in enumerate(minibatch):
+                #    states_v[idx, 0, :, :] = preprocess(s)
+                #    next_v[idx, 0, :, :]   = preprocess(next_s)
+                #    actions_v[idx] = int(a)
+                #    rewards_v[idx] = r
+                #    dones_v[idx] = abs(r)
                 targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)

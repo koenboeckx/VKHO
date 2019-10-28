@@ -24,7 +24,7 @@ iql.train(env, [agent0],
                 mini_batch_size = mini_batch_size,
                 buffer_size = 4*mini_batch_size,
                 sync_rate = 16*mini_batch_size,
-                print_rate=500,
+                print_rate = 500,
                 n_steps=1e5, save=False)
 
 
