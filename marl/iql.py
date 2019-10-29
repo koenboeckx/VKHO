@@ -58,9 +58,9 @@ class IQLAgent(BaseAgent):
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
     
-    def set_model(self, input_shape):
+    def set_model(self, input_shape, lr):
         self.model  = iql_model.IQL(input_shape, 8,
-            lr=0.001, board_size=self.board_size)
+            lr=lr, board_size=self.board_size)
         self.target = copy.deepcopy(self.model)
     
     def sync_models(self):
@@ -122,15 +122,16 @@ def train(env, agents, **kwargs):
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
     save = kwargs.get('save', False) # print frequency
+    lr = kwargs.get('lr', 0.02)
 
     with SummaryWriter() as writer:
         
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
         for agent in agents:
-            agent.set_model(input_shape)
+            agent.set_model(input_shape, lr)
 
-        get_epsilon = create_temp_schedule(1.0, 0.1, 10000)
+        get_epsilon = create_temp_schedule(1.0, 0.1, 50000)
 
         reward_sum = 0 # keep track of average reward
         n_terminated = 0
@@ -179,8 +180,8 @@ def train(env, agents, **kwargs):
                     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                     loss = nn.MSELoss()(targets_v, values_v)
 
+                    writer.add_scalar('agent{}'.format(agent.idx), loss.item(), step_idx)
                     if DEBUG_LOSS and step_idx % 100 == 0:
-                        writer.add_scalar('agent{}'.format(agent.idx), loss.item(), step_idx)
                         print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
                 
                     # perform training step 
@@ -196,10 +197,13 @@ def train(env, agents, **kwargs):
                 if n_terminated > 0:
                     print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
                             step_idx, reward_sum/n_terminated, n_terminated))
+                    writer.add_scalar('win_rate', reward_sum/n_terminated, step_idx)
                 else:
                     print('Iteration {} - no terminations'.format(step_idx))
                 reward_sum = 0
                 n_terminated = 0
+            
+            state = next_state
         
         if save:
             rand_int = random.randint(1000, 2000)
@@ -212,7 +216,7 @@ def test(env, agents, filenames=None):
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
         for agent, filename in zip(agents, filenames):
-            agent.set_model(input_shape)
+            agent.set_model(input_shape, 0.02)
             agent.model.load_state_dict(torch.load(filename))
             agent.model.eval()
     

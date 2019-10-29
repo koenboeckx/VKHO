@@ -23,17 +23,17 @@ env = game.make(0, agent_list,
                 board_size=BOARD_SIZE)
 
 if TRAIN:
-    mini_batch_size = 32
+    mini_batch_size = 256
     iql.train(env, [agent0, agent1],
                     mini_batch_size = mini_batch_size,
                     buffer_size = 4*mini_batch_size,
                     sync_rate = 16*mini_batch_size,
                     print_rate = 500,
-                    n_steps=3000,
+                    n_steps=200000,
                     save=True)
 if TEST:
-    filenames = ['./marl/models/iql_agent_0_1322.torch',
-                 './marl/models/iql_agent_1_1322.torch']
+    filenames = ['./marl/models/iql_agent_0_1779.torch',
+                 './marl/models/iql_agent_1_1779.torch']
     iql.test(env, [agent0, agent1], filenames)
     print('ok')
 
