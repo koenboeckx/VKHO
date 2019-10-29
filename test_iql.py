@@ -32,7 +32,9 @@ if TRAIN:
                     n_steps=90000,
                     save=True)
 if TEST:
-    filenames = ['./marl/models/iql_agent_0_1354.torch']
-    iql.test(env, [agent0], filenames)
+    filenames = ['./marl/models/iql_agent_0_1322.torch',
+                 './marl/models/iql_agent_1_1322.torch']
+    iql.test(env, [agent0, agent1], filenames)
+    print('ok')
 
 

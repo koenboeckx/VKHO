@@ -312,7 +312,7 @@ class Environment:
         if all(agent.alive == 0 for agent in self.agents[:2]):
             return -1
         # if both players of team 2 are death, return 1
-        if all(agent.alive == 0 for agent in self.agents[2:]):
+        elif all(agent.alive == 0 for agent in self.agents[2:]):
             return 1
         else:
             return 0

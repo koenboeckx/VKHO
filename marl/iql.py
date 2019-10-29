@@ -12,6 +12,7 @@ import copy
 from . import iql_model
 
 DEBUG_IQL = False
+DEBUG_LOSS = True
 
 class BaseAgent:
     """
@@ -56,7 +57,8 @@ class IQLAgent(BaseAgent):
         self.aim = None     # set by aim action
     
     def set_model(self, input_shape):
-        self.model  = iql_model.IQL(input_shape, 8, board_size=self.board_size)
+        self.model  = iql_model.IQL(input_shape, 8,
+            lr=0.001, board_size=self.board_size)
         self.target = copy.deepcopy(self.model)
     
     def sync_models(self):
@@ -127,7 +129,7 @@ def train(env, agents, **kwargs):
     for agent in agents:
         agent.set_model(input_shape)
 
-    get_epsilon = create_temp_schedule(1.0, 0.05, 1000)
+    get_epsilon = create_temp_schedule(1.0, 0.1, 10000)
 
     reward_sum = 0 # keep track of average reward
     n_terminated = 0
@@ -150,8 +152,9 @@ def train(env, agents, **kwargs):
         reward = env.get_reward()
 
         #env.render()
-        if env.terminal():
-            if DEBUG_IQL: print('@ iteration {}: episode terminated'.format(step_idx))
+        if env.terminal() != 0:
+            print('@ iteration {}: episode terminated; rewards = {}'.format(
+                step_idx, reward))
             n_terminated += 1
             reward_sum += reward[0]
             next_state =  env.set_init_game_state()
@@ -180,8 +183,8 @@ def train(env, agents, **kwargs):
                 targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)
-                #if DEBUG_IQL: 
-                #print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
+                if DEBUG_LOSS and step_idx % 100 == 0: 
+                    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
             
                 # perform training step 
                 loss.backward()
@@ -202,8 +205,8 @@ def train(env, agents, **kwargs):
             n_terminated = 0
     
     if save:
+        rand_int = random.randint(1000, 2000)
         for agent in agents:
-            rand_int = random.randint(1000, 2000)
             filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
             torch.save(agent.model.state_dict(), filename)
 
@@ -229,6 +232,7 @@ def test(env, agents, filenames=None):
         
         print(actions)
         next_state = env.step(actions)
+        print([o.alive for o in next_state])
         reward = env.get_reward()
         time.sleep(1.)
 
