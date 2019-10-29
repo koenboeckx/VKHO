@@ -11,6 +11,8 @@ import copy
 
 from . import iql_model
 
+from tensorboardX import SummaryWriter
+
 DEBUG_IQL = False
 DEBUG_LOSS = True
 
@@ -116,91 +118,95 @@ def train(env, agents, **kwargs):
     n_steps = kwargs.get('n_steps', 1024)
     mini_batch_size = kwargs.get('mini_batch_size', 32)
     buffer_size = kwargs.get('buffer_size', 128)
-    gamma = kwargs.get('gamma', 0.9)
+    gamma = kwargs.get('gamma', 0.99)
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
     save = kwargs.get('save', False) # print frequency
-    
-    # create and initialize model for agent
-    input_shape = (1, env.board_size, env.board_size)
-    for agent in agents:
-        agent.set_model(input_shape)
 
-    get_epsilon = create_temp_schedule(1.0, 0.1, 10000)
-
-    reward_sum = 0 # keep track of average reward
-    n_terminated = 0
-
-    buffers = [ReplayBuffer(buffer_size) for _ in agents]
-    state = env.set_init_game_state()
-    
-    for step_idx in range(int(n_steps)):
+    with SummaryWriter() as writer:
         
-        eps = get_epsilon(step_idx)
-        actions = [0, 0, 0, 0]
-        for agent in env.agents:
-            if agent in agents:
-                actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=eps)
-                #actions[agent.idx] = random.randint(0, 7)
-            else:
-                actions[agent.idx] = agent.get_action(state)
-        
-        next_state = env.step(actions)
-        reward = env.get_reward()
-
-        #env.render()
-        if env.terminal() != 0:
-            print('@ iteration {}: episode terminated; rewards = {}'.format(
-                step_idx, reward))
-            n_terminated += 1
-            reward_sum += reward[0]
-            next_state =  env.set_init_game_state()
-
-        for idx, agent in enumerate(agents):
-            buffers[idx].insert((state[agent.idx], actions[agent.idx],
-                                 reward[agent.idx], next_state[agent.idx]))
-    
-        if len(buffers[0]) > mini_batch_size: # = minibatch size
-            for agent_idx, agent in enumerate(agents):
-                # Sample minibatch and restructure for input to agent.model and loss calculation
-                minibatch = buffers[agent_idx].sample(mini_batch_size)
-                minibatch = list(zip(*minibatch))
-                states_v = preprocess(minibatch[0])
-                actions_v = torch.LongTensor(minibatch[1])
-                rewards_v = torch.Tensor(minibatch[2])
-                dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
-                next_v = preprocess(minibatch[3])
-
-                targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
-                values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-                loss = nn.MSELoss()(targets_v, values_v)
-                if DEBUG_LOSS and step_idx % 100 == 0: 
-                    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
-            
-                # perform training step 
-                loss.backward()
-                agent.model.optim.step()
-
-                if step_idx > 0 and step_idx % sync_rate == 0:
-                    if DEBUG_IQL: print('iteration {} - syncing ...'.format(step_idx))
-                    agent.sync_models()
-
-                 
-        if step_idx > 0 and step_idx % print_rate == 0:
-            if n_terminated > 0:
-                print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
-                        step_idx, reward_sum/n_terminated, n_terminated))
-            else:
-                print('Iteration {} - no terminations'.format(step_idx))
-            reward_sum = 0
-            n_terminated = 0
-    
-    if save:
-        rand_int = random.randint(1000, 2000)
+        # create and initialize model for agent
+        input_shape = (1, env.board_size, env.board_size)
         for agent in agents:
-            filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
-            torch.save(agent.model.state_dict(), filename)
+            agent.set_model(input_shape)
 
+        get_epsilon = create_temp_schedule(1.0, 0.1, 10000)
+
+        reward_sum = 0 # keep track of average reward
+        n_terminated = 0
+
+        buffers = [ReplayBuffer(buffer_size) for _ in agents]
+        state = env.set_init_game_state()
+        
+        for step_idx in range(int(n_steps)):
+            
+            eps = get_epsilon(step_idx)
+            actions = [0, 0, 0, 0]
+            for agent in env.agents:
+                if agent in agents:
+                    actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=eps)
+                    #actions[agent.idx] = random.randint(0, 7)
+                else:
+                    actions[agent.idx] = agent.get_action(state)
+            
+            next_state = env.step(actions)
+            reward = env.get_reward()
+
+            #env.render()
+            if env.terminal() != 0:
+                print('@ iteration {}: episode terminated; rewards = {}'.format(
+                    step_idx, reward))
+                n_terminated += 1
+                reward_sum += reward[0]
+                next_state =  env.set_init_game_state()
+
+            for idx, agent in enumerate(agents):
+                buffers[idx].insert((state[agent.idx], actions[agent.idx],
+                                    reward[agent.idx], next_state[agent.idx]))
+        
+            if len(buffers[0]) > mini_batch_size: # = minibatch size
+                for agent_idx, agent in enumerate(agents):
+                    # Sample minibatch and restructure for input to agent.model and loss calculation
+                    minibatch = buffers[agent_idx].sample(mini_batch_size)
+                    minibatch = list(zip(*minibatch))
+                    states_v = preprocess(minibatch[0])
+                    actions_v = torch.LongTensor(minibatch[1])
+                    rewards_v = torch.Tensor(minibatch[2])
+                    dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
+                    next_v = preprocess(minibatch[3])
+
+                    targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
+                    values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+                    loss = nn.MSELoss()(targets_v, values_v)
+
+                    if DEBUG_LOSS and step_idx % 100 == 0:
+                        writer.add_scalar('agent{}'.format(agent.idx), loss.item(), step_idx)
+                        print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
+                
+                    # perform training step 
+                    loss.backward()
+                    agent.model.optim.step()
+
+                    if step_idx > 0 and step_idx % sync_rate == 0:
+                        if DEBUG_IQL: print('iteration {} - syncing ...'.format(step_idx))
+                        agent.sync_models()
+
+                    
+            if step_idx > 0 and step_idx % print_rate == 0:
+                if n_terminated > 0:
+                    print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
+                            step_idx, reward_sum/n_terminated, n_terminated))
+                else:
+                    print('Iteration {} - no terminations'.format(step_idx))
+                reward_sum = 0
+                n_terminated = 0
+        
+        if save:
+            rand_int = random.randint(1000, 2000)
+            for agent in agents:
+                filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
+                torch.save(agent.model.state_dict(), filename)
+        
 def test(env, agents, filenames=None):
     if filenames is not None:
         # create and initialize model for agent

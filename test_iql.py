@@ -29,7 +29,7 @@ if TRAIN:
                     buffer_size = 4*mini_batch_size,
                     sync_rate = 16*mini_batch_size,
                     print_rate = 500,
-                    n_steps=90000,
+                    n_steps=3000,
                     save=True)
 if TEST:
     filenames = ['./marl/models/iql_agent_0_1322.torch',
