@@ -66,28 +66,25 @@ class IQLAgent(BaseAgent):
 
 
     def get_action(self, state, epsilon):
-        result = preprocess(state)
-        state_v = torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
+        state_v = preprocess([state])
         values = self.model(state_v)
         if random.random() < epsilon:
             return random.sample(range(8), 1)[0]
         else:
             return torch.argmax(values).item()
 
-def preprocess(state):
-    """process the 'state' such thzt it can serve
+def preprocess(states):
+    """process the 'state' such that it can serve
     as input to the NN model."""
-    # TODO: change this to (only!) allow list of states => more efficient / avoids weird construction in line 67 (get_action)
-    # and output can serve directly as input to model
-    board = state.board
-    size = int(np.sqrt(len(board)))
-    result = np.zeros((1, size, size))
-    for i in range(size):
-        for j in range(size):
-            if board[size*i + j] != -1:
-                result[0, i, j] = int(board[size*i + j][-1]) + 1
-    #return torch.from_numpy(result).type('torch.FloatTensor').unsqueeze(0)
-    return result
+    size = int(np.sqrt(len(states[0].board)))
+    tensor = torch.zeros((len(states), 1, size, size))
+    for idx, state in enumerate(states):
+        board = state.board
+        for i in range(size):
+            for j in range(size):
+                if board[size*i + j] != -1:
+                    tensor[idx, 0, i, j] = int(board[size*i + j][-1]) + 1
+    return tensor
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -165,21 +162,15 @@ def train(env, agents, **kwargs):
     
         if len(buffers[0]) > mini_batch_size: # = minibatch size
             for agent_idx, agent in enumerate(agents):
-                # TODO: do this more efficiently / cleaner (e.g. zip(minibatch))
+                # Sample minibatch and restructure for input to agent.model and loss calculation
                 minibatch = buffers[agent_idx].sample(mini_batch_size)
                 minibatch = list(zip(*minibatch))
-                states_v = torch.Tensor([preprocess(state) for state in minibatch[0]])
+                states_v = preprocess(minibatch[0])
                 actions_v = torch.LongTensor(minibatch[1])
                 rewards_v = torch.Tensor(minibatch[2])
                 dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
-                next_v = torch.Tensor([preprocess(state) for state in minibatch[3]])
-                # Above is equivalent to
-                #for idx, (s, a, r, next_s) in enumerate(minibatch):
-                #    states_v[idx, 0, :, :] = preprocess(s)
-                #    next_v[idx, 0, :, :]   = preprocess(next_s)
-                #    actions_v[idx] = int(a)
-                #    rewards_v[idx] = r
-                #    dones_v[idx] = abs(r)
+                next_v = preprocess(minibatch[3])
+
                 targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                 values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 loss = nn.MSELoss()(targets_v, values_v)
