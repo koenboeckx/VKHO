@@ -61,7 +61,9 @@ class IQLAgent(BaseAgent):
     def set_model(self, input_shape, lr, device):
         self.model  = iql_model.IQL(input_shape, 8,
             lr=lr, board_size=self.board_size).to(device)
-        self.target = copy.deepcopy(self.model)
+        self.target =iql_model.IQL(input_shape, 8,
+            lr=lr, board_size=self.board_size).to(device)
+        self.sync_models()
     
     def sync_models(self):
         self.target.load_state_dict(self.model.state_dict())
@@ -125,9 +127,10 @@ def train(env, agents, **kwargs):
     print_rate = kwargs.get('print_rate', 100) # print frequency
     save = kwargs.get('save', False) # print frequency
     if torch.cuda.is_available():
-        print("CUDA available ... using CUDA")
+        print("CUDA available ...")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('Using device {} ...'.format(device))
     lr = kwargs.get('lr', 0.02)
 
     with SummaryWriter() as writer:
