@@ -4,6 +4,8 @@ from game.gui import visualize
 from marl import iql, iql_model
 from game.envs import unflatten, State, print_obs
 
+import argparse
+
 BOARD_SIZE = 5
 TRAIN = True # set true if you want to train
 TEST  = False  # set true if you want to test
@@ -22,19 +24,28 @@ agent_list = [
 env = game.make(0, agent_list, 
                 board_size=BOARD_SIZE)
 
-if TRAIN:
-    mini_batch_size = 256
-    iql.train(env, [agent0, agent1],
-                    mini_batch_size = mini_batch_size,
-                    buffer_size = 4*mini_batch_size,
-                    sync_rate = 16*mini_batch_size,
-                    print_rate = 500,
-                    n_steps=200000,
-                    save=True)
-if TEST:
-    filenames = ['./marl/models/iql_agent_0_1779.torch',
-                 './marl/models/iql_agent_1_1779.torch']
-    iql.test(env, [agent0, agent1], filenames)
-    print('ok')
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batchsize", default=256, help="Minibatch size")
+    parser.add_argument("--buffersize", default=1024, help="Buffer size")
+    parser.add_argument("--syncrate", default=256, help="Synchronisation rate")
+    parser.add_argument("--lr", default=0.001, help="Learning rate")
+    args = parser.parse_args()
+
+    if TRAIN:
+        mini_batch_size = args.batchsize
+        iql.train(env, [agent0, agent1],
+                        mini_batch_size = int(args.batchsize),
+                        buffer_size = int(args.buffersize),
+                        sync_rate = int(args.syncrate),
+                        print_rate = 500,
+                        n_steps=200000,
+                        lr = float(args.lr),
+                        save=False)
+    if TEST:
+        filenames = ['./marl/models/iql_agent_0_1779.torch',
+                    './marl/models/iql_agent_1_1779.torch']
+        iql.test(env, [agent0, agent1], filenames)
+        print('ok')
 
 
