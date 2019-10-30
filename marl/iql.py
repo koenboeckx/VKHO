@@ -58,9 +58,9 @@ class IQLAgent(BaseAgent):
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
     
-    def set_model(self, input_shape, lr):
+    def set_model(self, input_shape, lr, device):
         self.model  = iql_model.IQL(input_shape, 8,
-            lr=lr, board_size=self.board_size)
+            lr=lr, board_size=self.board_size).to(device)
         self.target = copy.deepcopy(self.model)
     
     def sync_models(self):
@@ -122,6 +122,10 @@ def train(env, agents, **kwargs):
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
     save = kwargs.get('save', False) # print frequency
+    if torch.cuda.is_available():
+        print("CUDA available ... using CUDA")
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lr = kwargs.get('lr', 0.02)
 
     with SummaryWriter() as writer:
@@ -129,7 +133,7 @@ def train(env, agents, **kwargs):
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
         for agent in agents:
-            agent.set_model(input_shape, lr)
+            agent.set_model(input_shape, lr, device)
 
         get_epsilon = create_temp_schedule(1.0, 0.1, 50000)
 
@@ -149,6 +153,7 @@ def train(env, agents, **kwargs):
                     #actions[agent.idx] = random.randint(0, 7)
                 else:
                     actions[agent.idx] = agent.get_action(state)
+                    actions[agent.idx] = 0 # force all other player to stand still
             
             next_state = env.step(actions)
             reward = env.get_reward()
@@ -170,11 +175,11 @@ def train(env, agents, **kwargs):
                     # Sample minibatch and restructure for input to agent.model and loss calculation
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
                     minibatch = list(zip(*minibatch))
-                    states_v = preprocess(minibatch[0])
-                    actions_v = torch.LongTensor(minibatch[1])
-                    rewards_v = torch.Tensor(minibatch[2])
-                    dones_v = torch.abs(rewards_v) # 1 if terminated, otherwise 0
-                    next_v = preprocess(minibatch[3])
+                    states_v = preprocess(minibatch[0]).to(device)
+                    actions_v = torch.LongTensor(minibatch[1]).to(device)
+                    rewards_v = torch.Tensor(minibatch[2]).to(device)
+                    dones_v = torch.abs(rewards_v).to(device) # 1 if terminated, otherwise 0
+                    next_v = preprocess(minibatch[3]).to(device)
 
                     targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
@@ -212,11 +217,12 @@ def train(env, agents, **kwargs):
                 torch.save(agent.model.state_dict(), filename)
         
 def test(env, agents, filenames=None):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if filenames is not None:
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
         for agent, filename in zip(agents, filenames):
-            agent.set_model(input_shape, 0.02)
+            agent.set_model(input_shape, 0.02, device)
             agent.model.load_state_dict(torch.load(filename))
             agent.model.eval()
     
