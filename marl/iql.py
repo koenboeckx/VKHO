@@ -141,7 +141,7 @@ def train(env, agents, **kwargs):
         n_terminated = 0
 
         buffers = [ReplayBuffer(buffer_size) for _ in agents]
-        state = env.set_init_game_state()
+        state = env.get_init_game_state()
         
         for step_idx in range(int(n_steps)):
             
@@ -149,26 +149,26 @@ def train(env, agents, **kwargs):
             actions = [0, 0, 0, 0]
             for agent in env.agents:
                 if agent in agents:
-                    actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=eps)
+                    actions[agent.idx] = agent.get_action(state, epsilon=eps)
                     #actions[agent.idx] = random.randint(0, 7)
                 else:
                     actions[agent.idx] = agent.get_action(state)
                     actions[agent.idx] = 0 # force all other player to stand still
             
-            next_state = env.step(actions)
-            reward = env.get_reward()
+            next_state = env.step(state, actions)
+            reward = env.get_reward(next_state)
 
-            #env.render()
-            if env.terminal() != 0:
+            #env.render(state)
+            if env.terminal(next_state) != 0:
                 print('@ iteration {}: episode terminated; rewards = {}'.format(
                     step_idx, reward))
                 n_terminated += 1
                 reward_sum += reward[0]
-                next_state =  env.set_init_game_state()
+                next_state =  env.get_init_game_state()
 
             for idx, agent in enumerate(agents):
-                buffers[idx].insert((state[agent.idx], actions[agent.idx],
-                                    reward[agent.idx], next_state[agent.idx]))
+                buffers[idx].insert((state, actions[agent.idx],
+                                    reward[agent.idx], next_state)) # states are common TODO: use observations
         
             if len(buffers[0]) > mini_batch_size: # = minibatch size
                 for agent_idx, agent in enumerate(agents):
@@ -226,7 +226,7 @@ def test(env, agents, filenames=None):
             agent.model.load_state_dict(torch.load(filename))
             agent.model.eval()
     
-    state = env.set_init_game_state()
+    state = env.get_init_game_state()
 
     done = False
     while not done:
@@ -238,9 +238,9 @@ def test(env, agents, filenames=None):
                 actions[agent.idx] = agent.get_action(state)
         
         print(actions)
-        next_state = env.step(actions)
-        print([o.alive for o in next_state])
-        reward = env.get_reward()
+        next_state = env.step(state, actions)
+        print(state.alive)
+        reward = env.get_reward(state)
         time.sleep(1.)
 
         if reward[0] != 0:

@@ -1,8 +1,9 @@
 import game
 from game import agents
+from game.envs import Environment
 from game.gui import visualize
 from marl import iql, iql_model
-from game.envs import unflatten, State, print_obs
+from game.envs import unflatten, State
 import torch
 
 import argparse
@@ -20,8 +21,10 @@ agent_list = [
     agents.RandomTank(3)  # Team 2
 ]
 
-env = game.make(0, agent_list, 
-                board_size=BOARD_SIZE)
+#env = game.make(0, agent_list, 
+#                board_size=BOARD_SIZE)
+
+env = Environment(agent_list, size=BOARD_SIZE)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -38,7 +41,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
-    args.train = False
+    args.train = True
     if args.train:
         mini_batch_size = args.batchsize
         iql.train(env, [agent0],
@@ -49,7 +52,7 @@ if __name__ == '__main__':
                         n_steps=20000,
                         lr = float(args.lr),
                         save=True)
-    args.test = True
+    args.test = False
     if args.test:
         filenames = ['./marl/models/iql_agent_0_1699.torch']
                     #'./marl/models/iql_agent_1_1779.torch']
