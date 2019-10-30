@@ -67,12 +67,13 @@ class IQLAgent(BaseAgent):
         self.target.load_state_dict(self.model.state_dict())
 
 
-    def get_action(self, state, epsilon):
-        state_v = preprocess([state])
-        values = self.model(state_v)
+    def get_action(self, state, epsilon, device):
+        """Sample an action from action space with epsilon-greedy"""
         if random.random() < epsilon:
-            return random.sample(range(8), 1)[0]
+            return random.randint(0, 7)
         else:
+            state_v = preprocess([state]).to(device)
+            values = self.model(state_v)
             return torch.argmax(values).item()
 
 def preprocess(states):
@@ -118,6 +119,7 @@ def train(env, agents, **kwargs):
     n_steps = kwargs.get('n_steps', 1024)
     mini_batch_size = kwargs.get('mini_batch_size', 32)
     buffer_size = kwargs.get('buffer_size', 128)
+    replay_start_size = kwargs.get('replay_start_size', buffer_size)
     gamma = kwargs.get('gamma', 0.99)
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
@@ -149,40 +151,49 @@ def train(env, agents, **kwargs):
             actions = [0, 0, 0, 0]
             for agent in env.agents:
                 if agent in agents:
-                    actions[agent.idx] = agent.get_action(state, epsilon=eps)
-                    #actions[agent.idx] = random.randint(0, 7)
+                    # 2. with prob epsilon, select random action a; otherwise a = argmax Q(s, .)
+                    actions[agent.idx] = agent.get_action(state, epsilon=eps, device=device)
                 else:
                     actions[agent.idx] = agent.get_action(state)
                     actions[agent.idx] = 0 # force all other player to stand still
             
+            # 3. execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
             reward = env.get_reward(next_state)
 
             #env.render(state)
+            done = 0.
             if env.terminal(next_state) != 0:
                 print('@ iteration {}: episode terminated; rewards = {}'.format(
                     step_idx, reward))
                 n_terminated += 1
                 reward_sum += reward[0]
+                done = 1.
                 next_state =  env.get_init_game_state()
 
+            # 4. store transition (s, a, r, s') in replay buffer
             for idx, agent in enumerate(agents):
                 buffers[idx].insert((state, actions[agent.idx],
-                                    reward[agent.idx], next_state)) # states are common TODO: use observations
+                                    reward[agent.idx], next_state, # states are common TODO: use observations
+                                    done))
         
-            if len(buffers[0]) > mini_batch_size: # = minibatch size
+            if len(buffers[0]) >= replay_start_size: # = minibatch size
                 for agent_idx, agent in enumerate(agents):
                     # Sample minibatch and restructure for input to agent.model and loss calculation
+                    # 5. sample a random minibatch of transitions from the replay buffer
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
                     minibatch = list(zip(*minibatch))
                     states_v = preprocess(minibatch[0]).to(device)
                     actions_v = torch.LongTensor(minibatch[1]).to(device)
                     rewards_v = torch.Tensor(minibatch[2]).to(device)
-                    dones_v = torch.abs(rewards_v).to(device) # 1 if terminated, otherwise 0
                     next_v = preprocess(minibatch[3]).to(device)
+                    dones_v = torch.Tensor(minibatch[4]).to(device) # 1 if terminated, otherwise 0
 
+                    # 6. for every transition, compute y = r is episode ended othrewise y = r + ...
                     targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
                     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+                    
+                    # 7. calculate loss L = (Q - y)^2
                     loss = nn.MSELoss()(targets_v, values_v)
 
                     writer.add_scalar('agent{}'.format(agent.idx), loss.item(), step_idx)
@@ -190,6 +201,7 @@ def train(env, agents, **kwargs):
                         print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
                 
                     # perform training step 
+                    # 8. Update Q(s,a) using SGD by minimizing loss w.r.t. model parameters
                     loss.backward()
                     agent.model.optim.step()
 
@@ -233,9 +245,11 @@ def test(env, agents, filenames=None):
         actions = [0, 0, 0, 0]
         for agent in env.agents:
             if agent in agents:
-                actions[agent.idx] = agent.get_action(state[agent.idx], epsilon=0.0) # pick best action
+                actions[agent.idx] = agent.get_action(state, epsilon=0.0, # pick best action
+                                                        device=device)
             else:
                 actions[agent.idx] = agent.get_action(state)
+                actions[agent.idx] = 0 # force all other player to stand still
         
         print(actions)
         next_state = env.step(state, actions)
@@ -246,4 +260,5 @@ def test(env, agents, filenames=None):
         if reward[0] != 0:
             done = True
 
-        env.render()
+        env.render(next_state)
+        state = next_state

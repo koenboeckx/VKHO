@@ -35,8 +35,8 @@ if __name__ == '__main__':
     parser.add_argument("--cuda", default=False, action="store_true",
                         help="Enable cuda")
     parser.add_argument("--batchsize", default=256, help="Minibatch size")
-    parser.add_argument("--buffersize", default=1024, help="Buffer size")
-    parser.add_argument("--syncrate", default=256, help="Synchronisation rate")
+    parser.add_argument("--buffersize", default=1e4, help="Buffer size")
+    parser.add_argument("--syncrate", default=1e4, help="Synchronisation rate")
     parser.add_argument("--lr", default=0.001, help="Learning rate")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
@@ -49,12 +49,12 @@ if __name__ == '__main__':
                         buffer_size = int(args.buffersize),
                         sync_rate = int(args.syncrate),
                         print_rate = 500,
-                        n_steps=20000,
+                        n_steps=5e4,
                         lr = float(args.lr),
                         save=True)
     args.test = False
     if args.test:
-        filenames = ['./marl/models/iql_agent_0_1699.torch']
+        filenames = ['./marl/models/iql_agent_0_1241.torch']
                     #'./marl/models/iql_agent_1_1779.torch']
         iql.test(env, [agent0], filenames)
         print('ok')
