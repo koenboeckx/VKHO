@@ -42,6 +42,12 @@ class BaseAgent:
         return self.type + str(self.idx)
 
 class IQLAgent(BaseAgent):
+    """
+    Agent class to be used with independent q-learning.
+    Model and target model are set with method .set_model()
+    Syncing from model to target is done with .sync_models()
+    Epsilon-greedy action selection with .get_action(state, eps)
+    """
     def __init__(self, idx, board_size=11):
         super(IQLAgent, self).__init__()
         self.board_size = board_size
@@ -59,6 +65,14 @@ class IQLAgent(BaseAgent):
         self.aim = None     # set by aim action
     
     def set_model(self, input_shape, lr, device):
+        """
+        Set the model (neural net) and target of the agent.
+
+        :param input_shape: shape of input vector (channels, widht, height)
+        :param lr:          learning rate for model optimizer (=Adam)
+        :param device:      torch.device("cpu" or "cuda")
+        :return: None
+        """
         self.model  = iql_model.IQL(input_shape, 8,
             lr=lr, board_size=self.board_size).to(device)
         self.target =iql_model.IQL(input_shape, 8,
@@ -66,11 +80,24 @@ class IQLAgent(BaseAgent):
         self.sync_models()
     
     def sync_models(self):
+        """
+        Sync weights of agent.model with agent.target
+
+        :return: None
+        """
         self.target.load_state_dict(self.model.state_dict())
 
 
     def get_action(self, state, epsilon, device):
-        """Sample an action from action space with epsilon-greedy"""
+        """
+        Sample an action from action space with epsilon-greedy
+        
+        :param state:   state of the game
+        :param epsilon: value for epsilon-greedy selection
+        :param device:  torch.device("cpu" or "cuda")
+
+        :return: action (integer in [0..7])
+        """
         if random.random() < epsilon:
             return random.randint(0, 7)
         else:
@@ -79,8 +106,13 @@ class IQLAgent(BaseAgent):
             return torch.argmax(values).item()
 
 def preprocess(states):
-    """process the 'state' such that it can serve
-    as input to the NN model."""
+    """
+    Process the 'state' such that it can serve
+    as input to the NN model.
+    
+    :param states:  list of states
+    :return: tensor 
+    """
     size = int(np.sqrt(len(states[0].board)))
     tensor = torch.zeros((len(states), 1, size, size))
     for idx, state in enumerate(states):
@@ -98,6 +130,9 @@ class ReplayBuffer:
     
     def __len__(self):
         return len(self.contents)
+    
+    def __str__(self):
+        return self.contents
     
     def insert(self, item):
         if len(self.contents) == self.capacity:
@@ -133,7 +168,8 @@ def train(env, agents, **kwargs):
     print('Using device {} ...'.format(device))
     lr = kwargs.get('lr', 0.02)
 
-    with SummaryWriter() as writer:
+    comment = "-lr_{:.3}-batch_{}".format(lr, mini_batch_size)
+    with SummaryWriter(comment=comment) as writer:
         
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
@@ -199,7 +235,7 @@ def train(env, agents, **kwargs):
                     # 7. calculate loss L = (Q - y)^2
                     loss = nn.MSELoss()(targets_v, values_v)
 
-                    writer.add_scalar('agent{}'.format(agent.idx), loss.item(), step_idx)
+                    writer.add_scalar('agent{}_loss'.format(agent.idx), loss.item(), step_idx)
                     if DEBUG_LOSS and step_idx % 100 == 0:
                         print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
                 
@@ -209,7 +245,7 @@ def train(env, agents, **kwargs):
                     agent.model.optim.step()
 
                     if step_idx > 0 and step_idx % sync_rate == 0:
-                        if DEBUG_IQL: print('iteration {} - syncing ...'.format(step_idx))
+                        print('iteration {} - syncing ...'.format(step_idx))
                         agent.sync_models()
 
                     

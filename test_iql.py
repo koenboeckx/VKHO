@@ -1,7 +1,7 @@
 import game
 from game import agents
 from game.envs import Environment
-from game.gui import visualize
+#from game.gui import visualize
 from marl import iql, iql_model
 from game.envs import unflatten, State
 import torch
