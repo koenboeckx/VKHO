@@ -158,7 +158,7 @@ def train(env, agents, **kwargs):
                     actions[agent.idx] = agent.get_action(state, epsilon=eps, device=device)
                 else:
                     actions[agent.idx] = agent.get_action(state)
-                    actions[agent.idx] = 0 # force all other player to stand still
+                    #actions[agent.idx] = 0 # force all other player to stand still
             
             # 3. execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
@@ -252,7 +252,7 @@ def test(env, agents, filenames=None):
                                                         device=device)
             else:
                 actions[agent.idx] = agent.get_action(state)
-                actions[agent.idx] = 0 # force all other player to stand still
+                #actions[agent.idx] = 0 # force all other player to stand still
         
         print(actions)
         next_state = env.step(state, actions)
