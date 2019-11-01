@@ -150,6 +150,28 @@ def create_temp_schedule(start, stop, max_steps):
         else:
             return stop
     return get_epsilon
+
+def calc_loss(agent, batch, gamma, device="cuda"):
+    batch = list(zip(*batch))
+    states, actions, rewards, next_states, dones = batch
+    states_v = preprocess(states).to(device)
+    actions_v = torch.LongTensor(actions).to(device)
+    rewards_v = torch.Tensor(rewards).to(device)
+    next_v = preprocess(next_states).to(device)
+    done_mask = torch.LongTensor(dones).to(device) # 1 if terminated, otherwise 0
+
+    # 6. for every transition, compute y = r is episode ended othrewise y = r + ...
+    values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+    next_values_v = torch.max(agent.target(next_v), dim=1)[0]
+    next_values_v[done_mask] = 0.0
+    next_values_v = next_values_v.detach() # !! avoids feeding gradients in target network
+    targets_v = rewards_v + gamma * next_values_v
+    
+                    
+    # 7. calculate loss L = (Q - y)^2
+    loss = nn.MSELoss()(targets_v, values_v)
+
+    return loss
  
 def train(env, agents, **kwargs):
     """Train two agents in agent_list"""
@@ -221,19 +243,7 @@ def train(env, agents, **kwargs):
                     # Sample minibatch and restructure for input to agent.model and loss calculation
                     # 5. sample a random minibatch of transitions from the replay buffer
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
-                    minibatch = list(zip(*minibatch))
-                    states_v = preprocess(minibatch[0]).to(device)
-                    actions_v = torch.LongTensor(minibatch[1]).to(device)
-                    rewards_v = torch.Tensor(minibatch[2]).to(device)
-                    next_v = preprocess(minibatch[3]).to(device)
-                    dones_v = torch.Tensor(minibatch[4]).to(device) # 1 if terminated, otherwise 0
-
-                    # 6. for every transition, compute y = r is episode ended othrewise y = r + ...
-                    targets_v = rewards_v + (1-dones_v) * gamma * torch.max(agent.target(next_v), dim=1)[0]
-                    values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-                    
-                    # 7. calculate loss L = (Q - y)^2
-                    loss = nn.MSELoss()(targets_v, values_v)
+                    loss =calc_loss(agent, minibatch, gamma, device=device)
 
                     writer.add_scalar('agent{}_loss'.format(agent.idx), loss.item(), step_idx)
                     if DEBUG_LOSS and step_idx % 100 == 0:
