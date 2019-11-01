@@ -16,7 +16,7 @@ agent2 = iql.IQLAgent(2, board_size=BOARD_SIZE)
 
 agent_list = [
     agent0, # Team 1
-    agents.RandomTank(1), #agent1, # Team 1
+    agent1, # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     args.train = True
     if args.train:
         mini_batch_size = args.batchsize
-        iql.train(env, [agent0],
+        iql.train(env, [agent0, agent1],
                         mini_batch_size = int(args.batchsize),
                         buffer_size = int(args.buffersize),
                         sync_rate = int(args.syncrate),

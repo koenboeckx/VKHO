@@ -64,7 +64,7 @@ class IQLAgent(BaseAgent):
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action
     
-    def set_model(self, input_shape, lr, device):
+    def set_model(self, input_shape, n_actions, lr, device):
         """
         Set the model (neural net) and target of the agent.
 
@@ -73,9 +73,9 @@ class IQLAgent(BaseAgent):
         :param device:      torch.device("cpu" or "cuda")
         :return: None
         """
-        self.model  = iql_model.IQL(input_shape, 8,
+        self.model  = iql_model.IQL(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(device)
-        self.target =iql_model.IQL(input_shape, 8,
+        self.target =iql_model.IQL(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(device)
         self.sync_models()
     
@@ -196,7 +196,7 @@ def train(env, agents, **kwargs):
         # create and initialize model for agent
         input_shape = (1, env.board_size, env.board_size)
         for agent in agents:
-            agent.set_model(input_shape, lr, device)
+            agent.set_model(input_shape, env.n_actions, lr, device)
 
         get_epsilon = create_temp_schedule(1.0, 0.1, 50000)
 
@@ -240,6 +240,7 @@ def train(env, agents, **kwargs):
         
             if len(buffers[0]) >= replay_start_size: # = minibatch size
                 for agent_idx, agent in enumerate(agents):
+                    agent.model.optim.zero_grad()
                     # Sample minibatch and restructure for input to agent.model and loss calculation
                     # 5. sample a random minibatch of transitions from the replay buffer
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
