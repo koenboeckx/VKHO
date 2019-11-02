@@ -198,7 +198,7 @@ def train(env, agents, **kwargs):
         for agent in agents:
             agent.set_model(input_shape, env.n_actions, lr, device)
 
-        get_epsilon = create_temp_schedule(1.0, 0.1, 50000)
+        get_epsilon = create_temp_schedule(1.0, 0.1, 500000)
 
         reward_sum = 0 # keep track of average reward
         n_terminated = 0
@@ -218,7 +218,7 @@ def train(env, agents, **kwargs):
                     actions[agent.idx] = agent.get_action(state)
                     #actions[agent.idx] = 0 # force all other player to stand still
             
-            # 3. execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
+            # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
             reward = env.get_reward(next_state)
 
@@ -232,8 +232,9 @@ def train(env, agents, **kwargs):
                 done = 1.
                 next_state =  env.get_init_game_state()
 
-            # 4. store transition (s, a, r, s') in replay buffer
+            # Store transition (s, a, r, s') in replay buffer
             for idx, agent in enumerate(agents):
+                # TODO: store in namedtuple Experience
                 buffers[idx].insert((state, actions[agent.idx],
                                     reward[agent.idx], next_state, # states are common TODO: use observations
                                     done))
@@ -241,8 +242,7 @@ def train(env, agents, **kwargs):
             if len(buffers[0]) >= replay_start_size: # = minibatch size
                 for agent_idx, agent in enumerate(agents):
                     agent.model.optim.zero_grad()
-                    # Sample minibatch and restructure for input to agent.model and loss calculation
-                    # 5. sample a random minibatch of transitions from the replay buffer
+                    # Sample minibatch and compute loss
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
                     loss =calc_loss(agent, minibatch, gamma, device=device)
 
@@ -251,7 +251,6 @@ def train(env, agents, **kwargs):
                         print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
                 
                     # perform training step 
-                    # 8. Update Q(s,a) using SGD by minimizing loss w.r.t. model parameters
                     loss.backward()
                     agent.model.optim.step()
 
