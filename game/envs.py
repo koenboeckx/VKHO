@@ -109,8 +109,6 @@ class Environment:
     
     def get_init_game_state(self):
         """Get the initial game state.
-        A game state consists of a list of agents states.
-        First, add all agents
         :returns: a list of observations for the 4 agents
         """
         
@@ -130,7 +128,7 @@ class Environment:
         
         # generate the state 
         # by default, player 0 begins to play
-        state = State(
+        state = State( # TODO: use agent information
             board = flatten(board),
             positions = tuple(positions),
             alive = (1, 1, 1, 1), 
@@ -140,7 +138,9 @@ class Environment:
         return state
 
     def render(self, state):
-        """Represent the state of the environment."""
+        """Represent the state of the environment.
+        :param state: the state to show (actually only state.board)
+        """
         board = state.board
         board_size = self.args.get('size', 11)
         board_repr = ''
@@ -165,7 +165,13 @@ class Environment:
         print(board_repr)
 
     def check_conditions(self, state, agent, action):
-        """Checks whether 'agent' is allowed to execute 'action' in with game in 'state'"""
+        """Checks whether 'agent' is allowed to execute 'action' in with game in 'state'
+        :param state: current state of the game
+        :param agent: check the conditions for this agent 
+        :param action: check the conditions for the action of agent
+
+        :return: True if action is allowed else False 
+        """
         board = unflatten(state)
         board_size = self.args.get('size', 11)
 
@@ -203,7 +209,10 @@ class Environment:
 
     def step(self, state, actions):
         """Perform actions, part of joint action space.
-        Deconflict simultanuous execution of actions (...)
+        :param state: the game state in which the action is to be executed
+        :param actions: tuple of 4 actions that the players execute
+
+        :return: next game state
         """
         board = unflatten(state)
         board_size = self.board_size
@@ -272,7 +281,6 @@ class Environment:
 
     def terminal(self, state):
         """Check if state is terminal state, by checking alive-status of agents."""
-        # TODO: make similar to .terminal(self) (or vice versa)
         # TODO: add tie (return 0) if all agents out of ammo
         if all(state.ammo) == 0:
             return 0 # change to indicate end game
