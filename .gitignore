@@ -1,2 +1,9 @@
 runs/*
 *.pyc
+marl/models/*
+marl/__pycache__/*
+
+game/__pycache__/__init__.cpython-36.pyc
+game/__pycache__/__init__.cpython-36.pyc
+game/__pycache__/agents.cpython-36.pyc
+game/__pycache__/envs.cpython-36.pyc

@@ -4,6 +4,8 @@ Independent Q-Learning.
 
 import random
 import time
+from collections import namedtuple
+
 import numpy as np
 import torch
 from torch import nn
@@ -15,6 +17,10 @@ from tensorboardX import SummaryWriter
 
 DEBUG_IQL = False
 DEBUG_LOSS = True
+
+Experience = namedtuple('Experience', [
+    'state', 'action', 'reward', 'next_state', 'done'
+])
 
 class BaseAgent:
     """
@@ -158,9 +164,10 @@ def calc_loss(agent, batch, gamma, device="cuda"):
     actions_v = torch.LongTensor(actions).to(device)
     rewards_v = torch.Tensor(rewards).to(device)
     next_v = preprocess(next_states).to(device)
-    done_mask = torch.LongTensor(dones).to(device) # 1 if terminated, otherwise 0
+    #done_mask = torch.LongTensor(dones).to(device) # 1 if terminated, otherwise 0
+    done_mask = torch.ByteTensor(dones).to(device)
 
-    # 6. for every transition, compute y = r is episode ended othrewise y = r + ...
+    # For every transition, compute y = r is episode ended othrewise y = r + ...
     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
     next_values_v = torch.max(agent.target(next_v), dim=1)[0]
     next_values_v[done_mask] = 0.0
@@ -168,7 +175,7 @@ def calc_loss(agent, batch, gamma, device="cuda"):
     targets_v = rewards_v + gamma * next_values_v
     
                     
-    # 7. calculate loss L = (Q - y)^2
+    # Calculate loss L = (Q - y)^2
     loss = nn.MSELoss()(targets_v, values_v)
 
     return loss
@@ -212,39 +219,39 @@ def train(env, agents, **kwargs):
             actions = [0, 0, 0, 0]
             for agent in env.agents:
                 if agent in agents:
-                    # 2. with prob epsilon, select random action a; otherwise a = argmax Q(s, .)
+                    # with prob epsilon, select random action a; otherwise a = argmax Q(s, .)
                     actions[agent.idx] = agent.get_action(state, epsilon=eps, device=device)
                 else:
+                    # other, no trained agent => pick random action
                     actions[agent.idx] = agent.get_action(state)
-                    #actions[agent.idx] = 0 # force all other player to stand still
             
             # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
             reward = env.get_reward(next_state)
 
             #env.render(state)
-            done = 0.
+            done = False
             if env.terminal(next_state) != 0:
                 print('@ iteration {}: episode terminated; rewards = {}'.format(
                     step_idx, reward))
                 n_terminated += 1
                 reward_sum += reward[0]
-                done = 1.
+                done = True
                 next_state =  env.get_init_game_state()
 
             # Store transition (s, a, r, s') in replay buffer
             for idx, agent in enumerate(agents):
-                # TODO: store in namedtuple Experience
-                buffers[idx].insert((state, actions[agent.idx],
-                                    reward[agent.idx], next_state, # states are common TODO: use observations
-                                    done))
-        
+                exp = Experience(state=state, action=actions[agent.idx],
+                                 reward=reward[agent.idx],
+                                 next_state=next_state, done=done)
+                buffers[idx].insert(exp)
+
             if len(buffers[0]) >= replay_start_size: # = minibatch size
                 for agent_idx, agent in enumerate(agents):
                     agent.model.optim.zero_grad()
                     # Sample minibatch and compute loss
                     minibatch = buffers[agent_idx].sample(mini_batch_size)
-                    loss =calc_loss(agent, minibatch, gamma, device=device)
+                    loss = calc_loss(agent, minibatch, gamma, device=device)
 
                     writer.add_scalar('agent{}_loss'.format(agent.idx), loss.item(), step_idx)
                     if DEBUG_LOSS and step_idx % 100 == 0:
