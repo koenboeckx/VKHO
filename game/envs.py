@@ -280,7 +280,11 @@ class Environment:
         return new_state
 
     def terminal(self, state):
-        """Check if state is terminal state, by checking alive-status of agents."""
+        """Check if state is terminal state, by checking alive-status of agents.
+        :param state: current game state
+        
+        :return: 1 if player 0 wins, -1 if player 1 wins, 0 otherwise
+        """
         # TODO: add tie (return 0) if all agents out of ammo
         if all(state.ammo) == 0:
             return 0 # change to indicate end game
@@ -292,7 +296,11 @@ class Environment:
             return 0
     
     def get_reward(self, state):
-        """Return tuple of rewards, one for each agent."""
+        """Return tuple of rewards, one for each agent.
+        :param: state
+        
+        :return: list of rewards
+        """
         reward = self.terminal(state)
         return (reward, reward, -reward, -reward)
 
