@@ -1,7 +1,6 @@
 import game
 from game import agents
 from game.envs import Environment
-#from game.gui import visualize
 from marl import iql, iql_model
 from game.envs import unflatten, State
 import torch
@@ -39,6 +38,7 @@ if __name__ == '__main__':
     parser.add_argument("--syncrate", default=1e4, help="Synchronisation rate")
     parser.add_argument("--lr", default=0.00001, help="Learning rate")
     parser.add_argument("--nsteps", default=1e6, help="Number of steps")
+    parser.add_argument("--comment", default="", help="Extra comments")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -52,7 +52,8 @@ if __name__ == '__main__':
                         print_rate = 500,
                         n_steps = int(args.nsteps),
                         lr = float(args.lr),
-                        save=True)
+                        save=True,
+                        comment=args.comment)
     args.test = False
     if args.test:
         filenames = ['./marl/models/iql_agent_0_1241.torch']

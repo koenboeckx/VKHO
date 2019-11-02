@@ -165,7 +165,7 @@ def calc_loss(agent, batch, gamma, device="cuda"):
     rewards_v = torch.Tensor(rewards).to(device)
     next_v = preprocess(next_states).to(device)
     #done_mask = torch.LongTensor(dones).to(device) # 1 if terminated, otherwise 0
-    done_mask = torch.ByteTensor(dones).to(device)
+    done_mask = torch.BoolTensor(dones).to(device)
 
     # For every transition, compute y = r is episode ended othrewise y = r + ...
     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
@@ -190,6 +190,7 @@ def train(env, agents, **kwargs):
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
     save = kwargs.get('save', False) # print frequency
+    extra_comment = kwargs.get('comment', "") # comment in filename
     if torch.cuda.is_available():
         print("CUDA available ...")
     
@@ -197,7 +198,7 @@ def train(env, agents, **kwargs):
     print('Using device {} ...'.format(device))
     lr = kwargs.get('lr', 0.02)
 
-    comment = "-lr_{:.3}-batch_{}".format(lr, mini_batch_size)
+    comment = "-lr_{:.3}-batch_{}_{}".format(lr, mini_batch_size, extra_comment)
     with SummaryWriter(comment=comment) as writer:
         
         # create and initialize model for agent
