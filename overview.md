@@ -52,4 +52,13 @@
     1. [24Oct19] Implemented IQL:
         * Use DQN with experience replay and target network for both agents
         * Implement first naively, then with updates over combined minibatch loss
+    1. [03Nov19] Intermediate corrections
+        * Correction: addition of 'state = next_state'
+        * Addition of agent.optim.zero_grad()
+        * Rewrite of loss calculation
+        * Addition of next_values_v = next_values_v.detach() # !! avoids feeding gradients in target network
+        * Correction of done_mask
+        * Expansion of epsilon calculation
+        * Experience namedtuple
+        * Simplification of classification layer
     

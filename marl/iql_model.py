@@ -23,9 +23,9 @@ class IQL(nn.Module):
         self.conv_out_size = self._get_conv_out(input_shape)
         
         self.fc = nn.Sequential(
-            nn.Linear(self.conv_out_size, 512),
+            nn.Linear(self.conv_out_size, 128), # reduced hidden layer size
             nn.ReLU(),
-            nn.Linear(512, n_actions)
+            nn.Linear(128, n_actions)
         )
 
         self.optim = optim.Adam(self.parameters(), lr=lr)
