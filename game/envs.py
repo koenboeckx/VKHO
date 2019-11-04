@@ -182,6 +182,7 @@ class Environment:
         elif action == 2 or action == all_actions[2]: # aim1
             return state.alive[agent] == 1     # only allowed if agent is alive
         elif action == 3 or action == all_actions[3]: # fire TODO: check if line-of-sight is free
+                                                      # TODO: idea: create a priori matrix of all line-of-sight, reduces this to look-up in table
             if state.alive[agent] == 1 and state.aim[agent] is not None and state.ammo[agent] > 0:
                 return True
         elif action == 4 or action == all_actions[4]: # move_up

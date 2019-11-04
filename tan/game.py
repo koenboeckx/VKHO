@@ -35,6 +35,9 @@ named_actions = {0: 'move_up',
 
 ACTION_SIZE = len(named_actions)
 
+N_HUNTERS = 2
+N_PREY = 2
+
 def boltzmann(Qs, T):
     probs = [math.exp(q/T) for q in Qs]
     prob_sum = sum(probs)
@@ -84,12 +87,14 @@ class Environment:
         self.prey = prey
 
         self.size = kwargs.get('size', 10)
+    
+    def get_init_state(self):
         for agent in self.hunters + self.prey:
             x, y = random.randint(0, self.size-1), random.randint(0, self.size-1)
             agent.x, agent.y = x, y
-    
-    def get_init_state(self):
-        return self.get_board(self.hunters + self.prey)
+        sensations = self.get_sensations()
+        board = self.get_board(self.hunters + self.prey)
+        return board, sensations
     
     def render(self, board):
         s = ''
@@ -132,16 +137,7 @@ class Environment:
             else:
                 raise ValueError('action {} not allowed'.format(action))
         
-        # for each hunter, get window and derive sensation
-        sensations = {}
-        for hunter in self.hunters:
-            sensations[hunter] = None
-            window = self.get_window(hunter)
-            for x, y in window:
-                for p in self.prey:
-                    if x == p.x and y == p.y:
-                        sensations[hunter] = p # this way: only last prey found is returned
-
+        sensations = self.get_sensations()
         # reconstruct board
         board = self.get_board(self.hunters + self.prey)
 
@@ -158,18 +154,39 @@ class Environment:
                         window.append((x+i, y+j))
         return window
     
+    def get_sensations(self):
+        # for each hunter, get window and derive sensation
+        sensations = {}
+        for hunter in self.hunters:
+            sensations[hunter] = None
+            window = self.get_window(hunter)
+            for x, y in window:
+                for p in self.prey:
+                    if x == p.x and y == p.y:
+                        sensations[hunter] = p # this way: only last prey found is returned
+        return sensations
+    
+    def get_reward(self):
+        return 1 if self.terminal() else -0.1
+    
     def terminal(self):
         for hunter in self.hunters:
             for p in self.prey:
                 if hunter.x == p.x and hunter.y == p.y:
                     return True
-        return False              
+        return False
+               
+
+def create_game(n_hunters, n_prey):
+    hunters = [Hunter() for _ in range(n_hunters)]
+    prey    = [Prey() for _ in range(n_prey)]
+    env = Environment(hunters, prey)
+    return hunters, prey, env
 
 if __name__ == '__main__':
-    hunters = [Hunter() for _ in range(2)]
-    prey    = [Prey() for _ in range(2)]
-    env = Environment(hunters, prey)
-    state = env.get_init_state()
+    hunters, prey, env = create_game(N_HUNTERS, N_PREY)
+     
+    state, _ = env.get_init_state()
     
     while not env.terminal():
         h_actions = [h.get_action(0, 1) for h in hunters]
