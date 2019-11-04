@@ -1,4 +1,5 @@
 runs/*
+tan/runs/
 *.pyc
 marl/models/*
 game/__pycache__/__init__.cpython-36.pyc

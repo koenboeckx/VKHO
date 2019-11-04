@@ -25,6 +25,7 @@ in sight, a unique default sensation is used.
 import random
 import math
 import numpy as np
+from matplotlib import pyplot as plt
 from collections import defaultdict
 
 named_actions = {0: 'move_up',
@@ -37,6 +38,29 @@ ACTION_SIZE = len(named_actions)
 
 N_HUNTERS = 2
 N_PREY = 2
+
+NORM = 2 # normalize circles (esthetics only)
+
+def visualize(agent):
+    """
+    Shows how the different Q-values steer the behavior
+    of the agent in the different potential states.
+    """
+    positions = [(i, j)  for i in range(-agent.depth, agent.depth+1)
+                         for j in range(-agent.depth, agent.depth+1)]
+    centers = [(.5, .75), (.5, .25), (.25, .5), (.75, .5)] # top, down left, right
+
+    _, axarr = plt.subplots(2*agent.depth+1, 2*agent.depth+1)
+    for i, j in positions:
+        action_values = agent.Q[(i,j)]
+        probs = boltzmann(action_values, 0.4)
+        for idx, p in enumerate(probs): # TODO: correct Top, Down, Left, Right
+            circle = plt.Circle( centers[idx], p / NORM )
+            axarr[agent.depth + i, agent.depth + j].add_patch(circle)
+        axarr[agent.depth + i, agent.depth + j].axis('off')
+    
+    plt.show()
+
 
 def boltzmann(Qs, T):
     probs = [math.exp(q/T) for q in Qs]
@@ -185,7 +209,9 @@ def create_game(n_hunters, n_prey):
 
 if __name__ == '__main__':
     hunters, prey, env = create_game(N_HUNTERS, N_PREY)
-     
+    visualize(hunters[0])
+
+    """ 
     state, _ = env.get_init_state()
     
     while not env.terminal():
@@ -194,4 +220,6 @@ if __name__ == '__main__':
         state, obs = env.step(state, h_actions, p_actions)
         env.render(state)
         print(obs)
+    """
+
         
