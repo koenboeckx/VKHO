@@ -61,4 +61,4 @@
         * Expansion of epsilon calculation
         * Experience namedtuple
         * Simplification of classification layer
-    
+    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.    

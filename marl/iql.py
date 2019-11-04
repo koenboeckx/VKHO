@@ -85,6 +85,10 @@ class IQLAgent(BaseAgent):
             lr=lr, board_size=self.board_size).to(device)
         self.sync_models()
     
+    def load_model(self, filename):
+        self.model.load_state_dict(torch.load(filename))
+        self.sync_models()
+    
     def sync_models(self):
         """
         Sync weights of agent.model with agent.target
@@ -213,6 +217,8 @@ def train(env, agents, **kwargs):
 
         buffers = [ReplayBuffer(buffer_size) for _ in agents]
         state = env.get_init_game_state()
+
+        rand_int = random.randint(1000, 2000) # to create saved file (TODO: can be moved)
         
         for step_idx in range(int(n_steps)):
             
@@ -225,6 +231,7 @@ def train(env, agents, **kwargs):
                 else:
                     # other, no trained agent => pick random action
                     actions[agent.idx] = agent.get_action(state)
+                    actions[agent.idx] = 0 # avoid taking action
             
             # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
@@ -266,6 +273,11 @@ def train(env, agents, **kwargs):
                         print('iteration {} - syncing ...'.format(step_idx))
                         agent.sync_models()
 
+                        # temporary save of model TODO: can be removed 
+                        for agent in agents:
+                            filename =  './marl/models/iql_agent_{}_{}_{}.torch'.format(agent.idx, step_idx, str(rand_int))
+                            torch.save(agent.model.state_dict(), filename)
+
                     
             if step_idx > 0 and step_idx % print_rate == 0:
                 if n_terminated > 0:
@@ -280,7 +292,6 @@ def train(env, agents, **kwargs):
             state = next_state
         
         if save:
-            rand_int = random.randint(1000, 2000)
             for agent in agents:
                 filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
                 torch.save(agent.model.state_dict(), filename)

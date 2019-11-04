@@ -15,7 +15,7 @@ agent2 = iql.IQLAgent(2, board_size=BOARD_SIZE)
 
 agent_list = [
     agent0, # Team 1
-    agent1, # Team 1
+    agents.RandomTank(1), # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument("--buffersize", default=1e4, help="Buffer size")
     parser.add_argument("--syncrate", default=1e4, help="Synchronisation rate")
     parser.add_argument("--lr", default=0.00001, help="Learning rate")
-    parser.add_argument("--nsteps", default=1e6, help="Number of steps")
+    parser.add_argument("--nsteps", default=25e4, help="Number of steps")
     parser.add_argument("--comment", default="", help="Extra comments")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     args.train = True
     if args.train:
         mini_batch_size = args.batchsize
-        iql.train(env, [agent0, agent1],
+        iql.train(env, [agent0],
                         mini_batch_size = int(args.batchsize),
                         buffer_size = int(args.buffersize),
                         sync_rate = int(args.syncrate),
