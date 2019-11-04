@@ -23,12 +23,22 @@ in sight, a unique default sensation is used.
 """
 
 import random
+import math
+import numpy as np
+from collections import defaultdict
 
 named_actions = {0: 'move_up',
                  1: 'move_down',
                  2: 'move_left',
                  3: 'move_right',
 }
+
+ACTION_SIZE = len(named_actions)
+
+def boltzmann(Qs, T):
+    probs = [math.exp(q/T) for q in Qs]
+    prob_sum = sum(probs)
+    return [p/prob_sum for p in probs]
 
 class Agent:
     def __init__(self):
@@ -43,10 +53,11 @@ class Hunter(Agent):
         self.id = Hunter.id
         Hunter.id += 1
         self.depth = depth
-        self.Q = {} # store as Q[obs] = [Q1, ..., QN] for N actions
+        self.Q = defaultdict(lambda: [0,]*ACTION_SIZE) # store as Q[obs] = [Q1, ..., QN] for N actions
     
     def get_action(self, obs, T):
-
+        probs = boltzmann(self.Q[obs], T)
+        return np.random.choice(range(4), 1, probs)[0]
     
     def __repr__(self):
         return 'H'+str(self.id)
@@ -159,9 +170,10 @@ if __name__ == '__main__':
     prey    = [Prey() for _ in range(2)]
     env = Environment(hunters, prey)
     state = env.get_init_state()
+    
     while not env.terminal():
-        h_actions = [random.randint(0, 3) for _ in range(2)]
-        p_actions = [random.randint(0, 3) for _ in range(2)]
+        h_actions = [h.get_action(0, 1) for h in hunters]
+        p_actions = [p.get_action(0) for p in prey]
         state, obs = env.step(state, h_actions, p_actions)
         env.render(state)
         print(obs)
