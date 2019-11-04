@@ -151,7 +151,7 @@ class Environment:
             if 0<= x + i < self.size:
                 for j in range(-depth, depth+1):
                     if 0<= y + j < self.size:
-                        window.append((x+i, y+j))
+                        window.append((i, j))
         return window
     
     def get_sensations(self):
@@ -160,10 +160,10 @@ class Environment:
         for hunter in self.hunters:
             sensations[hunter] = None
             window = self.get_window(hunter)
-            for x, y in window:
+            for i, j in window:
                 for p in self.prey:
-                    if x == p.x and y == p.y:
-                        sensations[hunter] = p # this way: only last prey found is returned
+                    if hunter.x + i == p.x and  hunter.y + j == p.y:
+                        sensations[hunter] = (i, j) # this way: only last prey found is returned
         return sensations
     
     def get_reward(self):
