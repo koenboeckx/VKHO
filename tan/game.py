@@ -41,7 +41,7 @@ N_PREY = 2
 
 NORM = 2 # normalize circles (esthetics only)
 
-def visualize(agent):
+def visualize(agent, title=None):
     """
     Shows how the different Q-values steer the behavior
     of the agent in the different potential states.
@@ -59,6 +59,8 @@ def visualize(agent):
             axarr[agent.depth + i, agent.depth + j].add_patch(circle)
         axarr[agent.depth + i, agent.depth + j].axis('off')
     
+    if title is not None:
+        plt.title(title)
     plt.show()
 
 def boltzmann(Qs, T):
@@ -235,5 +237,5 @@ if __name__ == '__main__':
     """
 
     probs = [0.0015024974129203073, 0.0007072329756351492, 0.996921668937134, 0.0008686006743105232]
-    for _ in range(10):
+    for _ in range(100):
         print(np.random.choice(range(4), 1, p=probs)[0])

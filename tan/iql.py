@@ -11,8 +11,8 @@ ALPHA = 0.2
 GAMMA = 0.9
 SYNC_RATE = 50
 
-N_HUNTERS, N_PREY = 1, 1
-DEPTH = 10
+N_HUNTERS, N_PREY = 2, 2
+DEPTH = 2
 
 VISUALIZE = False # set to True to show action distribution of all states of hunter0
 DEBUG = False
@@ -29,14 +29,14 @@ def temp_schedule(start, stop, n_steps):
 def train(env, hunters, prey, n_steps=100):
     with SummaryWriter(comment='_tan') as writer:
         total_steps = 0
-        temperature = temp_schedule(0.4, 0.01, 1000)
+        temperature = temp_schedule(0.4, 0.01, 10000)
         for step in range(n_steps):
             temp = temperature(step)
             state, observations = env.get_init_state()
             
             h_actions = [h.get_action(observations[h], temp) for h in hunters]
-            #p_actions = [p.get_action(None) for p in prey] # here, obs doesn't matter
-            p_actions = [-1 for p in prey] # keep prey stationary
+            p_actions = [p.get_action(None) for p in prey] # here, obs doesn't matter
+            #p_actions = [-1 for p in prey] # keep prey stationary
             next_state, next_observations = env.step(state, h_actions, p_actions)
             reward = env.get_reward(next_state)
 
@@ -74,7 +74,7 @@ def train(env, hunters, prey, n_steps=100):
                 total_steps = 0
 
                 if VISUALIZE:
-                    game.visualize(hunters[0])
+                    game.visualize(hunters[0], title='# steps = {}'.format(step))
 
 def eval(env, hunters, prey):
     n_steps = 0
