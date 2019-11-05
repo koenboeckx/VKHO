@@ -61,7 +61,6 @@ def visualize(agent):
     
     plt.show()
 
-
 def boltzmann(Qs, T):
     probs = [math.exp(q/T) for q in Qs]
     prob_sum = sum(probs)
@@ -75,6 +74,10 @@ class Agent:
         raise NotImplementedError
 
 class Hunter(Agent):
+    """
+    Container for:  (1) get_action method
+                    (2) Q-dict to store Q(s,a) value
+    """
     id = 0
     def __init__(self, depth=2):
         self.id = Hunter.id
@@ -113,14 +116,16 @@ class Environment:
         self.size = kwargs.get('size', 10)
     
     def get_init_state(self):
+        state = {}
         for agent in self.hunters + self.prey:
             x, y = random.randint(0, self.size-1), random.randint(0, self.size-1)
-            agent.x, agent.y = x, y
-        sensations = self.get_sensations()
-        board = self.get_board(self.hunters + self.prey)
-        return board, sensations
+            state[agent] = (x, y)
+        sensations = self.get_sensations(state)
+        #board = self.get_board(state)
+        return state, sensations
     
-    def render(self, board):
+    def render(self, state):
+        board = self.get_board(state)
         s = ''
         for x in range(self.size):
             for y in range(self.size):
@@ -131,10 +136,10 @@ class Environment:
             s += '\n'
         print(s)
     
-    def get_board(self, agents):
+    def get_board(self, state):
         board = {(i,j): None for i in range(self.size) for j in range(self.size)}
-        for agent in agents:
-            x, y = agent.x, agent.y
+        for agent in self.hunters + self.prey:
+            x, y = state[agent]
             board[(x, y)] = agent
         return board
 
@@ -149,27 +154,29 @@ class Environment:
         :return: tuple (state, observations) where observations is a tuple of
                     sensations for the different hunters
         """
+        new_state = {}
         for agent, action in zip(self.hunters+self.prey, h_actions+p_actions):
+            x, y = state[agent]
             if action == 0: # move up
-                agent.y = max(min(agent.y-1, self.size-1), 0)
+                new_x, new_y = x, max(min(y-1, self.size-1), 0)
             elif action == 1: # move down
-                agent.y = max(min(agent.y+1, self.size-1), 0)
+                new_x, new_y = x, max(min(y+1, self.size-1), 0)
             elif action == 2: # move left
-                agent.x = max(min(agent.x-1, self.size-1), 0)
-            elif action == 3: # move left
-                agent.x = max(min(agent.x+1, self.size-1), 0)
+                new_x, new_y = max(min(x-1, self.size-1), 0), y
+            elif action == 3: # move right
+                new_x, new_y = max(min(x+1, self.size-1), 0), y
             else:
                 raise ValueError('action {} not allowed'.format(action))
         
-        sensations = self.get_sensations()
-        # reconstruct board
-        board = self.get_board(self.hunters + self.prey)
-
-        return board, sensations
+            new_state[agent] = (new_x, new_y)
+        
+        sensations = self.get_sensations(new_state)
+        
+        return new_state, sensations
     
-    def get_window(self, agent):
-        x, y = agent.x, agent.y
+    def get_window(self, state, agent):
         depth = agent.depth
+        x, y = state[agent]
         window = []
         for i in range(-depth, depth+1):
             if 0<= x + i < self.size:
@@ -178,48 +185,48 @@ class Environment:
                         window.append((i, j))
         return window
     
-    def get_sensations(self):
+    def get_sensations(self, state):
         # for each hunter, get window and derive sensation
         sensations = {}
         for hunter in self.hunters:
             sensations[hunter] = None
-            window = self.get_window(hunter)
+            window = self.get_window(state, hunter)
             for i, j in window:
                 for p in self.prey:
-                    if hunter.x + i == p.x and  hunter.y + j == p.y:
+                    if state[hunter][0] + i == state[p][0] and  state[hunter][1] + j == state[p][1]:
                         sensations[hunter] = (i, j) # this way: only last prey found is returned
         return sensations
     
-    def get_reward(self):
-        return 1 if self.terminal() else -0.1
+    def get_reward(self, state):
+        return 1 if self.terminal(state) else -0.1
     
-    def terminal(self):
+    def terminal(self, state):
         for hunter in self.hunters:
             for p in self.prey:
-                if hunter.x == p.x and hunter.y == p.y:
+                if state[hunter][0] == state[p][0] and state[hunter][1] == state[p][1]:
                     return True
         return False
                
 
-def create_game(n_hunters, n_prey):
-    hunters = [Hunter() for _ in range(n_hunters)]
+def create_game(n_hunters, n_prey, depth=2):
+    hunters = [Hunter(depth=depth) for _ in range(n_hunters)]
     prey    = [Prey() for _ in range(n_prey)]
     env = Environment(hunters, prey)
     return hunters, prey, env
 
 if __name__ == '__main__':
     hunters, prey, env = create_game(N_HUNTERS, N_PREY)
-    visualize(hunters[0])
+    #visualize(hunters[0])
 
-    """ 
+    
     state, _ = env.get_init_state()
     
-    while not env.terminal():
+    while not env.terminal(state):
         h_actions = [h.get_action(0, 1) for h in hunters]
         p_actions = [p.get_action(0) for p in prey]
         state, obs = env.step(state, h_actions, p_actions)
         env.render(state)
         print(obs)
-    """
+    
 
         
