@@ -87,7 +87,7 @@ class Hunter(Agent):
     
     def get_action(self, obs, T):
         probs = boltzmann(self.Q[obs], T)
-        return np.random.choice(range(4), 1, probs)[0]
+        return np.random.choice(range(4), 1, p=probs)[0]
     
     def __repr__(self):
         return 'H'+str(self.id)
@@ -157,7 +157,9 @@ class Environment:
         new_state = {}
         for agent, action in zip(self.hunters+self.prey, h_actions+p_actions):
             x, y = state[agent]
-            if action == 0: # move up
+            if action == -1: # don't move / for testing
+                new_x, new_y = x, y 
+            elif action == 0: # move up
                 new_x, new_y = x, max(min(y-1, self.size-1), 0)
             elif action == 1: # move down
                 new_x, new_y = x, max(min(y+1, self.size-1), 0)
@@ -218,7 +220,7 @@ if __name__ == '__main__':
     hunters, prey, env = create_game(N_HUNTERS, N_PREY)
     #visualize(hunters[0])
 
-    
+    """
     state, _ = env.get_init_state()
     
     while not env.terminal(state):
@@ -228,5 +230,10 @@ if __name__ == '__main__':
         env.render(state)
         print(obs)
     
+    print(boltzmann([.1, .0, .0, .0], 0.4))
+    print(boltzmann([.1, .0, .0, .0], 0.01))
+    """
 
-        
+    probs = [0.0015024974129203073, 0.0007072329756351492, 0.996921668937134, 0.0008686006743105232]
+    for _ in range(10):
+        print(np.random.choice(range(4), 1, p=probs)[0])
