@@ -22,9 +22,14 @@ all_actions = { 0: 'do_nothing',
 import random   # random assignement of agent's initial positions
 import copy     # make deepcopy of board
 import math     # compute distance between agents
+import numpy as np  # used in computing LOS
 from collections import namedtuple
 
-from . import agents
+try:
+    from . import agents
+except:
+    print('Running from file')
+    pass
 
 # helper functions
 
@@ -94,7 +99,39 @@ def distance(state, agent1, agent2):
     pos2 = state.positions[agent2]
     x1, y1 = pos1
     x2, y2 = pos2
-    return math.sqrt((x1-x2)**2 + (y1-y2)**2)      
+    return math.sqrt((x1-x2)**2 + (y1-y2)**2) 
+
+
+def get_line_of_sight_dict(size):
+    """
+    Pre-compute the straight lines between all two points.
+
+    :param size: size of the board
+    :return: a dict with keys = ((xi, yi), (xj, yj)) pairs
+             and values = [..., (xk, yk), ...] element along
+             line between (xi, yi) and (xj, yj).
+    """
+    N = 5 # number of points considered, 100 = randomly chosen value
+    los = {}
+    all_squares = [(x, y) for x in range(size) for y in range(size)]
+    for (xi, yi) in all_squares:
+        for (xj, yj) in all_squares:
+            los[((xi, yi), (xj, yj))] = []
+            dx = (xj - xi)/N
+            dy = (yj - yi)/N
+            xs = [xi+k*dx for k in range(N)]
+            ys = []
+            for k, x in zip(range(N), xs):
+                if x == xi:
+                    ys.append(yi + k*dy)
+                else:
+                    ys.append(yi + (yj - yi) * (x - xi) /(xj - xi))
+            for x_test, y_test in all_squares:
+                for x, y in zip(xs, ys):
+                    if  x_test-.5 <= x <= x_test+.5 and y_test-.5 <= y <=  y_test+.5:
+                        los[((xi, yi), (xj, yj))].append((x_test, y_test))
+            los[((xi, yi), (xj, yj))] = list(set(los[((xi, yi), (xj, yj))])) # remove doubles
+    return los
 
 class Environment:
     """The base game environment."""
@@ -106,6 +143,7 @@ class Environment:
         self.action_space = all_actions.copy()
         self.n_actions = len(self.action_space)
         self.board_size = self.args.get('size', 11) # board size fixed on 11x11
+        self.los = get_line_of_sight_dict(board_size)
     
     def get_init_game_state(self):
         """Get the initial game state.
@@ -178,6 +216,10 @@ class Environment:
         if action == 0 or action == all_actions[0]: # do_nothing
             return True                 # this action is always allowed
         elif action == 1 or action == all_actions[1]: # aim1
+            # TODO: solve this ....
+            opponent = 
+            los = self.los[()]
+            if 
             return state.alive[agent] == 1     # only allowed if agent is alive
         elif action == 2 or action == all_actions[2]: # aim1
             return state.alive[agent] == 1     # only allowed if agent is alive
@@ -305,3 +347,6 @@ class Environment:
         reward = self.terminal(state)
         return (reward, reward, -reward, -reward)
 
+if __name__ == '__main__':
+    los = get_line_of_sight_dict(5)
+    print('...')

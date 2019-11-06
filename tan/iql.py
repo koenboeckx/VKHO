@@ -30,10 +30,10 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
     writer_comment = '_tan_agents_{}_depth_{}'.format(len(hunters), hunters[0].depth)
     with SummaryWriter(comment=writer_comment) as writer:
         total_steps = 0
-        temperature = temp_schedule(0.4, 0.01, 10000)
+        temperature = temp_schedule(0.4, 0.1, 10000)
         for step in range(n_steps):
             temp = temperature(step)
-            temp = 0.4 # TODO: comment this line
+            #temp = 0.4 # TODO: comment this line
             state, observations = env.get_init_state()
             
             h_actions = [h.get_action(observations[h], temp) for h in hunters]
@@ -65,7 +65,7 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
             if step > 0 and step % SYNC_RATE == 0:
                 if verbose is True:
                     print('Step {:4d} -> avg. {:8.1f} steps required'.format(step,
-                                                                        total_steps/SYNC_RATE))
+                                                           total_steps/SYNC_RATE))
                 writer.add_scalar('steps', total_steps/SYNC_RATE, step)
                 total_steps = 0
 
