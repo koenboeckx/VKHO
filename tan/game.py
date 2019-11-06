@@ -46,7 +46,7 @@ def visualize(agent, title=None):
     Shows how the different Q-values steer the behavior
     of the agent in the different potential states.
     """
-    positions = [(i, j)  for i in range(-agent.depth, agent.depth+1)
+    positions = [(i,j )  for i in range(-agent.depth, agent.depth+1)
                          for j in range(-agent.depth, agent.depth+1)]
     centers = [(.5, .75), (.5, .25), (.25, .5), (.75, .5)] # top, down left, right
 
@@ -58,9 +58,8 @@ def visualize(agent, title=None):
             circle = plt.Circle( centers[idx], p / NORM )
             axarr[agent.depth + i, agent.depth + j].add_patch(circle)
         axarr[agent.depth + i, agent.depth + j].axis('off')
-    
-    if title is not None:
-        plt.title(title)
+        #axarr[agent.depth + i, agent.depth + j].title('{}, {}'.format(i,j))
+
     plt.show()
 
 def boltzmann(Qs, T):

@@ -36,7 +36,7 @@ def train(env, hunters, prey, n_steps=100):
             
             h_actions = [h.get_action(observations[h], temp) for h in hunters]
             p_actions = [p.get_action(None) for p in prey] # here, obs doesn't matter
-            #p_actions = [-1 for p in prey] # keep prey stationary
+            
             next_state, next_observations = env.step(state, h_actions, p_actions)
             reward = env.get_reward(next_state)
 
@@ -53,7 +53,7 @@ def train(env, hunters, prey, n_steps=100):
                 if DEBUG and obs == (-1, 0):
                     print(obs, game.boltzmann(hunter.Q[obs], temp))
                     print('Chosen action: ', action, game.named_actions[action])
-                    print('Terminal :', env.terminal(next_state))
+                    print('Terminal     : ', env.terminal(next_state))
             
             if env.terminal(next_state):
                 next_state, next_observations = env.get_init_state()
