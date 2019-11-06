@@ -41,25 +41,28 @@ N_PREY = 2
 
 NORM = 2 # normalize circles (esthetics only)
 
-def visualize(agent, title=None):
+def visualize(agent, temp=0.4, title=None):
     """
     Shows how the different Q-values steer the behavior
     of the agent in the different potential states.
     """
-    positions = [(i,j )  for i in range(-agent.depth, agent.depth+1)
+    positions = [(i, j)  for i in range(-agent.depth, agent.depth+1)
                          for j in range(-agent.depth, agent.depth+1)]
     centers = [(.5, .75), (.5, .25), (.25, .5), (.75, .5)] # top, down left, right
 
     _, axarr = plt.subplots(2*agent.depth+1, 2*agent.depth+1)
     for i, j in positions:
         action_values = agent.Q[(i,j)]
-        probs = boltzmann(action_values, 0.4)
-        for idx, p in enumerate(probs): # TODO: correct Top, Down, Left, Right
+        probs = boltzmann(action_values, temp)
+        for idx, p in enumerate(probs):
             circle = plt.Circle( centers[idx], p / NORM )
-            axarr[agent.depth + i, agent.depth + j].add_patch(circle)
-        axarr[agent.depth + i, agent.depth + j].axis('off')
-        #axarr[agent.depth + i, agent.depth + j].title('{}, {}'.format(i,j))
-
+            axarr[agent.depth + j, agent.depth + i].add_patch(circle)
+        axarr[agent.depth + j, agent.depth + i].set_title("{}, {}".format(j, i))
+        axarr[agent.depth + j, agent.depth + i].axis('off')
+    
+    if title is not None:
+        plt.title(title)
+        
     plt.show()
 
 def boltzmann(Qs, T):
@@ -200,15 +203,39 @@ class Environment:
                         sensations[hunter] = (i, j) # this way: only last prey found is returned
         return sensations
     
+    def captured(self, state):
+        """
+        A prey is captured when it occupies the same cell as a hunter
+        or when two hunters either occupy the same cell as the prey 
+        or are next to the prey.
+        """
+        # 1. check if hunter and prey on same cell
+        for prey in self.prey:
+            xp, yp = state[prey]
+            for hunter in self.hunters:
+                xh, yh = state[hunter]
+                if xp == xh and yp == yh:
+                    return True
+        
+        # 2. Check if two hunters are next to prey
+        for prey in self.prey:
+            xp, yp = state[prey]
+            for hunter1 in self.hunters:
+                xh1, yh1 = state[hunter1]
+                if xh1 in [xp-1, xp+1] and yh1 in [yp-1, yp+1]:
+                    for hunter2 in [h for h in self.hunters if h is not hunter1]:
+                        xh2, yh2 = state[hunter2]
+                        if xh2 in [xp-1, xp+1] and yh2 in [yp-1, yp+1]:
+                            return True
+        return False
+    
     def get_reward(self, state):
-        return 1 if self.terminal(state) else -0.1
+        "If a prey is captured, return 1. Else return -0.1"
+        return 1 if self.captured(state) else -0.1
     
     def terminal(self, state):
-        for hunter in self.hunters:
-            for p in self.prey:
-                if state[hunter][0] == state[p][0] and state[hunter][1] == state[p][1]:
-                    return True
-        return False
+        "Game is over when a prey is captured."
+        return self.captured(state)
                
 
 def create_game(n_hunters, n_prey, depth=2):

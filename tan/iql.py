@@ -5,17 +5,17 @@ Learn a strategy with independent Q-learning
 import game
 import time
 from tensorboardX import SummaryWriter
+import argparse
 
 TEMP = 0.4
 ALPHA = 0.2
 GAMMA = 0.9
 SYNC_RATE = 50
 
-N_HUNTERS, N_PREY = 2, 2
+N_HUNTERS, N_PREY = 2, 1
 DEPTH = 2
 
 VISUALIZE = False # set to True to show action distribution of all states of hunter0
-DEBUG = False
 
 def temp_schedule(start, stop, n_steps):
     """Returns a (linear) temperature schedule."""
@@ -26,12 +26,14 @@ def temp_schedule(start, stop, n_steps):
             return start + (stop - start) / n_steps * step
     return temperature
 
-def train(env, hunters, prey, n_steps=100):
-    with SummaryWriter(comment='_tan') as writer:
+def train(env, hunters, prey, n_steps=100, verbose=False):
+    writer_comment = '_tan_agents_{}_depth_{}'.format(len(hunters), hunters[0].depth)
+    with SummaryWriter(comment=writer_comment) as writer:
         total_steps = 0
         temperature = temp_schedule(0.4, 0.01, 10000)
         for step in range(n_steps):
             temp = temperature(step)
+            temp = 0.4 # TODO: comment this line
             state, observations = env.get_init_state()
             
             h_actions = [h.get_action(observations[h], temp) for h in hunters]
@@ -50,31 +52,25 @@ def train(env, hunters, prey, n_steps=100):
                     target_v = reward + GAMMA * max(hunter.Q[next_obs])
                 hunter.Q[obs][action] += ALPHA * (target_v - predicted_v)
                 
-                if DEBUG and obs == (-1, 0):
-                    print(obs, game.boltzmann(hunter.Q[obs], temp))
-                    print('Chosen action: ', action, game.named_actions[action])
-                    print('Terminal     : ', env.terminal(next_state))
-            
             if env.terminal(next_state):
                 next_state, next_observations = env.get_init_state()
                 
             observations = next_observations
             state = next_state
             
-            n_eval = eval(env, hunters, prey)
-            writer.add_scalar('steps', n_eval, step)
-            
+            # bookkeeping and performance eval
+            n_eval = eval(env, hunters, prey)           
             total_steps += n_eval
 
-            if step % SYNC_RATE == 0:
-                print('Step {:4d} -> avg. {:8.1f} steps required'.format(step,
+            if step > 0 and step % SYNC_RATE == 0:
+                if verbose is True:
+                    print('Step {:4d} -> avg. {:8.1f} steps required'.format(step,
                                                                         total_steps/SYNC_RATE))
-                #print('Qs[(1, 0)] = ', hunters[0].Q[(1, 0)])
-                #print('probs    = ', game.boltzmann(hunters[0].Q[(1, 0)], TEMP))
+                writer.add_scalar('steps', total_steps/SYNC_RATE, step)
                 total_steps = 0
 
                 if VISUALIZE:
-                    game.visualize(hunters[0], title='# steps = {}'.format(step))
+                    game.visualize(hunters[0], temp, title='# steps = {}'.format(step))
 
 def eval(env, hunters, prey):
     n_steps = 0
@@ -93,5 +89,15 @@ def eval(env, hunters, prey):
 
 
 if __name__ == '__main__':
-    hunters, prey, env = game.create_game(N_HUNTERS, N_PREY, DEPTH)
-    train(env, hunters, prey, n_steps=100000)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--hunters", default=2, help="Number of hunters")
+    parser.add_argument("--prey", default=1, help="Number of prey")
+    parser.add_argument("--depth", default=2, help="Depth")
+    parser.add_argument("--verbose", dest='verbose', 
+                        default=False, action="store_true")
+    args = parser.parse_args()
+
+    hunters, prey, env = game.create_game(int(args.hunters),
+                                          int(args.prey),
+                                          int(args.depth))
+    train(env, hunters, prey, n_steps=100000, verbose=args.verbose)
