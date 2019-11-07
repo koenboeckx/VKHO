@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = False
+DEBUG_ENV = True
 DEBUG_ENV_2 = False
 
 all_actions = { 0: 'do_nothing',
@@ -102,16 +102,17 @@ def distance(state, agent1, agent2):
     return math.sqrt((x1-x2)**2 + (y1-y2)**2) 
 
 
-def get_line_of_sight_dict(size):
+def get_line_of_sight_dict(size, remove_endpoints=True):
     """
     Pre-compute the straight lines between all two points.
 
     :param size: size of the board
+    :param remove_endpoints: if True, remove the endpoints from LOS
     :return: a dict with keys = ((xi, yi), (xj, yj)) pairs
              and values = [..., (xk, yk), ...] element along
              line between (xi, yi) and (xj, yj).
     """
-    N = 5 # number of points considered, 100 = randomly chosen value
+    N = 20 # number of points considered, 100 = randomly chosen value
     los = {}
     all_squares = [(x, y) for x in range(size) for y in range(size)]
     for (xi, yi) in all_squares:
@@ -121,16 +122,27 @@ def get_line_of_sight_dict(size):
             dy = (yj - yi)/N
             xs = [xi+k*dx for k in range(N)]
             ys = []
-            for k, x in zip(range(N), xs):
-                if x == xi:
+            for k, x in zip(range(N), xs): # create list of consecutive, non-integer x values
+                if x == xi: # move in horizontal line
                     ys.append(yi + k*dy)
                 else:
                     ys.append(yi + (yj - yi) * (x - xi) /(xj - xi))
+            for x, y in zip(xs, ys):
+                los[((xi, yi), (xj, yj))].append((int(round(x)), int(round(y))))
+            """
             for x_test, y_test in all_squares:
                 for x, y in zip(xs, ys):
                     if  x_test-.5 <= x <= x_test+.5 and y_test-.5 <= y <=  y_test+.5:
                         los[((xi, yi), (xj, yj))].append((x_test, y_test))
+            """
             los[((xi, yi), (xj, yj))] = list(set(los[((xi, yi), (xj, yj))])) # remove doubles
+            # remove endpoints:
+            if remove_endpoints:
+                if (xi, yi) in los[((xi, yi), (xj, yj))]:
+                    los[((xi, yi), (xj, yj))].remove((xi, yi))
+                if (xj, yj) in los[((xi, yi), (xj, yj))]:
+                    los[((xi, yi), (xj, yj))].remove((xj, yj))
+
     return los
 
 class Environment:
@@ -138,12 +150,11 @@ class Environment:
     def __init__(self, agents, **kwargs):
         self.agents = agents
         self.args = kwargs
-        self.max_range = kwargs.get('max_range', 8)
         self.state = None
         self.action_space = all_actions.copy()
         self.n_actions = len(self.action_space)
         self.board_size = self.args.get('size', 11) # board size fixed on 11x11
-        self.los = get_line_of_sight_dict(board_size)
+        self.los = get_line_of_sight_dict(self.board_size)
     
     def get_init_game_state(self):
         """Get the initial game state.
@@ -216,17 +227,24 @@ class Environment:
         if action == 0 or action == all_actions[0]: # do_nothing
             return True                 # this action is always allowed
         elif action == 1 or action == all_actions[1]: # aim1
-            # TODO: solve this ....
-            opponent = 
-            los = self.los[()]
-            if 
             return state.alive[agent] == 1     # only allowed if agent is alive
         elif action == 2 or action == all_actions[2]: # aim1
             return state.alive[agent] == 1     # only allowed if agent is alive
-        elif action == 3 or action == all_actions[3]: # fire TODO: check if line-of-sight is free
-                                                      # TODO: idea: create a priori matrix of all line-of-sight, reduces this to look-up in table
-            if state.alive[agent] == 1 and state.aim[agent] is not None and state.ammo[agent] > 0:
+        elif action == 3 or action == all_actions[3]: # fire
+            if state.alive[agent] == 0:
+                return False                                                      
+            if state.aim[agent] is None:
+                return False
+            if state.ammo[agent] <= 0:
+                return False
+
+            opponent = [0, 1, 2, 3][state.aim[agent]]
+            x, y = state.positions[agent]
+            x_opp, y_opp = state.positions[opponent]
+            los = self.los[((x, y), (x_opp, y_opp))]
+            if self.check_los(state, los): # check if LOS is clear
                 return True
+            return False
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board
                 agent_pos = state.positions[agent]
@@ -249,6 +267,12 @@ class Environment:
                     return True
         return False # default
 
+    def check_los(self, state, los):
+        """Returns True is LOS los is unobstructed in state; False otherwise."""
+        for pos in los:
+            if pos in state.positions:
+                return False
+        return True
 
     def step(self, state, actions):
         """Perform actions, part of joint action space.
@@ -285,7 +309,7 @@ class Environment:
                     aim[agent] = 1
             elif action == 3 or action == all_actions[3]: # fire
                 opponent = state.aim[agent]
-                if distance(state, agent, opponent) < self.max_range: # simple kill criterion
+                if distance(state, agent, opponent) < self.agents[agent].max_range: # simple kill criterion
                     alive[opponent] = 0
                     if DEBUG_ENV:
                         print('Agent {} was just killed by {}'.format(
@@ -348,5 +372,6 @@ class Environment:
         return (reward, reward, -reward, -reward)
 
 if __name__ == '__main__':
-    los = get_line_of_sight_dict(5)
-    print('...')
+    los = get_line_of_sight_dict(11)
+    print(los[((0, 1), (10, 10))])
+    print(len(los[((0, 1), (10, 10))]))
