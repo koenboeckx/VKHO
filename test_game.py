@@ -18,28 +18,20 @@ state = env.get_init_game_state()
 
 env.render(state)
 
-actions = (7, 0, 0, 0)
-state = env.step(state, actions)
-actions = (7, 0, 0, 0)
-state = env.step(state, actions)
-actions = (5, 0, 0, 0)
-state = env.step(state, actions)
-actions = (5, 0, 0, 0)
-state = env.step(state, actions)
+all_actions = [
+    (7, 0, 0, 0),
+    (7, 0, 0, 0),
+    (5, 0, 0, 0),
+    (5, 0, 0, 0),
+    (0, 2, 0, 0),
+    (0, 3, 0, 0),
+    (4, 3, 0, 0),
+    (4, 3, 0, 0),
+    (5, 0, 0, 0),
+    (6, 0, 0, 0),
+]
 
-env.render(state)
-
-actions = (0, 2, 0, 0)
-state = env.step(state, actions)
-
-actions = (0, 3, 0, 0)
-state = env.step(state, actions)
-
-actions = (4, 3, 0, 0)
-state = env.step(state, actions)
-
-actions = (4, 3, 0, 0)
-state = env.step(state, actions)
-
-env.render(state)
+for actions in all_actions:
+    state = env.step(state, actions)
+    env.render(state)
 print(state)

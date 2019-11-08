@@ -188,7 +188,7 @@ class Environment:
             if 0<= x + i < self.size:
                 for j in range(-depth, depth+1):
                     if 0<= y + j < self.size:
-                        window.append((i, j))
+                        window.append((i, j)) # TODO: check this - not .append((x+i, y+j))?
         return window
     
     def get_sensations(self, state):

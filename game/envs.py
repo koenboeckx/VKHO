@@ -29,7 +29,7 @@ try:
     from . import agents
 except:
     print('Running from file')
-    pass
+    import agents
 
 # helper functions
 
@@ -95,6 +95,14 @@ def unflatten(state):
     return board
 
 def distance(state, agent1, agent2):
+    """
+    Compute euclidean distance between two agents
+    :param state: instance of Stace
+    :param agent1: index of first agent
+    :param agent2: index of second agent
+
+    :return: distance between agents
+    """
     pos1 = state.positions[agent1]
     pos2 = state.positions[agent2]
     x1, y1 = pos1
@@ -144,6 +152,7 @@ def get_line_of_sight_dict(size, remove_endpoints=True):
                     los[((xi, yi), (xj, yj))].remove((xj, yj))
 
     return los
+
 
 class Environment:
     """The base game environment."""
@@ -214,7 +223,8 @@ class Environment:
         print(board_repr)
 
     def check_conditions(self, state, agent, action):
-        """Checks whether 'agent' is allowed to execute 'action' in with game in 'state'
+        """
+        Checks whether 'agent' is allowed to execute 'action' in with game in 'state'
         :param state: current state of the game
         :param agent: check the conditions for this agent 
         :param action: check the conditions for the action of agent
@@ -242,37 +252,62 @@ class Environment:
             x, y = state.positions[agent]
             x_opp, y_opp = state.positions[opponent]
             los = self.los[((x, y), (x_opp, y_opp))]
-            if self.check_los(state, los): # check if LOS is clear
+            if self.check_window(state, los): # check if LOS is clear
                 return True
             return False
+        # TODO: avoid that agents come too close, because this would mean that on next step they could end up in same spot
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board
                 agent_pos = state.positions[agent]
-                if board[(agent_pos[0]-1, agent_pos[1])] is None: # TODO: check case above
-                    return True
+                if board[(agent_pos[0]-1, agent_pos[1])] is None: 
+                    window = self.get_window(agent_pos[0]-1, agent_pos[1])
+                    if self.check_window(state, window):
+                        return True
         elif action == 5 or action == all_actions[5]: # move_down
             if state.alive[agent] == 1 and state.positions[agent][0] < board_size-1: # stay on the board
                 agent_pos = state.positions[agent]
-                if board[(agent_pos[0]+1, agent_pos[1])] is None: # TODO: check case below
-                    return True
+                if board[(agent_pos[0]+1, agent_pos[1])] is None: 
+                    window = self.get_window(agent_pos[0]+1, agent_pos[1])
+                    if self.check_window(state, window):
+                        return True
         elif action == 6 or action == all_actions[6]: # move_left
             if state.alive[agent] == 1 and state.positions[agent][1] > 0: # stay on the board
                 agent_pos = state.positions[agent]
-                if board[(agent_pos[0], agent_pos[1]-1)] is None: # TODO: check case left
-                    return True
+                if board[(agent_pos[0], agent_pos[1]-1)] is None: 
+                    window = self.get_window(agent_pos[0], agent_pos[1]-1)
+                    if self.check_window(state, window):
+                        return True
         elif action == 7 or action == all_actions[7]: # move_right
             if state.alive[agent] == 1 and state.positions[agent][1] < board_size-1: # stay on the board
                 agent_pos = state.positions[agent]
-                if board[(agent_pos[0], agent_pos[1]+1)] is None: # TODO: check case right
-                    return True
+                if board[(agent_pos[0], agent_pos[1]+1)] is None: 
+                    window = self.get_window(agent_pos[0], agent_pos[1]+1)
+                    if self.check_window(state, window):
+                        return True
         return False # default
 
-    def check_los(self, state, los):
-        """Returns True is LOS los is unobstructed in state; False otherwise."""
-        for pos in los:
+    def check_window(self, state, window):
+        """Returns True is winndow is unobstructed in state; False otherwise."""
+        for pos in window:
             if pos in state.positions:
                 return False
         return True
+
+    def get_window(self, x, y, depth=1):
+        """
+        Return window  around (x, y) (size = (depth+2)**2-1)
+        :param x, y: coordinates around which to compute window
+        :param depth: size of the window
+        :return: list of positions (x_win, y_win)
+        """
+        window = []
+        for i in range(-depth, depth+1):
+            if 0 <= x + i < self.board_size:
+                for j in range(-depth, depth+1):
+                    if 0 <= y + j < self.board_size:
+                        window.append((x+i, y+j))
+        window.remove((x, y)) # remove own position
+        return window
 
     def step(self, state, actions):
         """Perform actions, part of joint action space.
@@ -282,7 +317,6 @@ class Environment:
         :return: next game state
         """
         board = unflatten(state)
-        board_size = self.board_size
         agents = (0, 1, 2, 3)
 
         aim = list(state.aim)
