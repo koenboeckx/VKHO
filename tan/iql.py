@@ -2,10 +2,12 @@
 Learn a strategy with independent Q-learning
 """
 
-import game
+
 import time
 from tensorboardX import SummaryWriter
 import argparse
+
+import game
 
 TEMP = 0.4
 ALPHA = 0.2
@@ -33,9 +35,9 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
         temperature = temp_schedule(0.4, 0.1, 10000)
         for step in range(n_steps):
             temp = temperature(step)
-            #temp = 0.4 # TODO: comment this line
+            # temp = 0.4 # TODO: comment this line
             state, observations = env.get_init_state()
-            
+
             h_actions = [h.get_action(observations[h], temp) for h in hunters]
             p_actions = [p.get_action(None) for p in prey] # here, obs doesn't matter
             
@@ -58,14 +60,14 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
             observations = next_observations
             state = next_state
             
-            # bookkeeping and performance eval
+            ## bookkeeping and performance eval
             n_eval = eval(env, hunters, prey, temp)           
             total_steps += n_eval
 
             if step > 0 and step % SYNC_RATE == 0:
                 if verbose is True:
                     print('Step {:4d} -> avg. {:8.1f} steps required'.format(step,
-                                                           total_steps/SYNC_RATE))
+                                                                             total_steps/SYNC_RATE))
                 writer.add_scalar('steps', total_steps/SYNC_RATE, step)
                 total_steps = 0
 
@@ -73,6 +75,7 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
                     game.visualize(hunters[0], temp, title='# steps = {}'.format(step))
 
 def eval(env, hunters, prey, temp):
+    "Perform a single episode and return the number of steps it took."
     n_steps = 0
 
     state, obs = env.get_init_state()
