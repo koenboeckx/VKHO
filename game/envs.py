@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = True
+DEBUG_ENV = False
 DEBUG_ENV_2 = False
 
 all_actions = { 0: 'do_nothing',
@@ -254,7 +254,7 @@ class Environment:
             los = self.los[((x, y), (x_opp, y_opp))]
             if self.check_window(state, los): # check if LOS is clear
                 return True
-            return False
+            return False # default response for fire unless conditions above are met
         # TODO: avoid that agents come too close, because this would mean that on next step they could end up in same spot
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board

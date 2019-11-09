@@ -11,7 +11,11 @@ import torch
 from torch import nn
 import copy
 
-from . import iql_model
+from . import agent_models
+
+import sys
+sys.path.insert(1, '/home/koen/Programming/VKHO/game')
+import agents 
 
 from tensorboardX import SummaryWriter
 
@@ -22,32 +26,9 @@ Experience = namedtuple('Experience', [
     'state', 'action', 'reward', 'next_state', 'done'
 ])
 
-class BaseAgent:
-    """
-    This is the base abstraction for agents. 
-    All agents should inherit from this class
-    """
 
-    def __init__(self):
-        pass
-    
-    def get_action(self, obs, action_space):
-        """Return action to be executed by environment"""
-        raise NotImplementedError()
 
-    def episode_end(self, reward):
-        """This is called at the end of the episode to let the agent
-        know the episode has ended and what the reward is
-        
-        Args:
-            reward: the single reward scalar to this agent.
-        """
-        pass
-
-    def __repr__(self):
-        return self.type + str(self.idx)
-
-class IQLAgent(BaseAgent):
+class IQLAgent(agents.BaseAgent):
     """
     Agent class to be used with independent q-learning.
     Model and target model are set with method .set_model()
@@ -79,9 +60,9 @@ class IQLAgent(BaseAgent):
         :param device:      torch.device("cpu" or "cuda")
         :return: None
         """
-        self.model  = iql_model.IQL(input_shape, n_actions,
+        self.model  = agent_models.IQLModel(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(device)
-        self.target =iql_model.IQL(input_shape, n_actions,
+        self.target = agent_models.IQLModel(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(device)
         self.sync_models()
     
@@ -231,7 +212,7 @@ def train(env, agents, **kwargs):
                 else:
                     # other, no trained agent => pick random action
                     actions[agent.idx] = agent.get_action(state)
-                    actions[agent.idx] = 0 # avoid taking action
+                    #actions[agent.idx] = 0 # avoid taking action
             
             # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
             next_state = env.step(state, actions)
