@@ -59,7 +59,7 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
             state = next_state
             
             # bookkeeping and performance eval
-            n_eval = eval(env, hunters, prey)           
+            n_eval = eval(env, hunters, prey, temp)           
             total_steps += n_eval
 
             if step > 0 and step % SYNC_RATE == 0:
@@ -72,12 +72,12 @@ def train(env, hunters, prey, n_steps=100, verbose=False):
                 if VISUALIZE:
                     game.visualize(hunters[0], temp, title='# steps = {}'.format(step))
 
-def eval(env, hunters, prey):
+def eval(env, hunters, prey, temp):
     n_steps = 0
 
     state, obs = env.get_init_state()
     while not env.terminal(state):
-        h_actions = [h.get_action(obs[h], TEMP) for h in hunters]
+        h_actions = [h.get_action(obs[h], temp) for h in hunters]
         p_actions = [p.get_action(0) for p in prey]
         next_state, next_obs = env.step(state, h_actions, p_actions)
         n_steps += 1

@@ -1,5 +1,7 @@
 runs/*
-tan/runs/
-*.pyc
+tan/runs/*
 marl/models/*
-game/__pycache__/__init__.cpython-36.pyc
+*~
+*.swp
+*.pyc
+.vscode/settings.json

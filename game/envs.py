@@ -388,7 +388,7 @@ class Environment:
         """
         # TODO: add tie (return 0) if all agents out of ammo
         if all(state.ammo) == 0:
-            return 0 # change to indicate end game
+            return 0 # TODO change to indicate end game
         if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
             return -1
         elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead
