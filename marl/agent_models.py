@@ -53,7 +53,7 @@ class PGModel(nn.Module):
 
         self.conv_out_size = self._get_conv_out(input_shape)
         
-        self.ff = nn.Sequential(
+        self.fc = nn.Sequential(
             nn.Linear(self.conv_out_size, 128),
             nn.ReLU(),
         )
@@ -72,7 +72,7 @@ class PGModel(nn.Module):
         conv_out = self.conv(x).view(x.size()[0], -1)
         fc_out = self.fc(conv_out)
         value = self.value(fc_out)
-        policy = self.policy(fc_out)
-        return value, policy
+        log_probs = self.policy(fc_out)
+        return value, log_probs
 
  
