@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = False
+DEBUG_ENV = True
 DEBUG_ENV_2 = False
 
 all_actions = { 0: 'do_nothing',
@@ -256,11 +256,13 @@ class Environment:
                 return True
             return False # default response for fire unless conditions above are met
         # TODO: avoid that agents come too close, because this would mean that on next step they could end up in same spot
+        # TODO: improve window behavior (you know what i mean)
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board
                 agent_pos = state.positions[agent]
                 if board[(agent_pos[0]-1, agent_pos[1])] is None: 
                     window = self.get_window(agent_pos[0]-1, agent_pos[1])
+                    window.remove((agent_pos[0], agent_pos[1])) # remove future pos (vacant anyway)
                     if self.check_window(state, window):
                         return True
         elif action == 5 or action == all_actions[5]: # move_down
@@ -268,6 +270,7 @@ class Environment:
                 agent_pos = state.positions[agent]
                 if board[(agent_pos[0]+1, agent_pos[1])] is None: 
                     window = self.get_window(agent_pos[0]+1, agent_pos[1])
+                    window.remove((agent_pos[0], agent_pos[1])) # remove future pos (vacant anyway)
                     if self.check_window(state, window):
                         return True
         elif action == 6 or action == all_actions[6]: # move_left
@@ -275,6 +278,7 @@ class Environment:
                 agent_pos = state.positions[agent]
                 if board[(agent_pos[0], agent_pos[1]-1)] is None: 
                     window = self.get_window(agent_pos[0], agent_pos[1]-1)
+                    window.remove((agent_pos[0], agent_pos[1])) # remove future pos (vacant anyway)
                     if self.check_window(state, window):
                         return True
         elif action == 7 or action == all_actions[7]: # move_right
@@ -282,6 +286,7 @@ class Environment:
                 agent_pos = state.positions[agent]
                 if board[(agent_pos[0], agent_pos[1]+1)] is None: 
                     window = self.get_window(agent_pos[0], agent_pos[1]+1)
+                    window.remove((agent_pos[0], agent_pos[1])) # remove future pos (vacant anyway)
                     if self.check_window(state, window):
                         return True
         return False # default

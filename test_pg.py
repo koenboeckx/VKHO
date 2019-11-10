@@ -9,7 +9,8 @@ import argparse
 
 BOARD_SIZE = 5
 
-agent = pg.PGAgent(0, board_size=BOARD_SIZE)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+agent = pg.PGAgent(0, device, board_size=BOARD_SIZE)
 
 agent_list = [
     agent, # Team 1
@@ -21,16 +22,16 @@ agent_list = [
 env = Environment(agent_list, size=BOARD_SIZE)
 
 if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent.set_model((1, env.board_size, env.board_size), 8,
                     lr=0.01, device=device)
 
     state = env.get_init_game_state()
     
     for _ in range(30):
-        action = agent.get_action(state, device)
-        state = env.step(state, (action, 0, 0, 0))
-        #print(action)
+        print(state)
+        actions = [agent.get_action(state) for agent in agent_list]
+        state = env.step(state, actions)
+        print(actions)
         env.render(state)
 
 
