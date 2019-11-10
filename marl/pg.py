@@ -61,11 +61,18 @@ def generate_episode(env):
     return episode
 
 def compute_returns(env, episode, gamma):
-    "Do this now for agent 0 => TODO: extend later"
+    """Compute discounted cumulative rewards for all agents
+
+    :param env:     Environment containing the agents
+    :param epsiode: list of Experiences with last one the final of the episode
+    :params gamma:  discount factor
+
+    :return: list of discounted cumulative rewards [..., (G0, G1, G2, G3), ...]
+    """
     returns = []
-    cum_reward = 0.0
+    cum_reward = [0.0,] * len(env.agents)
     for _, _, reward, _, _ in reversed(episode):
-        cum_reward = gamma * cum_reward + reward[0] # TODO: only agent 0
+        cum_reward = [gamma * c + r for c, r in zip(cum_reward, reward)] # TODO: only agent 0
         returns.append(cum_reward)
     return list(reversed(returns))
 
@@ -78,7 +85,7 @@ def reinforce(env, agents, **kwargs):
     agent = agents[0]
 
     #while True:
-    for _ in range(20):
+    for _ in range(2000000):
         episode = generate_episode(env)
 
         agent.model.optim.zero_grad()

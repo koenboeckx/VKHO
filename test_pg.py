@@ -41,4 +41,4 @@ if __name__ == '__main__':
     returns = pg.compute_returns(env, episode, 0.99)
     print(returns)
 
-    pg.reinforce(env, [agent])
+    #pg.reinforce(env, [agent])
