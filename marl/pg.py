@@ -10,7 +10,10 @@ import agents
 import torch
 from torch import nn
 
-
+from collections import namedtuple
+Experience = namedtuple('Experience', [
+    'state', 'actions', 'reward', 'next_state', 'done'
+])
 
 class PGAgent(agents.Tank):
     """
@@ -43,10 +46,62 @@ class PGAgent(agents.Tank):
         action = m.sample()
         return action.item()
 
+def generate_episode(env):
+    """Generates one episode."""
+    episode = []
+    state = env.get_init_game_state()
+    while not env.terminal(state):
+        actions = [agent.get_action(state) for agent in env.agents]
+        next_state = env.step(state, actions)
+        reward = env.get_reward(next_state)
+        done = True if env.terminal(next_state) else False
+        episode.append(Experience(state, actions, reward,
+                                next_state, done))
+        state = next_state
+    return episode
+
+def compute_returns(env, episode, gamma):
+    "Do this now for agent 0 => TODO: extend later"
+    returns = []
+    cum_reward = 0.0
+    for _, _, reward, _, _ in reversed(episode):
+        cum_reward = gamma * cum_reward + reward[0] # TODO: only agent 0
+        returns.append(cum_reward)
+    return list(reversed(returns))
+
+#'state', 'actions', 'reward', 'next_state', 'done'
 def reinforce(env, agents, **kwargs):
+    """
+    Apply REINFORCE to the agents. Uses environement env.
+    """
     gamma = kwargs.get('gamma', 0.99)
-    while True:
-        episode = generate_episode(env, agents)
-        for state, action, reward in episode:
-            g = compute_return()
+    agent = agents[0]
+
+    #while True:
+    for _ in range(20):
+        episode = generate_episode(env)
+
+        agent.model.optim.zero_grad()
+        returns = compute_returns(env, episode, gamma)
+
+        returns_v = torch.tensor(returns).to(agent.device)
+        episode = list(zip(*episode)) # reorganise episode
+        states_v  = preprocess(episode[0]).to(agent.device)
+        actions_v = torch.LongTensor([a[0] for a in episode[1]]).to(agent.device) # TODO: correct for multiple agents
+
+        _, logprob = agent.model(states_v)
+        logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+        loss = - torch.sum(logprob_a * returns_v)
+
+        print('Loss = ', loss.item())
+
+        loss.backward()
+        agent.model.optim.step()
+
+        """
+        states = 
+        for Q, (state, actions, _, _, _) in zip(returns, episode):
+            action = actions[0] # TODO: correct for multiple agents
             _, logprob = agent.model(preprocess([state]))
+            logprob_a = logprob[0, action]
+        """

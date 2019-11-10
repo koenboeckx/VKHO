@@ -6,7 +6,7 @@ Limitations:
     * Fixed teams: 2 against 2
 """
 
-DEBUG_ENV = True
+DEBUG_ENV = False
 DEBUG_ENV_2 = False
 
 all_actions = { 0: 'do_nothing',

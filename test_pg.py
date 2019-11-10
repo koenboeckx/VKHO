@@ -24,7 +24,7 @@ env = Environment(agent_list, size=BOARD_SIZE)
 if __name__ == '__main__':
     agent.set_model((1, env.board_size, env.board_size), 8,
                     lr=0.01, device=device)
-
+    """
     state = env.get_init_game_state()
     
     for _ in range(30):
@@ -33,5 +33,12 @@ if __name__ == '__main__':
         state = env.step(state, actions)
         print(actions)
         env.render(state)
+    """
+    episode = pg.generate_episode(env)
+    print(episode)
+    print(len(episode))
 
+    returns = pg.compute_returns(env, episode, 0.99)
+    print(returns)
 
+    pg.reinforce(env, [agent])
