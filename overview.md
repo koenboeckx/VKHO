@@ -61,4 +61,5 @@
         * Expansion of epsilon calculation
         * Experience namedtuple
         * Simplification of classification layer
-    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.    
+    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.   
+    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting.  

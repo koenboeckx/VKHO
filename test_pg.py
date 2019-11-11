@@ -26,6 +26,6 @@ env = Environment(agent_list, size=BOARD_SIZE)
 if __name__ == '__main__':
     for agent in agents:
         agent.set_model((1, env.board_size, env.board_size), env.n_actions,
-                        lr=0.01)
+                        lr=0.001)
     
     pg.reinforce(env, agents)

@@ -1,5 +1,5 @@
 from . import agent_models
-from .common import *
+from .common import preprocess
 from tensorboardX import SummaryWriter
 
 # to import agents
@@ -10,6 +10,7 @@ import agents
 import torch
 from torch import nn
 from torch.nn import functional as F
+from tensorboardX import SummaryWriter
 
 from collections import namedtuple
 Experience = namedtuple('Experience', [
@@ -38,6 +39,14 @@ class PGAgent(agents.Tank):
         """
         self.model = agent_models.PGModel(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(self.device)
+    
+    def save_model(self, filename=None):
+        if filename is None:
+            filename = './marl/models/pg_agent_{}_{}.torch'.format(self.idx, '01')
+        torch.save(self.model.state_dict(), filename)
+
+    def load_model(self, filename):
+        self.model.load_state_dict(torch.load(filename))
     
     def get_action(self, state):
         state_v = preprocess([state]).to(self.device)
@@ -77,7 +86,16 @@ def compute_returns(env, episode, gamma):
         returns.append(cum_reward)
     return list(reversed(returns))
 
-#'state', 'actions', 'reward', 'next_state', 'done'
+def compute_mean_reward(episodes):
+    "Compute mean reward for agent 0"
+    rewards = 0.0
+    n_steps = 0
+    for _, _, reward, _, _ in episodes:
+        if reward[0] != 0:
+            rewards += reward[0]
+            n_steps += 1
+    return rewards/n_steps
+
 def reinforce(env, agents, **kwargs):
     """
     Apply REINFORCE to the agents. Uses environement env.
@@ -87,36 +105,45 @@ def reinforce(env, agents, **kwargs):
     :return: None
     """
     gamma = kwargs.get('gamma', 0.99)
+    n_steps = kwargs.get('n_steps', int(1e5))
     n_episodes = kwargs.get('n_episodes', 100)
     agent = agents[0]
 
-    while True:
-        episodes = []
-        returns  = []
-        for _ in range(n_episodes):
-            episode = generate_episode(env)
-            returns_ = compute_returns(env, episode, gamma)
-            episodes.extend(episode)
-            returns.extend(returns_)
-        
-        n_states = len(episodes) # total number of states seen during all episodes
-        episodes = list(zip(*episodes)) # reorganise episode
-        returns = list(zip(*returns)) # reorganise returns
-
-        for agent in agents:
-            agent.model.optim.zero_grad()
+    with SummaryWriter(comment='-pg') as writer:
+        for step_idx in range(n_steps):
+            episodes = []
+            returns  = []
+            for _ in range(n_episodes):
+                episode = generate_episode(env)
+                returns_ = compute_returns(env, episode, gamma)
+                episodes.extend(episode)
+                returns.extend(returns_)
             
-            returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
-            states_v  = preprocess(episodes[0]).to(agent.device)
-            actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
+            mean_reward = compute_mean_reward(episodes)
+            writer.add_scalar('mean_reward', mean_reward, step_idx)
 
-            _, logits_v = agent.model(states_v)
-            logprob_v = F.log_softmax(logits_v, dim=1)
-            #logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-            logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
-            loss = - logprob_act_vals_v.mean()
+            n_states = len(episodes) # total number of states seen during all episodes
+            episodes = list(zip(*episodes)) # reorganise episode
+            returns = list(zip(*returns)) # reorganise returns
 
-            print('Agent {}: Loss = {:.3f}'.format(str(agent), loss.item()))
+            for agent in agents:
+                agent.model.optim.zero_grad()
+                
+                returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
+                states_v  = preprocess(episodes[0]).to(agent.device)
+                actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-            loss.backward()
-            agent.model.optim.step()
+                _, logits_v = agent.model(states_v)
+                logprob_v = F.log_softmax(logits_v, dim=1)
+                #logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+                logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
+                loss = - logprob_act_vals_v.mean()
+
+                print('Agent {}: Loss = {:.3f}'.format(str(agent), loss.item()))
+                writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
+
+                loss.backward()
+                agent.model.optim.step()
+    
+    for agent in agents:
+        agent.save_model()
