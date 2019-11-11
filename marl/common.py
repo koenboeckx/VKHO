@@ -9,6 +9,7 @@ def preprocess(states):
     :param states:  list of states
     :return: tensor 
     """
+    # TODO: improve state representation !!!!
     size = int(np.sqrt(len(states[0].board)))
     tensor = torch.zeros((len(states), 1, size, size))
     for idx, state in enumerate(states):
