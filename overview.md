@@ -61,4 +61,9 @@
         * Expansion of epsilon calculation
         * Experience namedtuple
         * Simplification of classification layer
-    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.    
+    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.
+    1. [04Nov19] Work on TAN game (Independent Q-Learning article)
+    1. [09Nov19] Corrections to game:
+        * included Linr-Of-Sight criterion for aiming
+        * Working with window around future position to avoid agents comming too close
+    1. [10Nov19] Began development of Policy Gradients
