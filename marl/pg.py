@@ -62,7 +62,7 @@ def generate_episode(env):
     """Generates one episode."""
     episode = []
     state = env.get_init_game_state()
-    while not env.terminal(state):
+    while env.terminal(state) == 0:
         actions = [agent.get_action(state) for agent in env.agents]
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)

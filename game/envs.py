@@ -169,6 +169,10 @@ class Environment:
         """Get the initial game state.
         :returns: a list of observations for the 4 agents
         """
+
+        # reintialize agents
+        for agent in self.agents:
+            agent.init_agent(agent.idx)
         
         agents = (0, 1, 2, 3)
         board = {}
@@ -186,12 +190,12 @@ class Environment:
         
         # generate the state 
         # by default, player 0 begins to play
-        state = State( # TODO: use agent information
+        state = State(
             board = flatten(board),
             positions = tuple(positions),
-            alive = (1, 1, 1, 1), 
-            ammo = (5000, 5000, 5000, 5000),
-            aim = (None, None, None, None),
+            alive = tuple(agent.alive for agent in self.agents), 
+            ammo = tuple(agent.ammo for agent in self.agents),
+            aim = tuple(agent.aim for agent in self.agents),
         )
         return state
 
@@ -393,7 +397,7 @@ class Environment:
         """
         # TODO: add tie (return 0) if all agents out of ammo
         if all(state.ammo) == 0:
-            return 0 # TODO change to indicate end game
+            return 'out-of-ammo'
         if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
             return -1
         elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead
@@ -408,7 +412,10 @@ class Environment:
         :return: list of rewards
         """
         reward = self.terminal(state)
-        return (reward, reward, -reward, -reward)
+        if reward == 'out-of-ammo':
+            return (-1, -1, -1, -1)
+        else:
+            return (reward, reward, -reward, -reward)
 
 if __name__ == '__main__':
     los = get_line_of_sight_dict(11)
