@@ -24,8 +24,14 @@ agents = [agent0, agent1]
 env = Environment(agent_list, size=BOARD_SIZE)
 
 if __name__ == '__main__':
+    
     for agent in agents:
         agent.set_model((1, env.board_size, env.board_size), env.n_actions,
                         lr=0.001)
     
-    pg.reinforce(env, agents)
+    #pg.reinforce(env, agents)
+    
+    filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent_0_01.torch',
+                 '/home/koen/Programming/VKHO/marl/models/pg_agent_1_01.torch'
+    ]
+    pg.test_agents(env, agents, filenames)

@@ -1,6 +1,7 @@
 from . import agent_models
 from .common import preprocess
 from tensorboardX import SummaryWriter
+from collections import namedtuple
 
 # to import agents
 import sys
@@ -12,7 +13,8 @@ from torch import nn
 from torch.nn import functional as F
 from tensorboardX import SummaryWriter
 
-from collections import namedtuple
+SAVE_RATE = 1000
+
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
 ])
@@ -94,7 +96,7 @@ def compute_mean_reward(episodes):
         if reward[0] != 0:
             rewards += reward[0]
             n_steps += 1
-    return rewards/n_steps
+    return len(episodes)/n_steps, rewards/n_steps
 
 def reinforce(env, agents, **kwargs):
     """
@@ -119,8 +121,9 @@ def reinforce(env, agents, **kwargs):
                 episodes.extend(episode)
                 returns.extend(returns_)
             
-            mean_reward = compute_mean_reward(episodes)
+            mean_length, mean_reward = compute_mean_reward(episodes)
             writer.add_scalar('mean_reward', mean_reward, step_idx)
+            writer.add_scalar('mean_length', mean_length, step_idx)
 
             n_states = len(episodes) # total number of states seen during all episodes
             episodes = list(zip(*episodes)) # reorganise episode
@@ -144,6 +147,20 @@ def reinforce(env, agents, **kwargs):
 
                 loss.backward()
                 agent.model.optim.step()
+            if step_idx > 0 and step_idx % SAVE_RATE == 0:
+                for agent in agents:
+                    agent.save_model()
+
+def test_agents(env, agents, filenames):
+    for agent, filename in zip(agents, filenames):
+        agent.load_model(filename)
     
-    for agent in agents:
-        agent.save_model()
+    state = env.get_init_game_state()
+    while not env.terminal(state):
+        actions = [agent.get_action(state) for agent in env.agents]
+        print(actions)
+        next_state = env.step(state, actions)
+        env.render(next_state)
+        print(next_state)
+
+        state = next_state
