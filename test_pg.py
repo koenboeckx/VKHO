@@ -29,9 +29,9 @@ if __name__ == '__main__':
         agent.set_model((1, env.board_size, env.board_size), env.n_actions,
                         lr=0.001)
     
-    pg.reinforce(env, agents, n_episodes=4)
+    #pg.reinforce(env, agents, n_episodes=20)
     
     filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent_0_01.torch',
                  '/home/koen/Programming/VKHO/marl/models/pg_agent_1_01.torch'
     ]
-    #pg.test_agents(env, agents, filenames)
+    pg.test_agents(env, agents, filenames)

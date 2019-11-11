@@ -138,11 +138,10 @@ def reinforce(env, agents, **kwargs):
 
                 _, logits_v = agent.model(states_v)
                 logprob_v = F.log_softmax(logits_v, dim=1)
-                #logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
                 logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
                 loss = - logprob_act_vals_v.mean()
 
-                print('Agent {}: Loss = {:.3f}'.format(str(agent), loss.item()))
+                print('Agent {}: Loss = {:.5f}'.format(str(agent), loss.item()))
                 writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
 
                 loss.backward()
