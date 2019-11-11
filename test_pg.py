@@ -10,35 +10,22 @@ import argparse
 BOARD_SIZE = 5
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-agent = pg.PGAgent(0, device, board_size=BOARD_SIZE)
+agent0 = pg.PGAgent(0, device, board_size=BOARD_SIZE)
+agent1 = pg.PGAgent(1, device, board_size=BOARD_SIZE)
 
 agent_list = [
-    agent, # Team 1
-    agents.RandomTank(1), # Team 1
+    agent0, # Team 1
+    agent1, # Team 1
+    #agents.RandomTank(1), # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]
-
+agents = [agent0, agent1]
 env = Environment(agent_list, size=BOARD_SIZE)
 
 if __name__ == '__main__':
-    agent.set_model((1, env.board_size, env.board_size), 8,
-                    lr=0.01, device=device)
-    """
-    state = env.get_init_game_state()
+    for agent in agents:
+        agent.set_model((1, env.board_size, env.board_size), env.n_actions,
+                        lr=0.01)
     
-    for _ in range(30):
-        print(state)
-        actions = [agent.get_action(state) for agent in agent_list]
-        state = env.step(state, actions)
-        print(actions)
-        env.render(state)
-    """
-    episode = pg.generate_episode(env)
-    print(episode)
-    print(len(episode))
-
-    returns = pg.compute_returns(env, episode, 0.99)
-    print(returns)
-
-    #pg.reinforce(env, [agent])
+    pg.reinforce(env, agents)

@@ -9,6 +9,7 @@ import agents
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from collections import namedtuple
 Experience = namedtuple('Experience', [
@@ -26,7 +27,7 @@ class PGAgent(agents.Tank):
         self.board_size = board_size
         self.device = device
     
-    def set_model(self, input_shape, n_actions, lr, device):
+    def set_model(self, input_shape, n_actions, lr):
         """
         Set the model (neural net) of the agent.
 
@@ -36,7 +37,7 @@ class PGAgent(agents.Tank):
         :return: None
         """
         self.model = agent_models.PGModel(input_shape, n_actions,
-            lr=lr, board_size=self.board_size).to(device)
+            lr=lr, board_size=self.board_size).to(self.device)
     
     def get_action(self, state):
         state_v = preprocess([state]).to(self.device)
@@ -80,35 +81,42 @@ def compute_returns(env, episode, gamma):
 def reinforce(env, agents, **kwargs):
     """
     Apply REINFORCE to the agents. Uses environement env.
+    :param env: Environment
+    :param agents: list of agents to train (subset of env.agents)
+
+    :return: None
     """
     gamma = kwargs.get('gamma', 0.99)
+    n_episodes = kwargs.get('n_episodes', 100)
     agent = agents[0]
 
-    #while True:
-    for _ in range(2000000):
-        episode = generate_episode(env)
+    while True:
+        episodes = []
+        returns  = []
+        for _ in range(n_episodes):
+            episode = generate_episode(env)
+            returns_ = compute_returns(env, episode, gamma)
+            episodes.extend(episode)
+            returns.extend(returns_)
+        
+        n_states = len(episodes) # total number of states seen during all episodes
+        episodes = list(zip(*episodes)) # reorganise episode
+        returns = list(zip(*returns)) # reorganise returns
 
-        agent.model.optim.zero_grad()
-        returns = compute_returns(env, episode, gamma)
+        for agent in agents:
+            agent.model.optim.zero_grad()
+            
+            returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
+            states_v  = preprocess(episodes[0]).to(agent.device)
+            actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-        returns_v = torch.tensor(returns).to(agent.device)
-        episode = list(zip(*episode)) # reorganise episode
-        states_v  = preprocess(episode[0]).to(agent.device)
-        actions_v = torch.LongTensor([a[0] for a in episode[1]]).to(agent.device) # TODO: correct for multiple agents
+            _, logits_v = agent.model(states_v)
+            logprob_v = F.log_softmax(logits_v, dim=1)
+            #logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+            logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
+            loss = - logprob_act_vals_v.mean()
 
-        _, logprob = agent.model(states_v)
-        logprob_a = logprob.gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-        loss = - torch.sum(logprob_a * returns_v)
+            print('Agent {}: Loss = {:.3f}'.format(str(agent), loss.item()))
 
-        print('Loss = ', loss.item())
-
-        loss.backward()
-        agent.model.optim.step()
-
-        """
-        states = 
-        for Q, (state, actions, _, _, _) in zip(returns, episode):
-            action = actions[0] # TODO: correct for multiple agents
-            _, logprob = agent.model(preprocess([state]))
-            logprob_a = logprob[0, action]
-        """
+            loss.backward()
+            agent.model.optim.step()
