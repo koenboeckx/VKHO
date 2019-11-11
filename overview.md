@@ -20,6 +20,7 @@
     * how to analyze (NE?, ESS?)
     
 1. Deploy MARL algorithms to develop strategies
+    * First: IQL with DQN for each agent of player 1
     * compare with MCTS results
     
 1. Extend game to more realistic situations with
@@ -46,3 +47,18 @@
         * if stores are reformed (currently in works) => how to deal with Min-Max ?: *solution*: this doesn't solve the core problem (see next point). However, alternatively updating v_values in function of wich player (`v_values[state] += or -= reward`, accordingly)
         * How to handle loops in behavior (returning to same state after X actions) -> leads to loop where we never find a leaf node = **core of the problem**
         * Added to MCTS: save and load methods that store/recover the 3 essential stores of the object: .n_visits, .v_values, .children
+        * Remark: being able to return previous states introduces loops that are not present in other board games like 'Go' (but are in chess)
+    1. [22Oct19] Rewrite to store everything in separate 'stores'
+    1. [24Oct19] Implemented IQL:
+        * Use DQN with experience replay and target network for both agents
+        * Implement first naively, then with updates over combined minibatch loss
+    1. [03Nov19] Intermediate corrections
+        * Correction: addition of 'state = next_state'
+        * Addition of agent.optim.zero_grad()
+        * Rewrite of loss calculation
+        * Addition of next_values_v = next_values_v.detach() # !! avoids feeding gradients in target network
+        * Correction of done_mask
+        * Expansion of epsilon calculation
+        * Experience namedtuple
+        * Simplification of classification layer
+    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.    
