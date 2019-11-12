@@ -2,6 +2,7 @@ from . import agent_models
 from .common import preprocess
 from tensorboardX import SummaryWriter
 from collections import namedtuple
+from datetime import datetime
 
 # to import agents
 import sys
@@ -84,7 +85,7 @@ def compute_returns(env, episode, gamma):
     returns = []
     cum_reward = [0.0,] * len(env.agents)
     for _, _, reward, _, _ in reversed(episode):
-        cum_reward = [gamma * c + r for c, r in zip(cum_reward, reward)] # TODO: only agent 0
+        cum_reward = [gamma * c + r for c, r in zip(cum_reward, reward)]
         returns.append(cum_reward)
     return list(reversed(returns))
 
@@ -147,8 +148,10 @@ def reinforce(env, agents, **kwargs):
                 loss.backward()
                 agent.model.optim.step()
             if step_idx > 0 and step_idx % SAVE_RATE == 0:
+                date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 for agent in agents:
-                    agent.save_model()
+                    filename = '/home/koen/Programming/VKHO/marl/models/pg_agent{}_{}.torch'.format(agent.idx, date_str)
+                    agent.save_model(filename)
 
 def test_agents(env, agents, filenames):
     for agent, filename in zip(agents, filenames):
