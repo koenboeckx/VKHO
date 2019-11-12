@@ -1,5 +1,5 @@
 from . import agent_models
-from .common import preprocess
+from .common import preprocess_extended as preprocess
 from tensorboardX import SummaryWriter
 from collections import namedtuple
 from datetime import datetime
@@ -40,7 +40,7 @@ class PGAgent(agents.Tank):
         :param device:      torch.device("cpu" or "cuda")
         :return: None
         """
-        self.model = agent_models.PGModel(input_shape, n_actions,
+        self.model = agent_models.PGExtendedModel(input_shape, n_actions,
             lr=lr, board_size=self.board_size).to(self.device)
     
     def save_model(self, filename=None):
@@ -52,8 +52,8 @@ class PGAgent(agents.Tank):
         self.model.load_state_dict(torch.load(filename))
     
     def get_action(self, state):
-        state_v = preprocess([state]).to(self.device)
-        _, logprobs = self.model(state_v)
+        board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
+        _, logprobs = self.model(board_v, state_v)
         probs = nn.Softmax(dim=1)(logprobs)
         m = torch.distributions.Categorical(probs)
         action = m.sample()
@@ -134,10 +134,10 @@ def reinforce(env, agents, **kwargs):
                 agent.model.optim.zero_grad()
                 
                 returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
-                states_v  = preprocess(episodes[0]).to(agent.device)
+                states_v, states2_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
                 actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-                _, logits_v = agent.model(states_v)
+                _, logits_v = agent.model(states_v, states2_v)
                 logprob_v = F.log_softmax(logits_v, dim=1)
                 logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
                 loss = - logprob_act_vals_v.mean()
