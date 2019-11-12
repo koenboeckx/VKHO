@@ -113,6 +113,7 @@ def reinforce(env, agents, **kwargs):
     agent = agents[0]
 
     with SummaryWriter(comment='-pg') as writer:
+        #writer.add_graph(agents[0].model) # TODO: doesn't work (yet)
         for step_idx in range(n_steps):
             episodes = []
             returns  = []
@@ -134,10 +135,10 @@ def reinforce(env, agents, **kwargs):
                 agent.model.optim.zero_grad()
                 
                 returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
-                states_v, states2_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
+                states_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
                 actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-                _, logits_v = agent.model(states_v, states2_v)
+                _, logits_v = agent.model(*states_v)
                 logprob_v = F.log_softmax(logits_v, dim=1)
                 logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
                 loss = - logprob_act_vals_v.mean()

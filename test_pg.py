@@ -8,7 +8,7 @@ import torch
 import argparse
 from datetime import datetime
 
-BOARD_SIZE = 5
+BOARD_SIZE = 11
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 agent0 = pg.PGAgent(0, device, board_size=BOARD_SIZE)
