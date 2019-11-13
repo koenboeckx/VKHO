@@ -8,7 +8,7 @@ import torch
 import argparse
 from datetime import datetime
 
-BOARD_SIZE = 11
+BOARD_SIZE = 7
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 agent0 = pg.PGAgent(0, device, board_size=BOARD_SIZE)
@@ -30,9 +30,9 @@ if __name__ == '__main__':
         agent.set_model((1, env.board_size, env.board_size), env.n_actions,
                         lr=0.001)
     
-    pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
+    #pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
     
-    filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_{}.torch'.format(datetime.now().strftime("%Y%m%d_%H%M%S") ),
-                 '/home/koen/Programming/VKHO/marl/models/pg_agent1_{}.torch'.format(datetime.now().strftime("%Y%m%d_%H%M%S") )
+    filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',
+                 '/home/koen/Programming/VKHO/marl/models/pg_agent1_20191113_103251.torch', 
     ]
-    #pg.test_agents(env, agents, filenames)
+    pg.test_agents(env, agents, filenames)

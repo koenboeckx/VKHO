@@ -110,7 +110,6 @@ def reinforce(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.99)
     n_steps = kwargs.get('n_steps', int(1e5))
     n_episodes = kwargs.get('n_episodes', 100)
-    agent = agents[0]
 
     with SummaryWriter(comment='-pg') as writer:
         #writer.add_graph(agents[0].model) # TODO: doesn't work (yet)
@@ -153,6 +152,31 @@ def reinforce(env, agents, **kwargs):
                 for agent in agents:
                     filename = '/home/koen/Programming/VKHO/marl/models/pg_agent{}_{}.torch'.format(agent.idx, date_str)
                     agent.save_model(filename)
+
+def actor_critic(env, agents, **kwargs):
+    """
+    Use Actor-Critic learning to train agents. Uses environement env.
+    :param env: Environment
+    :param agents: list of agents to train (subset of env.agents)
+
+    :return: None
+    """
+    gamma = kwargs.get('gamma', 0.99)
+    n_steps = kwargs.get('n_steps', int(1e5))
+    n_episodes = kwargs.get('n_episodes', 100)
+    agent = agents[0]
+
+    with SummaryWriter(comment='-ac') as writer:
+        state = env.get_init_game_state()
+        I = 1
+        for step_idx in range(n_steps):
+            actions = [agent.get_action(state) for agent in env.agents]
+            next_state = env.step(state, actions)
+            reward = env.get_reward(next_state)
+            done = True if env.terminal(next_state) else False
+            
+            delta = reward 
+        
 
 def test_agents(env, agents, filenames):
     for agent, filename in zip(agents, filenames):
