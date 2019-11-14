@@ -10,6 +10,8 @@ def preprocess(states):
     :return: tensor 
     """
     # TODO: improve state representation -> see preprocess_extended
+    if not isinstance(states, list):
+        raise TypeError('states should be list')
     size = int(np.sqrt(len(states[0].board)))
     tensor = torch.zeros((len(states), 1, size, size))
     for idx, state in enumerate(states):
@@ -30,6 +32,8 @@ def preprocess_extended(states):
                 tensor0: input to conv net
                 tensor1: input to in_fc
     """
+    if not isinstance(states, list):
+        raise TypeError('states should be list')
     size = int(np.sqrt(len(states[0].board)))
     tensor0 = torch.zeros((len(states), 1, size, size))
     tensor1 = torch.zeros((len(states), 8))

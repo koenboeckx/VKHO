@@ -13,8 +13,10 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from tensorboardX import SummaryWriter
+import numpy as np
 
 SAVE_RATE = 1000
+REWARDS_STEPS = 4 # TODO: look this up
 
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
@@ -73,6 +75,25 @@ def generate_episode(env):
         state = next_state
     return episode
 
+def generate_steps(env, n_steps):
+    """
+    Generate n_steps through interaction with environment env. Actions are
+    picked with agent.get_action(state) methods for the agents in env.agents.
+    """
+    experiences = []
+    state = env.get_init_game_state()
+    for step_idx in range(n_steps):
+        actions = [agent.get_action(state) for agent in env.agents]
+        next_state = env.step(state, actions)
+        reward = env.get_reward(next_state)
+        done = True if env.terminal(next_state) else False
+        experiences.append(Experience(state, actions, reward, next_state, done))
+        if done:
+            state = env.get_init_game_state() # reinit game when episode is done
+        else:
+            state = next_state
+    return experiences
+            
 def compute_returns(env, episode, gamma):
     """Compute discounted cumulative rewards for all agents
 
@@ -147,6 +168,7 @@ def reinforce(env, agents, **kwargs):
 
                 loss.backward()
                 agent.model.optim.step()
+
             if step_idx > 0 and step_idx % SAVE_RATE == 0:
                 date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 for agent in agents:
@@ -161,22 +183,88 @@ def actor_critic(env, agents, **kwargs):
 
     :return: None
     """
-    gamma = kwargs.get('gamma', 0.99)
-    n_steps = kwargs.get('n_steps', int(1e5))
-    n_episodes = kwargs.get('n_episodes', 100)
-    agent = agents[0]
+    gamma = kwargs.get('gamma', 0.99)           # discount factor
+    n_steps = kwargs.get('n_steps', 128)        # number of steps to generate each iteration
+    batch_size = kwargs.get('batch_size', 32)   # number of exp used for learning
 
     with SummaryWriter(comment='-ac') as writer:
-        state = env.get_init_game_state()
-        I = 1
-        for step_idx in range(n_steps):
-            actions = [agent.get_action(state) for agent in env.agents]
-            next_state = env.step(state, actions)
-            reward = env.get_reward(next_state)
-            done = True if env.terminal(next_state) else False
-            
-            delta = reward 
-        
+        for step_idx in range(100): # TODO: redefine (number of steps or until convergence)
+            exp_source = generate_steps(env, n_steps) # TODO: IDEA: make this a generator (-> yield)
+            batch = []
+
+            mean_length, mean_reward = compute_mean_reward(exp_source)
+            writer.add_scalar('mean_reward', mean_reward, step_idx)
+            writer.add_scalar('mean_length', mean_length, step_idx)
+
+            print('Step {:3d} - mean length = {:.2f}, mean reward = {:.3f}'.format(
+                step_idx, mean_length, mean_reward
+            ))
+
+            for exp in exp_source:
+                batch.append(exp)
+                if len(batch) >= batch_size:
+                    for agent in agents:
+                        (boards_v, states_v), actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
+                        
+                        agent.model.optim.zero_grad()
+
+                        values_v, logits_v = agent.model(boards_v, states_v)
+                        loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
+
+                        logprob_v = F.log_softmax(logits_v, dim=1)
+                        adv_v = vals_ref_v - values_v.detach()
+                        logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
+                        loss_policy_v = -logprob_actions_v.mean()   # policy gradient
+
+                        # TODO: add entropy loss
+                        # TODO: do loss_policy_v.backward() separately
+
+                        loss_v = loss_value_v + loss_policy_v
+                        loss_v.backward()
+                        # TODO: clip gradients?
+
+                        #print('Agent {}: Loss = {:.5f}'.format(str(agent), loss_v.item()))
+                        #writer.add_scalar('loss_{}'.format(str(agent)), loss_v.item(), step_idx)
+
+                        agent.model.optim.step()
+
+                    
+                    batch.clear()
+
+def unpack_batch(env, agent, batch, gamma):
+    """
+    Convert batch into training tensors
+    :param env:
+    :param agent:
+    :param batch:
+    :param gamma:
+    :return: (boards variable, states variable), actions tensor, reference values variable
+    """
+    states, actions, rewards, not_done_idx, last_states = [], [], [], [], []
+    for idx, exp in enumerate(batch):
+        states.append(exp.state)
+        actions.append(exp.actions[agent.idx])
+        rewards.append(exp.reward[agent.idx])
+        if exp.done:
+            not_done_idx.append(idx)
+            last_states.append(exp.state)
+    
+    boards_v, states_v = [torch.tensor(tensor).to(agent.device) 
+                                for tensor in preprocess(states)]
+    actions_t = torch.LongTensor(actions).to(agent.device)
+
+    # handle the rewards
+    rewards_np = np.array(rewards, dtype=np.float32)
+    if not_done_idx: # check if not_done is present 
+        last_boards_v, last_states_v = [torch.tensor(tensor).to(agent.device) 
+                                            for tensor in preprocess(last_states)]
+        last_vals_v, _ = agent.model(last_boards_v, last_states_v)
+        last_vals_np = last_vals_v.data.cpu().numpy()[:, 0] # TODO: check this 
+        rewards_np[not_done_idx] += gamma ** REWARDS_STEPS * last_vals_np
+    ref_vals_v = torch.tensor(rewards_np).to(agent.device)
+
+    return (boards_v, states_v), actions_t, ref_vals_v
+
 
 def test_agents(env, agents, filenames):
     for agent, filename in zip(agents, filenames):
