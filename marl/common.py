@@ -32,7 +32,7 @@ def preprocess_extended(states):
                 tensor0: input to conv net
                 tensor1: input to in_fc
     """
-    if not isinstance(states, list):
+    if not isinstance(states, list) and not isinstance(states, tuple):
         raise TypeError('states should be list')
     size = int(np.sqrt(len(states[0].board)))
     tensor0 = torch.zeros((len(states), 1, size, size))

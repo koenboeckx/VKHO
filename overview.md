@@ -66,4 +66,5 @@
     1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net)
     1. [11Nov19]: First priority: improve state representation for DNN to include e.g. ammo: DONE [12Nov19]
     1. [12Nov19]: IDEA: work iteratively: learn policy against random agent; then retrain agents against agent's using this policy => Q: how to adapt policy/model so it can be used by opponent?
-    1. [12Nov19]: implement critic and extend REINFORCE
+    1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
+    1. [14Nov19]: TODO: implement experiment manager like 'sacred' 

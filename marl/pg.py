@@ -12,11 +12,14 @@ import agents
 import torch
 from torch import nn
 from torch.nn import functional as F
+import torch.nn.utils as nn_utils
+
 from tensorboardX import SummaryWriter
 import numpy as np
 
 SAVE_RATE = 1000
 REWARDS_STEPS = 4 # TODO: look this up
+CLIP_GRAD = 0.1
 
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
@@ -82,7 +85,7 @@ def generate_steps(env, n_steps):
     """
     experiences = []
     state = env.get_init_game_state()
-    for step_idx in range(n_steps):
+    for _ in range(n_steps):
         actions = [agent.get_action(state) for agent in env.agents]
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
@@ -113,12 +116,12 @@ def compute_returns(env, episode, gamma):
 def compute_mean_reward(episodes):
     "Compute mean reward for agent 0"
     rewards = 0.0
-    n_steps = 0
-    for _, _, reward, _, _ in episodes:
-        if reward[0] != 0:
-            rewards += reward[0]
-            n_steps += 1
-    return len(episodes)/n_steps, rewards/n_steps
+    n_episodes = 0
+    for _, _, reward, _, done in episodes:
+        rewards += reward[0]
+        if done:
+            n_episodes += 1
+    return len(episodes)/n_episodes, rewards/n_episodes
 
 def reinforce(env, agents, **kwargs):
     """
@@ -217,14 +220,16 @@ def actor_critic(env, agents, **kwargs):
                         loss_policy_v = -logprob_actions_v.mean()   # policy gradient
 
                         # TODO: add entropy loss
-                        # TODO: do loss_policy_v.backward() separately
+                        
+                        loss_policy_v.backward(retain_graph=True)
 
-                        loss_v = loss_value_v + loss_policy_v
+                        loss_v = loss_value_v
                         loss_v.backward()
-                        # TODO: clip gradients?
+                        
+                        # clip gradients
+                        nn.utils.clip_grad_norm_(agent.model.parameters(),
+                                                 CLIP_GRAD)
 
-                        #print('Agent {}: Loss = {:.5f}'.format(str(agent), loss_v.item()))
-                        #writer.add_scalar('loss_{}'.format(str(agent)), loss_v.item(), step_idx)
 
                         agent.model.optim.step()
 
