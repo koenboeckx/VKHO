@@ -60,8 +60,8 @@ class Tank(BaseAgent):
 
         # specific parameters
         self.alive = 1
-        self.ammo = 5000    # default = 5
-        self.max_range = 8  # TODO: default = 4, has big impact on how fast game is over
+        self.ammo = 5
+        self.max_range = 5
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action  
 

@@ -1,0 +1,7 @@
+runs/*
+tan/runs/*
+marl/models/*
+*~
+*.swp
+*.pyc
+.vscode/settings.json

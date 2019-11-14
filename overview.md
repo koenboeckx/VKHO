@@ -20,6 +20,10 @@
     * how to analyze (NE?, ESS?)
     
 1. Deploy MARL algorithms to develop strategies
+<<<<<<< HEAD
+=======
+    * First: IQL with DQN for each agent of player 1
+>>>>>>> rl_devel
     * compare with MCTS results
     
 1. Extend game to more realistic situations with
@@ -46,3 +50,24 @@
         * if stores are reformed (currently in works) => how to deal with Min-Max ?: *solution*: this doesn't solve the core problem (see next point). However, alternatively updating v_values in function of wich player (`v_values[state] += or -= reward`, accordingly)
         * How to handle loops in behavior (returning to same state after X actions) -> leads to loop where we never find a leaf node = **core of the problem**
         * Added to MCTS: save and load methods that store/recover the 3 essential stores of the object: .n_visits, .v_values, .children
+        * Remark: being able to return previous states introduces loops that are not present in other board games like 'Go' (but are in chess)
+    1. [22Oct19] Rewrite to store everything in separate 'stores'
+    1. [24Oct19] Implemented IQL:
+        * Use DQN with experience replay and target network for both agents
+        * Implement first naively, then with updates over combined minibatch loss
+    1. [03Nov19] Intermediate corrections
+        * Correction: addition of 'state = next_state'
+        * Addition of agent.optim.zero_grad()
+        * Rewrite of loss calculation
+        * Addition of next_values_v = next_values_v.detach() # !! avoids feeding gradients in target network
+        * Correction of done_mask
+        * Expansion of epsilon calculation
+        * Experience namedtuple
+        * Simplification of classification layer
+    1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.
+    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting.
+    1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net)
+    1. [11Nov19]: First priority: improve state representation for DNN to include e.g. ammo: DONE [12Nov19]
+    1. [12Nov19]: IDEA: work iteratively: learn policy against random agent; then retrain agents against agent's using this policy => Q: how to adapt policy/model so it can be used by opponent?
+    1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
+    1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
