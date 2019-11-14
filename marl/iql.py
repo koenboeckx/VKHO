@@ -2,6 +2,8 @@
 Independent Q-Learning.
 """
 
+# TODO: integrate unrlling to longer experience chains
+
 import random
 import time
 from collections import namedtuple

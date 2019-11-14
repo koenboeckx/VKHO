@@ -31,7 +31,8 @@ if __name__ == '__main__':
                         lr=0.001)
     
     #pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
-    pg.actor_critic(env, agents, n_steps=100)
+    pg.actor_critic(env, agents, n_steps=100,
+                    batch_size=256)
 
 
     filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',

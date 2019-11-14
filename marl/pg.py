@@ -18,12 +18,14 @@ from tensorboardX import SummaryWriter
 import numpy as np
 
 SAVE_RATE = 1000
-REWARDS_STEPS = 1 # TODO: look this up
+REWARDS_STEPS = 1 # don't just use next step in bootstrapping, but look ahead NOT USED YET
 CLIP_GRAD = 0.1
 
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
 ])
+# Experience.__new__.__defaults__ = (None, ) * len(Experience._fields) # set default values
+
 
 class PGAgent(agents.Tank):
     """
@@ -78,24 +80,30 @@ def generate_episode(env):
         state = next_state
     return episode
 
-def generate_steps(env, n_steps):
+def generate_steps(env, n_steps, gamma=0.99):
     """
     Generate n_steps through interaction with environment env. Actions are
     picked with agent.get_action(state) methods for the agents in env.agents.
     """
     experiences = []
+    returns = []
     state = env.get_init_game_state()
+    episode = []
     for _ in range(n_steps):
         actions = [agent.get_action(state) for agent in env.agents]
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
         done = True if env.terminal(next_state) else False
-        experiences.append(Experience(state, actions, reward, next_state, done))
+        episode.append(Experience(state, actions, reward, next_state, done))
         if done:
+            experiences.extend(episode)
+            returns.extend(compute_returns(env, episode, gamma))
+            episode = []
             state = env.get_init_game_state() # reinit game when episode is done
         else:
             state = next_state
-    return experiences
+        
+    return experiences, returns
             
 def compute_returns(env, episode, gamma):
     """Compute discounted cumulative rewards for all agents
@@ -113,12 +121,12 @@ def compute_returns(env, episode, gamma):
         returns.append(cum_reward)
     return list(reversed(returns))
 
-def compute_mean_reward(episodes):
-    "Compute mean reward for agent 0"
+def compute_mean_reward(episodes, agent):
+    "Compute mean reward for agent"
     rewards = 0.0
     n_episodes = 0
     for _, _, reward, _, done in episodes:
-        rewards += reward[0]
+        rewards += reward[agent.idx]
         if done:
             n_episodes += 1
     return len(episodes)/n_episodes, rewards/n_episodes
@@ -146,7 +154,7 @@ def reinforce(env, agents, **kwargs):
                 episodes.extend(episode)
                 returns.extend(returns_)
             
-            mean_length, mean_reward = compute_mean_reward(episodes)
+            mean_length, mean_reward = compute_mean_reward(episodes, agents[0])
             writer.add_scalar('mean_reward', mean_reward, step_idx)
             writer.add_scalar('mean_length', mean_length, step_idx)
 
@@ -191,11 +199,11 @@ def actor_critic(env, agents, **kwargs):
     batch_size = kwargs.get('batch_size', 32)   # number of exp used for learning
 
     with SummaryWriter(comment='-ac') as writer:
-        for step_idx in range(n_steps): # TODO: redefine (number of steps or until convergence)
-            exp_source = generate_steps(env, 8*batch_size) # TODO: IDEA: make this a generator (-> yield)
+        for step_idx in range(n_steps):
+            exp_source, returns = generate_steps(env, 8*batch_size, gamma) # TODO: IDEA: make this a generator (-> yield)
             batch = []
 
-            mean_length, mean_reward = compute_mean_reward(exp_source)
+            mean_length, mean_reward = compute_mean_reward(exp_source, agents[0])
             writer.add_scalar('mean_reward', mean_reward, step_idx)
             writer.add_scalar('mean_length', mean_length, step_idx)
 
@@ -203,8 +211,8 @@ def actor_critic(env, agents, **kwargs):
                 step_idx, mean_length, mean_reward
             ))
 
-            for exp in exp_source:
-                batch.append(exp)
+            for exp, ret in zip(exp_source, returns):
+                batch.append((exp, ret))
                 if len(batch) < batch_size:
                     continue
 
@@ -241,18 +249,20 @@ def unpack_batch(env, agent, batch, gamma):
     Convert batch into training tensors
     :param env:
     :param agent:
-    :param batch:
+    :param batch: list: [..., (exp, return), ...]
     :param gamma:
     :return: (boards variable, states variable), actions tensor, reference values variable
     """
     states, actions, rewards, not_done_idx, last_states = [], [], [], [], []
-    for idx, exp in enumerate(batch):
+    for idx, (exp, ret) in enumerate(batch):
         states.append(exp.state)
         actions.append(exp.actions[agent.idx])
-        rewards.append(exp.reward[agent.idx]) # !! TODO !!: integrate discounting on rewards
-        if exp.done: # TODO: this is not how it's done - check the last state of the experience
+        rewards.append(ret[agent.idx]) 
+        
+        if not exp.done: # TODO: change Experience class to allow longer rollouts
             not_done_idx.append(idx)
-            last_states.append(exp.state)
+            last_states.append(exp.next_state)
+
     
     boards_v, states_v = [torch.tensor(tensor).to(agent.device) 
                                 for tensor in preprocess(states)]
@@ -265,7 +275,7 @@ def unpack_batch(env, agent, batch, gamma):
                                             for tensor in preprocess(last_states)]
         last_vals_v, _ = agent.model(last_boards_v, last_states_v)
         last_vals_np = last_vals_v.data.cpu().numpy()
-        result = gamma ** REWARDS_STEPS * last_vals_np
+        result = gamma * last_vals_np
         rewards_np[not_done_idx] += result.squeeze(-1)
     ref_vals_v = torch.tensor(rewards_np).to(agent.device)
 
