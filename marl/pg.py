@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 import numpy as np
 
 SAVE_RATE = 1000
-REWARDS_STEPS = 4 # TODO: look this up
+REWARDS_STEPS = 1 # TODO: look this up
 CLIP_GRAD = 0.1
 
 Experience = namedtuple('Experience', [
@@ -187,12 +187,12 @@ def actor_critic(env, agents, **kwargs):
     :return: None
     """
     gamma = kwargs.get('gamma', 0.99)           # discount factor
-    n_steps = kwargs.get('n_steps', 128)        # number of steps to generate each iteration
+    n_steps = kwargs.get('n_steps', 100)        # number of steps to generate each iteration
     batch_size = kwargs.get('batch_size', 32)   # number of exp used for learning
 
     with SummaryWriter(comment='-ac') as writer:
-        for step_idx in range(100): # TODO: redefine (number of steps or until convergence)
-            exp_source = generate_steps(env, n_steps) # TODO: IDEA: make this a generator (-> yield)
+        for step_idx in range(n_steps): # TODO: redefine (number of steps or until convergence)
+            exp_source = generate_steps(env, 8*batch_size) # TODO: IDEA: make this a generator (-> yield)
             batch = []
 
             mean_length, mean_reward = compute_mean_reward(exp_source)
@@ -205,36 +205,36 @@ def actor_critic(env, agents, **kwargs):
 
             for exp in exp_source:
                 batch.append(exp)
-                if len(batch) >= batch_size:
-                    for agent in agents:
-                        (boards_v, states_v), actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
+                if len(batch) < batch_size:
+                    continue
+
+                for agent in agents:
+                    (boards_v, states_v), actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
+                     
+                    agent.model.optim.zero_grad()
+
+                    values_v, logits_v = agent.model(boards_v, states_v)
+                    loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
+
+                    logprob_v = F.log_softmax(logits_v, dim=1)
+                    adv_v = vals_ref_v - values_v.detach()
+                    logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
+                    loss_policy_v = -logprob_actions_v.mean()   # policy gradient
+
+                    # TODO: add entropy loss
                         
-                        agent.model.optim.zero_grad()
+                    loss_policy_v.backward(retain_graph=True)
 
-                        values_v, logits_v = agent.model(boards_v, states_v)
-                        loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
-
-                        logprob_v = F.log_softmax(logits_v, dim=1)
-                        adv_v = vals_ref_v - values_v.detach()
-                        logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
-                        loss_policy_v = -logprob_actions_v.mean()   # policy gradient
-
-                        # TODO: add entropy loss
+                    loss_v = loss_value_v
+                    loss_v.backward()
                         
-                        loss_policy_v.backward(retain_graph=True)
-
-                        loss_v = loss_value_v
-                        loss_v.backward()
-                        
-                        # clip gradients
-                        nn.utils.clip_grad_norm_(agent.model.parameters(),
-                                                 CLIP_GRAD)
-
-
-                        agent.model.optim.step()
+                    # clip gradients
+                    nn.utils.clip_grad_norm_(agent.model.parameters(),
+                                            CLIP_GRAD)
+                    agent.model.optim.step()
 
                     
-                    batch.clear()
+                batch.clear()
 
 def unpack_batch(env, agent, batch, gamma):
     """
@@ -249,8 +249,8 @@ def unpack_batch(env, agent, batch, gamma):
     for idx, exp in enumerate(batch):
         states.append(exp.state)
         actions.append(exp.actions[agent.idx])
-        rewards.append(exp.reward[agent.idx])
-        if exp.done:
+        rewards.append(exp.reward[agent.idx]) # !! TODO !!: integrate discounting on rewards
+        if exp.done: # TODO: this is not how it's done - check the last state of the experience
             not_done_idx.append(idx)
             last_states.append(exp.state)
     
@@ -264,8 +264,9 @@ def unpack_batch(env, agent, batch, gamma):
         last_boards_v, last_states_v = [torch.tensor(tensor).to(agent.device) 
                                             for tensor in preprocess(last_states)]
         last_vals_v, _ = agent.model(last_boards_v, last_states_v)
-        last_vals_np = last_vals_v.data.cpu().numpy()[:, 0] # TODO: check this 
-        rewards_np[not_done_idx] += gamma ** REWARDS_STEPS * last_vals_np
+        last_vals_np = last_vals_v.data.cpu().numpy()
+        result = gamma ** REWARDS_STEPS * last_vals_np
+        rewards_np[not_done_idx] += result.squeeze(-1)
     ref_vals_v = torch.tensor(rewards_np).to(agent.device)
 
     return (boards_v, states_v), actions_t, ref_vals_v

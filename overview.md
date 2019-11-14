@@ -69,17 +69,16 @@
         * Experience namedtuple
         * Simplification of classification layer
     1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.
-<<<<<<< HEAD
-    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting.
-    1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net)
-    1. [11Nov19]: First priority: improve state representation for DNN to include e.g. ammo: DONE [12Nov19]
-    1. [12Nov19]: IDEA: work iteratively: learn policy against random agent; then retrain agents against agent's using this policy => Q: how to adapt policy/model so it can be used by opponent?
-    1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
-    1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
-=======
     1. [04Nov19] Work on TAN game (Independent Q-Learning article)
     1. [09Nov19] Corrections to game:
         * included Linr-Of-Sight criterion for aiming
         * Working with window around future position to avoid agents comming too close
     1. [10Nov19] Began development of Policy Gradients
->>>>>>> 107e0cfd16e41cd597aaa36521b2eb842e0325b9
+    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting.
+    1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net) but [14Nov19] works on 7x7 and results have been documented.
+    1. [11Nov19]: First priority: improve state representation for DNN to include e.g. ammo: DONE [12Nov19]
+    1. [12Nov19]: IDEA: work iteratively: learn policy against random agent; then retrain agents against agent's using this policy => Q: how to adapt policy/model so it can be used by opponent?
+    1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
+    1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
+
+    
