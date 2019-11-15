@@ -218,11 +218,11 @@ def actor_critic(env, agents, **kwargs):
                     continue
 
                 for agent in agents:
-                    (boards_v, states_v), actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
+                    states_v, actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
                      
                     agent.model.optimizer.zero_grad()
 
-                    values_v, logits_v = agent.model(boards_v, states_v)
+                    values_v, logits_v = agent.model(*states_v)
                     loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
 
                     logprob_v = F.log_softmax(logits_v, dim=1)

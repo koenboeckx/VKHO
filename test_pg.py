@@ -28,7 +28,7 @@ if __name__ == '__main__':
     
     for agent in agents:
         agent.set_model((1, env.board_size, env.board_size), env.n_actions,
-                        lr=0.001)
+                        lr=0.0005)
     
     #pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
     pg.actor_critic(env, agents, n_steps=100, batch_size=256)
