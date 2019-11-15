@@ -28,7 +28,7 @@ class IQLModel(nn.Module):
             nn.Linear(128, n_actions)
         )
 
-        self.optim = optim.Adam(self.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -60,7 +60,7 @@ class PGModel(nn.Module):
         self.policy = nn.Linear(128, n_actions) # policy head
         self.value  = nn.Linear(128, 1)         # value head
 
-        self.optim = optim.Adam(self.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -99,7 +99,7 @@ class PGExtendedModel(nn.Module):
         self.policy = nn.Linear(128, n_actions) # policy head
         self.value  = nn.Linear(128, 1)         # value head
 
-        self.optim = optim.Adam(self.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 

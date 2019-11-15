@@ -52,7 +52,9 @@ class PGAgent(agents.Tank):
     
     def save_model(self, filename=None):
         if filename is None:
-            filename = './marl/models/pg_agent_{}_{}.torch'.format(self.idx, '01')
+            date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = '/home/koen/Programming/VKHO/marl/models/pg_agent{}_{}.torch'.format(
+                            self.idx, date_str)
         torch.save(self.model.state_dict(), filename)
 
     def load_model(self, filename):
@@ -95,9 +97,9 @@ def generate_steps(env, n_steps, gamma=0.99):
         reward = env.get_reward(next_state)
         done = True if env.terminal(next_state) else False
         episode.append(Experience(state, actions, reward, next_state, done))
-        if done:
+        if done: # end of episode
             experiences.extend(episode)
-            returns.extend(compute_returns(env, episode, gamma))
+            returns.extend(compute_returns(env, episode, gamma)) # only compute returns at end of episode
             episode = []
             state = env.get_init_game_state() # reinit game when episode is done
         else:
@@ -163,7 +165,7 @@ def reinforce(env, agents, **kwargs):
             returns = list(zip(*returns)) # reorganise returns
 
             for agent in agents:
-                agent.model.optim.zero_grad()
+                agent.model.optimizer.zero_grad()
                 
                 returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
                 states_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
@@ -178,13 +180,10 @@ def reinforce(env, agents, **kwargs):
                 writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
 
                 loss.backward()
-                agent.model.optim.step()
+                agent.model.optimizer.step()
 
             if step_idx > 0 and step_idx % SAVE_RATE == 0:
-                date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                for agent in agents:
-                    filename = '/home/koen/Programming/VKHO/marl/models/pg_agent{}_{}.torch'.format(agent.idx, date_str)
-                    agent.save_model(filename)
+                agent.save_model(filename)
 
 def actor_critic(env, agents, **kwargs):
     """
@@ -199,6 +198,7 @@ def actor_critic(env, agents, **kwargs):
     batch_size = kwargs.get('batch_size', 32)   # number of exp used for learning
 
     with SummaryWriter(comment='-ac') as writer:
+        idx = 0
         for step_idx in range(n_steps):
             exp_source, returns = generate_steps(env, 8*batch_size, gamma) # TODO: IDEA: make this a generator (-> yield)
             batch = []
@@ -211,21 +211,22 @@ def actor_critic(env, agents, **kwargs):
                 step_idx, mean_length, mean_reward
             ))
 
-            for idx, (exp, ret) in enumerate(zip(exp_source, returns)):
-                batch.append((exp, ret))
+            for exp, ret  in zip(exp_source, returns):
+                # batch.append((exp, ret))
+                batch.append((exp, exp.reward))
                 if len(batch) < batch_size:
                     continue
 
                 for agent in agents:
                     (boards_v, states_v), actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
                      
-                    agent.model.optim.zero_grad()
+                    agent.model.optimizer.zero_grad()
 
                     values_v, logits_v = agent.model(boards_v, states_v)
                     loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
 
                     logprob_v = F.log_softmax(logits_v, dim=1)
-                    adv_v = vals_ref_v - values_v.detach()
+                    adv_v = vals_ref_v - values_v.detach().squeeze(-1)
                     logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
                     loss_policy_v = -logprob_actions_v.mean()   # policy gradient
 
@@ -237,18 +238,19 @@ def actor_critic(env, agents, **kwargs):
                     grads = np.concatenate([p.grad.data.cpu().numpy().flatten() 
                                             for p in agent.model.parameters()
                                             if p.grad is not None])
+                    
                     writer.add_scalar('grad_l2_{}'.format(agent),
-                                        np.sqrt(np.mean(np.square(grads))), step_idx*idx)
+                                        np.sqrt(np.mean(np.square(grads))), idx)
+                    writer.add_scalar('loss_value_{}'.format(agent), loss_value_v.item(), idx)
 
-                    loss_v = loss_value_v
-                    loss_v.backward()
+                    loss_value_v.backward()
                         
                     # clip gradients
                     nn.utils.clip_grad_norm_(agent.model.parameters(),
                                             CLIP_GRAD)
-                    agent.model.optim.step()
-
-                    
+                    agent.model.optimizer.step()
+                idx += 1
+    
                 batch.clear()
 
 def unpack_batch(env, agent, batch, gamma):
