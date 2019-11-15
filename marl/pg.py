@@ -211,7 +211,7 @@ def actor_critic(env, agents, **kwargs):
                 step_idx, mean_length, mean_reward
             ))
 
-            for exp, ret in zip(exp_source, returns):
+            for idx, (exp, ret) in enumerate(zip(exp_source, returns)):
                 batch.append((exp, ret))
                 if len(batch) < batch_size:
                     continue
@@ -232,6 +232,13 @@ def actor_critic(env, agents, **kwargs):
                     # TODO: add entropy loss
                         
                     loss_policy_v.backward(retain_graph=True)
+
+                    # store grads for analysis
+                    grads = np.concatenate([p.grad.data.cpu().numpy().flatten() 
+                                            for p in agent.model.parameters()
+                                            if p.grad is not None])
+                    writer.add_scalar('grad_l2_{}'.format(agent),
+                                        np.sqrt(np.mean(np.square(grads))), step_idx*idx)
 
                     loss_v = loss_value_v
                     loss_v.backward()
@@ -264,22 +271,19 @@ def unpack_batch(env, agent, batch, gamma):
             last_states.append(exp.next_state)
 
     
-    boards_v, states_v = [torch.tensor(tensor).to(agent.device) 
-                                for tensor in preprocess(states)]
+    states_v = preprocess(states)
     actions_t = torch.LongTensor(actions).to(agent.device)
 
     # handle the rewards
     rewards_np = np.array(rewards, dtype=np.float32)
     if not_done_idx: # check if not_done is present 
-        last_boards_v, last_states_v = [torch.tensor(tensor).to(agent.device) 
-                                            for tensor in preprocess(last_states)]
-        last_vals_v, _ = agent.model(last_boards_v, last_states_v)
-        last_vals_np = last_vals_v.data.cpu().numpy()
-        result = gamma * last_vals_np
-        rewards_np[not_done_idx] += result.squeeze(-1)
+        last_states_v =  preprocess(last_states)
+        last_vals_v, _ = agent.model(*last_states_v)
+        last_vals_np = last_vals_v.data.cpu().numpy().squeeze()
+        rewards_np[not_done_idx] += gamma * last_vals_np
     ref_vals_v = torch.tensor(rewards_np).to(agent.device)
 
-    return (boards_v, states_v), actions_t, ref_vals_v
+    return states_v, actions_t, ref_vals_v
 
 
 def test_agents(env, agents, filenames):
