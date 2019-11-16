@@ -12,6 +12,7 @@ import agents
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.distributions import Categorical
 import torch.nn.utils as nn_utils
 
 from tensorboardX import SummaryWriter
@@ -62,9 +63,9 @@ class PGAgent(agents.Tank):
     
     def get_action(self, state):
         board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
-        _, logprobs = self.model(board_v, state_v)
-        probs = nn.Softmax(dim=1)(logprobs)
-        m = torch.distributions.Categorical(probs)
+        _, logits = self.model(board_v, state_v)
+        probs = F.softmax(logits, dim=-1)
+        m = Categorical(probs)
         action = m.sample()
         return action.item()
 
@@ -266,27 +267,26 @@ def unpack_batch(env, agent, batch, gamma):
     for idx, (exp, ret) in enumerate(batch):
         states.append(exp.state)
         actions.append(exp.actions[agent.idx])
-        rewards.append(ret[agent.idx]) 
+        rewards.append(exp.reward[agent.idx]) 
         
+        # store indexes where episode is not done
         if not exp.done: # TODO: change Experience class to allow longer rollouts
             not_done_idx.append(idx)
             last_states.append(exp.next_state)
 
-    
-    states_v = preprocess(states)
+    states_v = [t.to(agent.device) for t  in preprocess(states)]
     actions_t = torch.LongTensor(actions).to(agent.device)
 
     # handle the rewards
     rewards_np = np.array(rewards, dtype=np.float32)
-    if not_done_idx: # check if not_done is present 
-        last_states_v =  preprocess(last_states)
+    if not_done_idx: # check if not_done is present and then update these states with V(s_t+1)
+        last_states_v  = [t.to(agent.device) for t in preprocess(last_states)]
         last_vals_v, _ = agent.model(*last_states_v)
-        last_vals_np = last_vals_v.data.cpu().numpy().squeeze()
+        last_vals_np   = last_vals_v.data.cpu().numpy().squeeze()
         rewards_np[not_done_idx] += gamma * last_vals_np
     ref_vals_v = torch.tensor(rewards_np).to(agent.device)
 
     return states_v, actions_t, ref_vals_v
-
 
 def test_agents(env, agents, filenames):
     for agent, filename in zip(agents, filenames):
@@ -301,3 +301,74 @@ def test_agents(env, agents, filenames):
         print(next_state)
 
         state = next_state
+
+# new try to implement actor-critic
+def actor_critic2(env, agents, **kwargs):
+    """
+    Use Actor-Critic learning to train agents. Uses environement env.
+    :param env: Environment
+    :param agents: list of agents to train (subset of env.agents)
+
+    :return: None
+    """
+
+    gamma = kwargs.get('gamma', 0.99)           # discount factor
+    n_steps = kwargs.get('n_steps', 100)
+    n_episodes = kwargs.get('n_episodes', 100)
+
+    # 1. init network
+    for step_idx in range(n_steps):
+        # 2. Play N steps in env using current policy -> store experience (s_t, a_t, r_t, s_t+1)
+        episodes = []
+        for _ in range(n_episodes):
+            state = env.get_init_game_state()
+            while not env.terminal(state):
+                actions = [agent.get_action(state) for agent in env.agents]
+                actions = [agent.get_action(state) for agent in env.agents]
+                next_state = env.step(state, actions)
+                reward = env.get_reward(next_state)
+                done = True if env.terminal(next_state) else False
+                episodes.append(Experience(state, actions, reward, next_state, done))
+                
+                state = next_state
+        
+        episodes = list(zip(*episodes)) # reorganise episodes
+        states, actions, rewards, next_states, dones = episodes
+
+        avg_length = len(episodes[0]) / n_episodes
+        avg_reward = sum([reward[0] for reward in rewards]) / n_episodes
+        print('Episode length = {}'.format(avg_length))
+        print('Episode reward = {}'.format(avg_reward))
+
+        for agent in agents:
+            states_v  = [t.to(agent.device) for t in preprocess(states)]
+            next_states_v = [t.to(agent.device) for t in preprocess(next_states)]
+            actions_t = torch.LongTensor([action[agent.idx]
+                                            for action in actions]).to(agent.device)
+            dones_t = torch.LongTensor(dones)
+
+            values_v, logits_v = agent.model(*states_v)
+            vals_ref_v, _ = agent.model(*next_states_v)
+
+            vals_ref_v = vals_ref_v.squeeze(-1)
+            vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
+
+            rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
+            vals_ref_v = rewards_v + gamma * vals_ref_v
+
+            loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
+
+            logprobs_v = F.log_softmax(logits_v, dim=1)
+            advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
+            log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
+            loss_policy_v = -log_prob_actions_v.mean()
+
+            agent.model.zero_grad()
+            loss_v = loss_policy_v + loss_values_v
+            loss_v.backward()
+
+            agent.model.optimizer.step()
+
+    
+    # 5. Update network weights
+    # 6. go back to 2 until convergence
