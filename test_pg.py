@@ -16,12 +16,12 @@ agent1 = pg.PGAgent(1, device, board_size=BOARD_SIZE)
 
 agent_list = [
     agent0, # Team 1
-    #agent1, # Team 1
-    agents.RandomTank(1), # Team 1
+    agent1, # Team 1
+    #agents.RandomTank(1), # Team 1
     agents.RandomTank(2), # Team 2
     agents.RandomTank(3)  # Team 2
 ]
-agents = [agent0]#, agent1]
+agents = [agent0, agent1]
 env = Environment(agent_list, size=BOARD_SIZE)
 
 if __name__ == '__main__':

@@ -316,58 +316,62 @@ def actor_critic2(env, agents, **kwargs):
     n_steps = kwargs.get('n_steps', 100)
     n_episodes = kwargs.get('n_episodes', 100)
 
-    # 1. init network
-    for step_idx in range(n_steps):
-        # 2. Play N steps in env using current policy -> store experience (s_t, a_t, r_t, s_t+1)
-        episodes = []
-        for _ in range(n_episodes):
-            state = env.get_init_game_state()
-            while not env.terminal(state):
-                actions = [agent.get_action(state) for agent in env.agents]
-                actions = [agent.get_action(state) for agent in env.agents]
-                next_state = env.step(state, actions)
-                reward = env.get_reward(next_state)
-                done = True if env.terminal(next_state) else False
-                episodes.append(Experience(state, actions, reward, next_state, done))
-                
-                state = next_state
-        
-        episodes = list(zip(*episodes)) # reorganise episodes
-        states, actions, rewards, next_states, dones = episodes
+    with SummaryWriter(comment=('-ac2')) as writer:
+        # 1. init network
+        for step_idx in range(n_steps):
+            # 2. Play N steps in env using current policy -> store experience (s_t, a_t, r_t, s_t+1)
+            episodes = []
+            for _ in range(n_episodes):
+                state = env.get_init_game_state()
+                while not env.terminal(state):
+                    actions = [agent.get_action(state) for agent in env.agents]
+                    actions = [agent.get_action(state) for agent in env.agents]
+                    next_state = env.step(state, actions)
+                    reward = env.get_reward(next_state)
+                    done = True if env.terminal(next_state) else False
+                    episodes.append(Experience(state, actions, reward, next_state, done))
+                    
+                    state = next_state
+            
+            episodes = list(zip(*episodes)) # reorganise episodes
+            states, actions, rewards, next_states, dones = episodes
 
-        avg_length = len(episodes[0]) / n_episodes
-        avg_reward = sum([reward[0] for reward in rewards]) / n_episodes
-        print('Episode length = {}'.format(avg_length))
-        print('Episode reward = {}'.format(avg_reward))
+            mean_length = len(episodes[0]) / n_episodes
+            mean_reward = sum([reward[0] for reward in rewards]) / n_episodes
+            print('Episode length = {}'.format(mean_length))
+            print('Episode reward = {}'.format(mean_reward))
 
-        for agent in agents:
-            states_v  = [t.to(agent.device) for t in preprocess(states)]
-            next_states_v = [t.to(agent.device) for t in preprocess(next_states)]
-            actions_t = torch.LongTensor([action[agent.idx]
-                                            for action in actions]).to(agent.device)
-            dones_t = torch.LongTensor(dones)
+            writer.add_scalar('mean_length', mean_length, step_idx)
+            writer.add_scalar('mean_reward', mean_reward, step_idx)
 
-            values_v, logits_v = agent.model(*states_v)
-            vals_ref_v, _ = agent.model(*next_states_v)
+            for agent in agents:
+                states_v  = [t.to(agent.device) for t in preprocess(states)]
+                next_states_v = [t.to(agent.device) for t in preprocess(next_states)]
+                actions_t = torch.LongTensor([action[agent.idx]
+                                                for action in actions]).to(agent.device)
+                dones_t = torch.LongTensor(dones)
 
-            vals_ref_v = vals_ref_v.squeeze(-1)
-            vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
+                values_v, logits_v = agent.model(*states_v)
+                vals_ref_v, _ = agent.model(*next_states_v)
 
-            rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
-            vals_ref_v = rewards_v + gamma * vals_ref_v
+                vals_ref_v = vals_ref_v.squeeze(-1)
+                vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
 
-            loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
+                rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
+                vals_ref_v = rewards_v + gamma * vals_ref_v
 
-            logprobs_v = F.log_softmax(logits_v, dim=1)
-            advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
-            log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
-            loss_policy_v = -log_prob_actions_v.mean()
+                loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
 
-            agent.model.zero_grad()
-            loss_v = loss_policy_v + loss_values_v
-            loss_v.backward()
+                logprobs_v = F.log_softmax(logits_v, dim=1)
+                advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
+                log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
+                loss_policy_v = -log_prob_actions_v.mean()
 
-            agent.model.optimizer.step()
+                agent.model.zero_grad()
+                loss_v = loss_policy_v + loss_values_v
+                loss_v.backward()
+
+                agent.model.optimizer.step()
 
     
     # 5. Update network weights
