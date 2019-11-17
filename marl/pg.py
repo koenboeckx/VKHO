@@ -361,18 +361,21 @@ def actor_critic2(env, agents, **kwargs):
                 vals_ref_v = rewards_v + gamma * vals_ref_v
 
                 loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
+                writer.add_scalar('loss_{}'.format(agent), loss_values_v.item(), step_idx)
 
                 logprobs_v = F.log_softmax(logits_v, dim=1)
                 advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
                 log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
                 loss_policy_v = -log_prob_actions_v.mean()
+                
+                loss_policy_v.backward(retain_graph=True)
+                grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                        for p in agent.model.parameters()
+                                        if p.grad is not None]
+                )
+                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
 
                 agent.model.zero_grad()
-                loss_v = loss_policy_v + loss_values_v
-                loss_v.backward()
+                loss_values_v.backward()
 
                 agent.model.optimizer.step()
-
-    
-    # 5. Update network weights
-    # 6. go back to 2 until convergence
