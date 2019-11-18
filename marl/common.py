@@ -46,3 +46,5 @@ def preprocess_extended(states):
         tensor1[idx, :] = torch.tensor(list(state.alive) + list(state.ammo))
     return (tensor0, tensor1)
     
+def preprocess_gym(states):
+    return torch.tensor(states).float(), torch.tensor(0) # dummy var for consistency

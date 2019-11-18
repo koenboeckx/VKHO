@@ -1,5 +1,6 @@
 from . import agent_models
-from .common import preprocess_extended as preprocess
+#from .common import preprocess_extended as preprocess
+from .common import preprocess_gym as preprocess
 from tensorboardX import SummaryWriter
 from collections import namedtuple
 from datetime import datetime
@@ -64,6 +65,33 @@ class PGAgent(agents.Tank):
     def get_action(self, state):
         board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
         _, logits = self.model(board_v, state_v)
+        probs = F.softmax(logits, dim=-1)
+        m = Categorical(probs)
+        action = m.sample()
+        return action.item()
+
+class GymAgent:
+    def __init__(self, idx, device, **kwargs):
+        self.idx = idx
+        self.device = device
+
+    def set_model(self, input_shape, n_actions, lr):
+        self.model = agent_models.GymModel(input_shape, n_actions,
+            lr=lr).to(self.device)
+    
+    def save_model(self, filename=None):
+        if filename is None:
+            date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = '/home/koen/Programming/VKHO/marl/models/gym_pg_agent{}_{}.torch'.format(
+                            self.idx, date_str)
+        torch.save(self.model.state_dict(), filename)
+
+    def load_model(self, filename):
+        self.model.load_state_dict(torch.load(filename))
+    
+    def get_action(self, state):
+        state_v = [t.to(self.device) for t in preprocess(state)]
+        _, logits = self.model(*state_v)
         probs = F.softmax(logits, dim=-1)
         m = Categorical(probs)
         action = m.sample()

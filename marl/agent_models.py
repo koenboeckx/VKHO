@@ -3,6 +3,26 @@ from torch import nn
 from torch import optim
 import numpy as np
 
+
+class GymModel(nn.Module):
+    """Module to be used with open AI gym 'CartPole-v0' """
+    def __init__(self, input_shape, n_actions, lr=0.01):
+        super(GymModel, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_shape, 32),
+            nn.ReLU()
+        )
+        self.policy = nn.Linear(32, n_actions)
+        self.value  = nn.Linear(32, 1)
+
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
+    
+    def forward(self, x, dummy): 
+        x = self.fc(x)
+        value = self.value(x)
+        logits = self.policy(x)
+        return value, logits
+
 class IQLModel(nn.Module):
     """Defines and learns the behavior of a single agent"""
     def __init__(self, input_shape, n_actions, lr=0.01, board_size=11):
@@ -71,9 +91,9 @@ class PGModel(nn.Module):
     def forward(self, x): 
         conv_out = self.conv(x).view(x.size()[0], -1)
         fc_out = self.fc(conv_out)
-        value = self.value(fc_out)
-        log_probs = self.policy(fc_out)
-        return value, log_probs
+        value  = self.value(fc_out)
+        logits = self.policy(fc_out)
+        return value, logits
 
 class PGExtendedModel(nn.Module):
     """Defines and learns the behavior of a single agent
