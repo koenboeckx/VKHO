@@ -74,6 +74,9 @@ class GymAgent:
     def __init__(self, idx, device, **kwargs):
         self.idx = idx
         self.device = device
+    
+    def __repr__(self):
+        return 'gym{}'.format(self.idx)
 
     def set_model(self, input_shape, n_actions, lr):
         self.model = agent_models.GymModel(input_shape, n_actions,
@@ -353,7 +356,6 @@ def actor_critic2(env, agents, **kwargs):
                 state = env.get_init_game_state()
                 while not env.terminal(state):
                     actions = [agent.get_action(state) for agent in env.agents]
-                    actions = [agent.get_action(state) for agent in env.agents]
                     next_state = env.step(state, actions)
                     reward = env.get_reward(next_state)
                     done = True if env.terminal(next_state) else False
@@ -389,7 +391,7 @@ def actor_critic2(env, agents, **kwargs):
                 vals_ref_v = rewards_v + gamma * vals_ref_v
 
                 loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
-                writer.add_scalar('loss_{}'.format(agent), loss_values_v.item(), step_idx)
+                writer.add_scalar('loss_value_{}'.format(agent), loss_values_v.item(), step_idx)
 
                 logprobs_v = F.log_softmax(logits_v, dim=1)
                 advantage_v = vals_ref_v - values_v.squeeze(-1).detach()

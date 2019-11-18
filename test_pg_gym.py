@@ -23,8 +23,8 @@ if __name__ == '__main__':
                         lr=0.001)
     
     #pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
-    pg.actor_critic2(env, agents, n_steps=1000,
-                    n_episodes=10)
+    pg.actor_critic2(env, agents, n_steps=10000,
+                    n_episodes=100)
 
 
 
