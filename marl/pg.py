@@ -78,9 +78,9 @@ class GymAgent:
     def __repr__(self):
         return 'gym{}'.format(self.idx)
 
-    def set_model(self, input_shape, n_actions, lr):
+    def set_model(self, input_shape, n_actions, n_hidden, lr):
         self.model = agent_models.GymModel(input_shape, n_actions,
-            lr=lr).to(self.device)
+            n_hidden=n_hidden, lr=lr).to(self.device)
     
     def save_model(self, filename=None):
         if filename is None:
@@ -212,6 +212,12 @@ def reinforce(env, agents, **kwargs):
                 writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
 
                 loss.backward()
+                grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                        for p in agent.model.parameters()
+                                        if p.grad is not None]
+                )
+                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
+
                 agent.model.optimizer.step()
 
             if step_idx > 0 and step_idx % SAVE_RATE == 0:
@@ -355,6 +361,7 @@ def actor_critic2(env, agents, **kwargs):
             for _ in range(n_episodes):
                 state = env.get_init_game_state()
                 while not env.terminal(state):
+                    #env.render(state)
                     actions = [agent.get_action(state) for agent in env.agents]
                     next_state = env.step(state, actions)
                     reward = env.get_reward(next_state)
@@ -398,6 +405,7 @@ def actor_critic2(env, agents, **kwargs):
                 log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
                 loss_policy_v = -log_prob_actions_v.mean()
                 
+                agent.model.zero_grad()
                 loss_policy_v.backward(retain_graph=True)
                 grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
                                         for p in agent.model.parameters()
@@ -405,7 +413,6 @@ def actor_critic2(env, agents, **kwargs):
                 )
                 writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
 
-                agent.model.zero_grad()
                 loss_values_v.backward()
 
                 agent.model.optimizer.step()

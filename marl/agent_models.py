@@ -6,14 +6,14 @@ import numpy as np
 
 class GymModel(nn.Module):
     """Module to be used with open AI gym 'CartPole-v0' """
-    def __init__(self, input_shape, n_actions, lr=0.01):
+    def __init__(self, input_shape, n_actions, n_hidden=32, lr=0.01):
         super(GymModel, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_shape, 32),
+            nn.Linear(input_shape, n_hidden),
             nn.ReLU()
         )
-        self.policy = nn.Linear(32, n_actions)
-        self.value  = nn.Linear(32, 1)
+        self.policy = nn.Linear(n_hidden, n_actions)
+        self.value  = nn.Linear(n_hidden, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
     

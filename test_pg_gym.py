@@ -20,7 +20,7 @@ if __name__ == '__main__':
     
     for agent in agents:
         agent.set_model(env.state_space[0], env.n_actions,
-                        lr=0.001)
+                        n_hidden=128, lr=0.001)
     
     #pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
     pg.actor_critic2(env, agents, n_steps=10000,
