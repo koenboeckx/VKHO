@@ -20,14 +20,8 @@
     * how to analyze (NE?, ESS?)
     
 1. Deploy MARL algorithms to develop strategies
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
     * First: IQL with DQN for each agent of player 1
->>>>>>> rl_devel
-=======
     * First: IQL with DQN for each agent of player 1
->>>>>>> 107e0cfd16e41cd597aaa36521b2eb842e0325b9
     * compare with MCTS results
     
 1. Extend game to more realistic situations with
@@ -74,11 +68,12 @@
         * included Linr-Of-Sight criterion for aiming
         * Working with window around future position to avoid agents comming too close
     1. [10Nov19] Began development of Policy Gradients
-    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting.
+    1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting. => [18Nov19] **DONE** works with actor-critic2
     1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net) but [14Nov19] works on 7x7 and results have been documented.
     1. [11Nov19]: First priority: improve state representation for DNN to include e.g. ammo: DONE [12Nov19]
     1. [12Nov19]: IDEA: work iteratively: learn policy against random agent; then retrain agents against agent's using this policy => Q: how to adapt policy/model so it can be used by opponent?
     1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
     1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
+    1. [18Nov19]: open ai CartPole-v0 single agent works (well) with actor-critic2; however, this doesn't work with battlefield game => is this an error or is more going on? **To investigate**
 
     

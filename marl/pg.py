@@ -1,6 +1,6 @@
 from . import agent_models
-#from .common import preprocess_extended as preprocess
-from .common import preprocess_gym as preprocess
+from .common import preprocess_extended as preprocess
+#from .common import preprocess_gym as preprocess
 from tensorboardX import SummaryWriter
 from collections import namedtuple
 from datetime import datetime
@@ -406,7 +406,7 @@ def actor_critic2(env, agents, **kwargs):
                 vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
 
                 #rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
-                rewards_v = torch.tensor(returns).squeeze(-1)
+                rewards_v = torch.tensor([ret[agent.idx] for ret in returns])
                 vals_ref_v = rewards_v + gamma * vals_ref_v
 
                 loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
