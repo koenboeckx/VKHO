@@ -221,7 +221,7 @@ def reinforce(env, agents, **kwargs):
                 agent.model.optimizer.step()
 
             if step_idx > 0 and step_idx % SAVE_RATE == 0:
-                agent.save_model(filename)
+                agent.save_model()
 
 def actor_critic(env, agents, **kwargs):
     """
@@ -369,6 +369,17 @@ def actor_critic2(env, agents, **kwargs):
                     episodes.append(Experience(state, actions, reward, next_state, done))
                     
                     state = next_state
+
+            # discount states
+            end_states = [-1] + [idx for idx, exp in enumerate(episodes) if exp.done]
+            returns = [0.0,] * len(episodes)
+            for start, stop in zip(end_states[:-1], end_states[1:]):
+                cum_reward = [0.0, ] * len(env.agents)
+                for j in range(stop, start, -1):
+                    exp = episodes[j]
+                    cum_reward = [gamma * c + r for c, r in zip(cum_reward, exp.reward)]
+                    returns[j] = cum_reward
+                
             
             episodes = list(zip(*episodes)) # reorganise episodes
             states, actions, rewards, next_states, dones = episodes
@@ -394,11 +405,11 @@ def actor_critic2(env, agents, **kwargs):
                 vals_ref_v = vals_ref_v.squeeze(-1)
                 vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
 
-                rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
+                #rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
+                rewards_v = torch.tensor(returns).squeeze(-1)
                 vals_ref_v = rewards_v + gamma * vals_ref_v
 
                 loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
-                writer.add_scalar('loss_value_{}'.format(agent), loss_values_v.item(), step_idx)
 
                 logprobs_v = F.log_softmax(logits_v, dim=1)
                 advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
@@ -411,8 +422,12 @@ def actor_critic2(env, agents, **kwargs):
                                         for p in agent.model.parameters()
                                         if p.grad is not None]
                 )
-                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
 
                 loss_values_v.backward()
 
+                nn_utils.clip_grad_norm_(agent.model.parameters(), CLIP_GRAD) # clip gradients
                 agent.model.optimizer.step()
+
+                ## bookkeeping
+                writer.add_scalar('loss_value_{}'.format(agent), loss_values_v.item(), step_idx)
+                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
