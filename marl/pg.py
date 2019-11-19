@@ -1,6 +1,7 @@
 from . import agent_models
-from .common import preprocess_extended as preprocess
-#from .common import preprocess_gym as preprocess
+#from .common import preprocess_extended as preprocess
+from .common import preprocess_gym as preprocess
+
 from tensorboardX import SummaryWriter
 from collections import namedtuple
 from datetime import datetime
@@ -93,7 +94,7 @@ class GymAgent:
         self.model.load_state_dict(torch.load(filename))
     
     def get_action(self, state):
-        state_v = [t.to(self.device) for t in preprocess(state)]
+        state_v = [t.to(self.device) for t in preprocess([state])]
         _, logits = self.model(*state_v)
         probs = F.softmax(logits, dim=-1)
         m = Categorical(probs)
@@ -176,6 +177,7 @@ def reinforce(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.99)
     n_steps = kwargs.get('n_steps', int(1e5))
     n_episodes = kwargs.get('n_episodes', 100)
+    ex = kwargs.get('experiment')
 
     with SummaryWriter(comment='-pg') as writer:
         #writer.add_graph(agents[0].model) # TODO: doesn't work (yet)
@@ -190,7 +192,9 @@ def reinforce(env, agents, **kwargs):
             
             mean_length, mean_reward = compute_mean_reward(episodes, agents[0])
             writer.add_scalar('mean_reward', mean_reward, step_idx)
+            ex.log_scalar("mean_reward", mean_reward)
             writer.add_scalar('mean_length', mean_length, step_idx)
+            ex.log_scalar("mean_length", mean_length)
 
             n_states = len(episodes) # total number of states seen during all episodes
             episodes = list(zip(*episodes)) # reorganise episode
@@ -210,6 +214,7 @@ def reinforce(env, agents, **kwargs):
 
                 print('Agent {}: Loss = {:.5f}'.format(str(agent), loss.item()))
                 writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
+                ex.log_scalar('loss_{}'.format(str(agent)), loss.item())
 
                 loss.backward()
                 grads = np.concatenate([p.grad.data.cpu().numpy().flatten()

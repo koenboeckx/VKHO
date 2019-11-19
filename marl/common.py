@@ -33,7 +33,7 @@ def preprocess_extended(states):
                 tensor1: input to in_fc
     """
     if not isinstance(states, list) and not isinstance(states, tuple):
-        raise TypeError('states should be list')
+        raise TypeError('states should be list or tuple, not {}'.format(type(states)))
     size = int(np.sqrt(len(states[0].board)))
     tensor0 = torch.zeros((len(states), 1, size, size))
     tensor1 = torch.zeros((len(states), 8))
