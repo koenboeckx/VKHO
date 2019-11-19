@@ -12,13 +12,13 @@ from datetime import datetime
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('test_pg')
+ex = Experiment('test_pg_gym')
 ex.observers.append(MongoObserver(url='localhost',
                                   db_name='my_database'))
 
 @ex.config
 def cfg():
-    rl_type = 'reinforce'
+    rl_type = 'actor-critic'
     n_hidden = 128
     lr = 0.001
     n_episodes = 10
@@ -41,6 +41,6 @@ def run(rl_type, n_hidden, lr, n_episodes, n_steps):
         if rl_type == 'reinforce':
             pg.reinforce(env, agents, n_episodes=n_episodes,
                         n_steps=n_steps, experiment=ex)
-        elif rl_type == 'actor_critic':
-            pg.actor_critic2(env, agents, n_episodes=n_episodes,
-                        n_steps=n_steps)
+        elif rl_type == 'actor-critic':
+            pg.actor_critic(env, agents, n_episodes=n_episodes,
+                        n_steps=n_steps, experiment=ex)

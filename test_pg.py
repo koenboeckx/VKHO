@@ -1,5 +1,4 @@
 import game
-from game import agents
 from game.envs import Environment
 from marl import pg, agent_models
 from game.envs import unflatten, State
@@ -8,35 +7,54 @@ import torch
 import argparse
 from datetime import datetime
 
-BOARD_SIZE = 7
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment('policy_gradients')
+ex.observers.append(MongoObserver(url='localhost',
+                                  db_name='my_database'))
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-agent0 = pg.PGAgent(0, device, board_size=BOARD_SIZE)
-agent1 = pg.PGAgent(1, device, board_size=BOARD_SIZE)
+@ex.config
+def cfg():
+    rl_type = 'actor-critic'
+    n_hidden = 128
+    lr = 0.001
+    n_episodes = 10
+    n_steps = 1000
+    board_size = 7
 
-agent_list = [
-    agent0, # Team 1
-    agent1, # Team 1
-    #agents.RandomTank(1), # Team 1
-    agents.RandomTank(2), # Team 2
-    agents.RandomTank(3)  # Team 2
-]
-agents = [agent0, agent1]
-env = Environment(agent_list, size=BOARD_SIZE)
+@ex.automain
+def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size):
 
-if __name__ == '__main__':
-    
-    for agent in agents:
-        agent.set_model((1, env.board_size, env.board_size), env.n_actions,
-                        lr=0.001)
-    
-    pg.reinforce(env, agents, n_episodes=20, n_steps=3000)
-    #pg.actor_critic2(env, agents, n_steps=1000,
-    #                n_episodes=10)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    agent0 = pg.PGAgent(0, device, board_size=board_size)
+    agent1 = pg.PGAgent(1, device, board_size=board_size)
 
-
-
-    filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',
-                 '/home/koen/Programming/VKHO/marl/models/pg_agent1_20191113_103251.torch', 
+    agent_list = [
+        agent0, # Team 1
+        agent1, # Team 1
+        #agents.RandomTank(1), # Team 1
+        game.agents.RandomTank(2), # Team 2
+        game.agents.RandomTank(3)  # Team 2
     ]
-    #pg.test_agents(env, agents, filenames)
+    agents = [agent0, agent1]
+    env = Environment(agent_list, size=board_size)
+
+    if __name__ == '__main__':
+        
+        for agent in agents:
+            agent.set_model((1, env.board_size, env.board_size), env.n_actions,
+                            lr=lr)
+        
+        if rl_type == 'reinforce':
+            pg.reinforce(env, agents, n_episodes=n_episodes,
+                        n_steps=n_steps, experiment=ex)
+        elif rl_type == 'actor-critic':
+            pg.actor_critic(env, agents, n_episodes=n_episodes,
+                        n_steps=n_steps, experiment=ex)
+
+
+
+        filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',
+                    '/home/koen/Programming/VKHO/marl/models/pg_agent1_20191113_103251.torch', 
+        ]
+        #pg.test_agents(env, agents, filenames)

@@ -179,56 +179,51 @@ def reinforce(env, agents, **kwargs):
     n_episodes = kwargs.get('n_episodes', 100)
     ex = kwargs.get('experiment')
 
-    with SummaryWriter(comment='-pg') as writer:
-        #writer.add_graph(agents[0].model) # TODO: doesn't work (yet)
-        for step_idx in range(n_steps):
-            episodes = []
-            returns  = []
-            for _ in range(n_episodes):
-                episode = generate_episode(env)
-                returns_ = compute_returns(env, episode, gamma)
-                episodes.extend(episode)
-                returns.extend(returns_)
+    for step_idx in range(n_steps):
+        episodes = []
+        returns  = []
+        for _ in range(n_episodes):
+            episode = generate_episode(env)
+            returns_ = compute_returns(env, episode, gamma)
+            episodes.extend(episode)
+            returns.extend(returns_)
             
-            mean_length, mean_reward = compute_mean_reward(episodes, agents[0])
-            writer.add_scalar('mean_reward', mean_reward, step_idx)
-            ex.log_scalar("mean_reward", mean_reward)
-            writer.add_scalar('mean_length', mean_length, step_idx)
-            ex.log_scalar("mean_length", mean_length)
+        mean_length, mean_reward = compute_mean_reward(episodes, agents[0])
+        ex.log_scalar("mean_reward", mean_reward)
+        ex.log_scalar("mean_length", mean_length)
 
-            n_states = len(episodes) # total number of states seen during all episodes
-            episodes = list(zip(*episodes)) # reorganise episode
-            returns = list(zip(*returns)) # reorganise returns
+        n_states = len(episodes) # total number of states seen during all episodes
+        episodes = list(zip(*episodes)) # reorganise episode
+        returns = list(zip(*returns)) # reorganise returns
 
-            for agent in agents:
-                agent.model.optimizer.zero_grad()
-                
-                returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
-                states_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
-                actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
+        for agent in agents:
+            agent.model.optimizer.zero_grad()
+            
+            returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
+            states_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
+            actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-                _, logits_v = agent.model(*states_v)
-                logprob_v = F.log_softmax(logits_v, dim=1)
-                logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
-                loss = - logprob_act_vals_v.mean()
+            _, logits_v = agent.model(*states_v)
+            logprob_v = F.log_softmax(logits_v, dim=1)
+            logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
+            loss = - logprob_act_vals_v.mean()
 
-                print('Agent {}: Loss = {:.5f}'.format(str(agent), loss.item()))
-                writer.add_scalar('loss_{}'.format(str(agent)), loss.item(), step_idx)
-                ex.log_scalar('loss_{}'.format(str(agent)), loss.item())
+            print('Agent {}: Loss = {:.5f}'.format(str(agent), loss.item()))
+            ex.log_scalar('loss_{}'.format(str(agent)), loss.item())
 
-                loss.backward()
-                grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
-                                        for p in agent.model.parameters()
-                                        if p.grad is not None]
-                )
-                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
+            loss.backward()
+            grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                    for p in agent.model.parameters()
+                                    if p.grad is not None]
+            )
+            ex.log_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))))
 
-                agent.model.optimizer.step()
+            agent.model.optimizer.step()
 
-            if step_idx > 0 and step_idx % SAVE_RATE == 0:
-                agent.save_model()
+        if step_idx > 0 and step_idx % SAVE_RATE == 0:
+            agent.save_model()
 
-def actor_critic(env, agents, **kwargs):
+def actor_critic_(env, agents, **kwargs):
     """
     Use Actor-Critic learning to train agents. Uses environement env.
     :param env: Environment
@@ -239,62 +234,62 @@ def actor_critic(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.99)           # discount factor
     n_steps = kwargs.get('n_steps', 100)        # number of steps to generate each iteration
     batch_size = kwargs.get('batch_size', 32)   # number of exp used for learning
+    ex = kwargs.get('experiment')
 
-    with SummaryWriter(comment='-ac') as writer:
-        idx = 0
-        for step_idx in range(n_steps):
-            exp_source, returns = generate_steps(env, 8*batch_size, gamma) # TODO: IDEA: make this a generator (-> yield)
-            batch = []
+    idx = 0
+    for step_idx in range(n_steps):
+        exp_source, returns = generate_steps(env, 8*batch_size, gamma) # TODO: IDEA: make this a generator (-> yield)
+        batch = []
 
-            mean_length, mean_reward = compute_mean_reward(exp_source, agents[0])
-            writer.add_scalar('mean_reward', mean_reward, step_idx)
-            writer.add_scalar('mean_length', mean_length, step_idx)
+        mean_length, mean_reward = compute_mean_reward(exp_source, agents[0])
+        ex.log_scalar('mean_reward', mean_reward)
+        ex.log_scalar('mean_length', mean_length)
 
-            print('Step {:3d} - mean length = {:.2f}, mean reward = {:.3f}'.format(
-                step_idx, mean_length, mean_reward
-            ))
+        print('Step {:3d} - mean length = {:.2f}, mean reward = {:.3f}'.format(
+            step_idx, mean_length, mean_reward
+        ))
 
-            for exp, ret  in zip(exp_source, returns):
-                # batch.append((exp, ret))
-                batch.append((exp, exp.reward))
-                if len(batch) < batch_size:
-                    continue
+        for exp, ret  in zip(exp_source, returns):
+            # batch.append((exp, ret))
+            batch.append((exp, exp.reward))
+            if len(batch) < batch_size:
+                continue
 
-                for agent in agents:
-                    states_v, actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
-                     
-                    agent.model.optimizer.zero_grad()
-
-                    values_v, logits_v = agent.model(*states_v)
-                    loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
-
-                    logprob_v = F.log_softmax(logits_v, dim=1)
-                    adv_v = vals_ref_v - values_v.detach().squeeze(-1)
-                    logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
-                    loss_policy_v = -logprob_actions_v.mean()   # policy gradient
-
-                    # TODO: add entropy loss
-                        
-                    loss_policy_v.backward(retain_graph=True)
-
-                    # store grads for analysis
-                    grads = np.concatenate([p.grad.data.cpu().numpy().flatten() 
-                                            for p in agent.model.parameters()
-                                            if p.grad is not None])
+            for agent in agents:
+                states_v, actions_t, vals_ref_v = unpack_batch(env, agent, batch, gamma)
                     
-                    writer.add_scalar('grad_l2_{}'.format(agent),
-                                        np.sqrt(np.mean(np.square(grads))), idx)
-                    writer.add_scalar('loss_value_{}'.format(agent), loss_value_v.item(), idx)
+                agent.model.optimizer.zero_grad()
 
-                    loss_value_v.backward()
-                        
-                    # clip gradients
-                    nn.utils.clip_grad_norm_(agent.model.parameters(),
-                                            CLIP_GRAD)
-                    agent.model.optimizer.step()
-                idx += 1
-    
-                batch.clear()
+                values_v, logits_v = agent.model(*states_v)
+                loss_value_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v) # loss for value estimate
+
+                logprob_v = F.log_softmax(logits_v, dim=1)
+                adv_v = vals_ref_v - values_v.detach().squeeze(-1)
+                logprob_actions_v = adv_v * logprob_v[range(batch_size), actions_t]
+                loss_policy_v = -logprob_actions_v.mean()   # policy gradient
+
+                # TODO: add entropy loss
+                    
+                loss_policy_v.backward(retain_graph=True)
+
+                # store grads for analysis
+                grads = np.concatenate([p.grad.data.cpu().numpy().flatten() 
+                                        for p in agent.model.parameters()
+                                        if p.grad is not None])
+                
+                ex.log_scalar('grad_l2_{}'.format(agent),
+                                    np.sqrt(np.mean(np.square(grads))))
+                ex.log_scalar('loss_value_{}'.format(agent), loss_value_v.item())
+
+                loss_value_v.backward()
+                    
+                # clip gradients
+                nn.utils.clip_grad_norm_(agent.model.parameters(),
+                                        CLIP_GRAD)
+                agent.model.optimizer.step()
+            
+            idx += 1
+            batch.clear()
 
 def unpack_batch(env, agent, batch, gamma):
     """
@@ -345,7 +340,7 @@ def test_agents(env, agents, filenames):
         state = next_state
 
 # new try to implement actor-critic
-def actor_critic2(env, agents, **kwargs):
+def actor_critic(env, agents, **kwargs):
     """
     Use Actor-Critic learning to train agents. Uses environement env.
     :param env: Environment
@@ -357,82 +352,82 @@ def actor_critic2(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.99)           # discount factor
     n_steps = kwargs.get('n_steps', 100)
     n_episodes = kwargs.get('n_episodes', 100)
+    ex = kwargs.get('experiment')
 
-    with SummaryWriter(comment=('-ac2')) as writer:
-        # 1. init network
-        for step_idx in range(n_steps):
-            # 2. Play N steps in env using current policy -> store experience (s_t, a_t, r_t, s_t+1)
-            episodes = []
-            for _ in range(n_episodes):
-                state = env.get_init_game_state()
-                while not env.terminal(state):
-                    #env.render(state)
-                    actions = [agent.get_action(state) for agent in env.agents]
-                    next_state = env.step(state, actions)
-                    reward = env.get_reward(next_state)
-                    done = True if env.terminal(next_state) else False
-                    episodes.append(Experience(state, actions, reward, next_state, done))
-                    
-                    state = next_state
-
-            # discount states
-            end_states = [-1] + [idx for idx, exp in enumerate(episodes) if exp.done]
-            returns = [0.0,] * len(episodes)
-            for start, stop in zip(end_states[:-1], end_states[1:]):
-                cum_reward = [0.0, ] * len(env.agents)
-                for j in range(stop, start, -1):
-                    exp = episodes[j]
-                    cum_reward = [gamma * c + r for c, r in zip(cum_reward, exp.reward)]
-                    returns[j] = cum_reward
+    # 1. init network
+    for step_idx in range(n_steps):
+        # 2. Play N steps in env using current policy -> store experience (s_t, a_t, r_t, s_t+1)
+        episodes = []
+        for _ in range(n_episodes):
+            state = env.get_init_game_state()
+            while not env.terminal(state):
+                #env.render(state)
+                actions = [agent.get_action(state) for agent in env.agents]
+                next_state = env.step(state, actions)
+                reward = env.get_reward(next_state)
+                done = True if env.terminal(next_state) else False
+                episodes.append(Experience(state, actions, reward, next_state, done))
                 
+                state = next_state
+
+        # discount states
+        end_states = [-1] + [idx for idx, exp in enumerate(episodes) if exp.done]
+        returns = [0.0,] * len(episodes)
+        for start, stop in zip(end_states[:-1], end_states[1:]):
+            cum_reward = [0.0, ] * len(env.agents)
+            for j in range(stop, start, -1):
+                exp = episodes[j]
+                cum_reward = [gamma * c + r for c, r in zip(cum_reward, exp.reward)]
+                returns[j] = cum_reward
             
-            episodes = list(zip(*episodes)) # reorganise episodes
-            states, actions, rewards, next_states, dones = episodes
+        
+        episodes = list(zip(*episodes)) # reorganise episodes
+        states, actions, rewards, next_states, dones = episodes
 
-            mean_length = len(episodes[0]) / n_episodes
-            mean_reward = sum([reward[0] for reward in rewards]) / n_episodes
-            print('Episode length = {}'.format(mean_length))
-            print('Episode reward = {}'.format(mean_reward))
+        mean_length = len(episodes[0]) / n_episodes
+        mean_reward = sum([reward[0] for reward in rewards]) / n_episodes
+        print('Episode length = {}'.format(mean_length))
+        print('Episode reward = {}'.format(mean_reward))
 
-            writer.add_scalar('mean_length', mean_length, step_idx)
-            writer.add_scalar('mean_reward', mean_reward, step_idx)
+        ex.log_scalar('mean_length', mean_length)
+        ex.log_scalar('mean_reward', mean_reward)
 
-            for agent in agents:
-                states_v  = [t.to(agent.device) for t in preprocess(states)]
-                next_states_v = [t.to(agent.device) for t in preprocess(next_states)]
-                actions_t = torch.LongTensor([action[agent.idx]
-                                                for action in actions]).to(agent.device)
-                dones_t = torch.LongTensor(dones)
+        for agent in agents:
+            states_v  = [t.to(agent.device) for t in preprocess(states)]
+            next_states_v = [t.to(agent.device) for t in preprocess(next_states)]
+            actions_t = torch.LongTensor([action[agent.idx]
+                                            for action in actions]).to(agent.device)
+            dones_t = torch.LongTensor(dones)
 
-                values_v, logits_v = agent.model(*states_v)
-                vals_ref_v, _ = agent.model(*next_states_v)
+            values_v, logits_v = agent.model(*states_v)
+            vals_ref_v, _ = agent.model(*next_states_v)
 
-                vals_ref_v = vals_ref_v.squeeze(-1)
-                vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
+            vals_ref_v = vals_ref_v.squeeze(-1)
+            vals_ref_v[dones_t == 1.0] = 0.0 # set done states to zero
 
-                #rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
-                rewards_v = torch.tensor([ret[agent.idx] for ret in returns])
-                vals_ref_v = rewards_v + gamma * vals_ref_v
+            #rewards_v = torch.tensor([reward[agent.idx] for reward in rewards])
+            rewards_v = torch.tensor([ret[agent.idx] for ret in returns])
+            vals_ref_v = rewards_v + gamma * vals_ref_v
 
-                loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
+            loss_values_v = F.mse_loss(values_v.squeeze(-1), vals_ref_v)
 
-                logprobs_v = F.log_softmax(logits_v, dim=1)
-                advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
-                log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
-                loss_policy_v = -log_prob_actions_v.mean()
-                
-                agent.model.zero_grad()
-                loss_policy_v.backward(retain_graph=True)
-                grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
-                                        for p in agent.model.parameters()
-                                        if p.grad is not None]
-                )
+            logprobs_v = F.log_softmax(logits_v, dim=1)
+            advantage_v = vals_ref_v - values_v.squeeze(-1).detach()
+            log_prob_actions_v = advantage_v * logprobs_v[range(len(states)), actions_t]
+            loss_policy_v = -log_prob_actions_v.mean()
+            
+            agent.model.zero_grad()
+            loss_policy_v.backward(retain_graph=True)
+            grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                    for p in agent.model.parameters()
+                                    if p.grad is not None]
+            )
 
-                loss_values_v.backward()
+            loss_values_v.backward()
 
-                nn_utils.clip_grad_norm_(agent.model.parameters(), CLIP_GRAD) # clip gradients
-                agent.model.optimizer.step()
+            nn_utils.clip_grad_norm_(agent.model.parameters(), CLIP_GRAD) # clip gradients
+            agent.model.optimizer.step()
 
-                ## bookkeeping
-                writer.add_scalar('loss_value_{}'.format(agent), loss_values_v.item(), step_idx)
-                writer.add_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))), step_idx)
+            ## bookkeeping
+            ex.log_scalar('loss_value_{}'.format(agent), loss_values_v.item())
+            ex.log_scalar('grad_l2_{}'.format(agent),  np.sqrt(np.mean(np.square(grads))))
