@@ -10,7 +10,7 @@ def preprocess(states):
     :return: tensor 
     """
     # TODO: improve state representation -> see preprocess_extended
-    if not isinstance(states, list):
+    if not isinstance(states, list) and not isinstance(states, tuple):
         raise TypeError('states should be list')
     size = int(np.sqrt(len(states[0].board)))
     tensor = torch.zeros((len(states), 1, size, size))

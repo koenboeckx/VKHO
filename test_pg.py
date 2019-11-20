@@ -38,23 +38,21 @@ def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size):
     ]
     agents = [agent0, agent1]
     env = Environment(agent_list, size=board_size)
-
-    if __name__ == '__main__':
-        
-        for agent in agents:
-            agent.set_model((1, env.board_size, env.board_size), env.n_actions,
-                            lr=lr)
-        
-        if rl_type == 'reinforce':
-            pg.reinforce(env, agents, n_episodes=n_episodes,
-                        n_steps=n_steps, experiment=ex)
-        elif rl_type == 'actor-critic':
-            pg.actor_critic(env, agents, n_episodes=n_episodes,
-                        n_steps=n_steps, experiment=ex)
+         
+    for agent in agents:
+        agent.set_model((1, env.board_size, env.board_size), env.n_actions,
+                        lr=lr)
+    
+    if rl_type == 'reinforce':
+        pg.reinforce(env, agents, n_episodes=n_episodes,
+                    n_steps=n_steps, experiment=ex)
+    elif rl_type == 'actor-critic':
+        pg.actor_critic(env, agents, n_episodes=n_episodes,
+                    n_steps=n_steps, experiment=ex)
 
 
 
-        filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',
-                    '/home/koen/Programming/VKHO/marl/models/pg_agent1_20191113_103251.torch', 
-        ]
-        #pg.test_agents(env, agents, filenames)
+    filenames = ['/home/koen/Programming/VKHO/marl/models/pg_agent0_20191113_103251.torch',
+                '/home/koen/Programming/VKHO/marl/models/pg_agent1_20191113_103251.torch', 
+    ]
+    #pg.test_agents(env, agents, filenames)

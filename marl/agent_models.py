@@ -15,7 +15,7 @@ class GymModel(nn.Module):
         self.policy = nn.Linear(n_hidden, n_actions)
         self.value  = nn.Linear(n_hidden, 1)
 
-        self.optimizer = optim.Adam(self.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.parameters(), lr=lr, eps=1e-3)
     
     def forward(self, x, dummy): 
         x = self.fc(x)

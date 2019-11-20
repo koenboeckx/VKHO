@@ -2,10 +2,11 @@
 Independent Q-Learning.
 """
 
-# TODO: integrate unrlling to longer experience chains
+# TODO: integrate unrolling to longer experience chains
 
 import random
 import time
+import datetime
 from collections import namedtuple
 
 import numpy as np
@@ -72,6 +73,13 @@ class IQLAgent(agents.BaseAgent):
     def load_model(self, filename):
         self.model.load_state_dict(torch.load(filename))
         self.sync_models()
+    
+    def save_model(self, filename=None):
+        if filename is None:
+            date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = '/home/koen/Programming/VKHO/marl/models/iql_agent{}_{}.torch'.format(
+                            self.idx, date_str)
+        torch.save(self.model.state_dict(), filename)
     
     def sync_models(self):
         """
@@ -159,108 +167,93 @@ def train(env, agents, **kwargs):
     gamma = kwargs.get('gamma', 0.99)
     sync_rate = kwargs.get('sync_rate', 10) # when copy model to target?
     print_rate = kwargs.get('print_rate', 100) # print frequency
-    save = kwargs.get('save', False) # print frequency
-    extra_comment = kwargs.get('comment', "") # comment in filename
-    if torch.cuda.is_available():
-        print("CUDA available ...")
-    
+    lr = kwargs.get('lr', 0.02)
+    ex = kwargs.get('experiment') # instance of sacred.Experiment
+   
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('Using device {} ...'.format(device))
-    lr = kwargs.get('lr', 0.02)
-
-    comment = "-lr_{:.3}-batch_{}_{}".format(lr, mini_batch_size, extra_comment)
-    with SummaryWriter(comment=comment) as writer:
         
-        # create and initialize model for agent
-        input_shape = (1, env.board_size, env.board_size)
-        for agent in agents:
-            agent.set_model(input_shape, env.n_actions, lr, device)
+    # create and initialize model for agent
+    input_shape = (1, env.board_size, env.board_size)
+    for agent in agents:
+        agent.set_model(input_shape, env.n_actions, lr, device)
 
-        get_epsilon = create_temp_schedule(1.0, 0.1, 500000)
+    get_epsilon = create_temp_schedule(1.0, 0.1, 500000)
 
-        reward_sum = 0 # keep track of average reward
-        n_terminated = 0
+    reward_sum = 0 # keep track of average reward
+    n_terminated = 0
 
-        buffers = [ReplayBuffer(buffer_size) for _ in agents]
-        state = env.get_init_game_state()
+    buffers = [ReplayBuffer(buffer_size) for _ in agents]
+    state = env.get_init_game_state()
 
-        rand_int = random.randint(1000, 2000) # to create saved file (TODO: can be moved)
+    rand_int = random.randint(1000, 2000) # to create saved file (TODO: can be moved)
+    
+    for step_idx in range(int(n_steps)):        
+        eps = get_epsilon(step_idx)
+        actions = [0, 0, 0, 0]
+        for agent in env.agents:
+            if agent in agents:
+                # with prob epsilon, select random action a; otherwise a = argmax Q(s, .)
+                actions[agent.idx] = agent.get_action(state, epsilon=eps, device=device)
+            else:
+                # other, no trained agent => pick random action
+                actions[agent.idx] = agent.get_action(state)
+                #actions[agent.idx] = 0 # avoid taking action
         
-        for step_idx in range(int(n_steps)):
+        # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
+        next_state = env.step(state, actions)
+        reward = env.get_reward(next_state)
+
+        done = False
+        if env.terminal(next_state) != 0:
+            print('@ iteration {}: episode terminated; rewards = {}'.format(
+                step_idx, reward))
+            n_terminated += 1
+            reward_sum += reward[0]
+            done = True
+            next_state =  env.get_init_game_state()
+
+        # Store transition (s, a, r, s') in replay buffer
+        for idx, agent in enumerate(agents):
+            exp = Experience(state=state, action=actions[agent.idx],
+                                reward=reward[agent.idx],
+                                next_state=next_state, done=done)
+            buffers[idx].insert(exp)
+
+        if len(buffers[0]) >= replay_start_size: # = minibatch size
+            for agent_idx, agent in enumerate(agents):
+                agent.model.optimizer.zero_grad()
+                # Sample minibatch and compute loss
+                minibatch = buffers[agent_idx].sample(mini_batch_size)
+                loss = calc_loss(agent, minibatch, gamma, device=device)
+
+                ex.log_scalar('agent{}_loss'.format(agent.idx), loss.item())
+                if DEBUG_LOSS and step_idx % 100 == 0:
+                    print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
             
-            eps = get_epsilon(step_idx)
-            actions = [0, 0, 0, 0]
-            for agent in env.agents:
-                if agent in agents:
-                    # with prob epsilon, select random action a; otherwise a = argmax Q(s, .)
-                    actions[agent.idx] = agent.get_action(state, epsilon=eps, device=device)
-                else:
-                    # other, no trained agent => pick random action
-                    actions[agent.idx] = agent.get_action(state)
-                    #actions[agent.idx] = 0 # avoid taking action
-            
-            # Execute actions, get next state and rewards TODO: get (.., observation, ..) in stead of action
-            next_state = env.step(state, actions)
-            reward = env.get_reward(next_state)
+                # perform training step 
+                loss.backward()
+                agent.model.optimizer.step()
 
-            #env.render(state)
-            done = False
-            if env.terminal(next_state) != 0:
-                print('@ iteration {}: episode terminated; rewards = {}'.format(
-                    step_idx, reward))
-                n_terminated += 1
-                reward_sum += reward[0]
-                done = True
-                next_state =  env.get_init_game_state()
+                if step_idx > 0 and step_idx % sync_rate == 0:
+                    print('iteration {} - syncing ...'.format(step_idx))
+                    agent.sync_models()
 
-            # Store transition (s, a, r, s') in replay buffer
-            for idx, agent in enumerate(agents):
-                exp = Experience(state=state, action=actions[agent.idx],
-                                 reward=reward[agent.idx],
-                                 next_state=next_state, done=done)
-                buffers[idx].insert(exp)
-
-            if len(buffers[0]) >= replay_start_size: # = minibatch size
-                for agent_idx, agent in enumerate(agents):
-                    agent.model.optim.zero_grad()
-                    # Sample minibatch and compute loss
-                    minibatch = buffers[agent_idx].sample(mini_batch_size)
-                    loss = calc_loss(agent, minibatch, gamma, device=device)
-
-                    writer.add_scalar('agent{}_loss'.format(agent.idx), loss.item(), step_idx)
-                    if DEBUG_LOSS and step_idx % 100 == 0:
-                        print('Player {} -> loss = {}'.format(agent_idx, loss.item()))
-                
-                    # perform training step 
-                    loss.backward()
-                    agent.model.optim.step()
-
-                    if step_idx > 0 and step_idx % sync_rate == 0:
-                        print('iteration {} - syncing ...'.format(step_idx))
-                        agent.sync_models()
-
-                        # temporary save of model TODO: can be removed 
-                        for agent in agents:
-                            filename =  './marl/models/iql_agent_{}_{}_{}.torch'.format(agent.idx, step_idx, str(rand_int))
-                            torch.save(agent.model.state_dict(), filename)
-
-                    
-            if step_idx > 0 and step_idx % print_rate == 0:
-                if n_terminated > 0:
-                    print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
-                            step_idx, reward_sum/n_terminated, n_terminated))
-                    writer.add_scalar('win_rate', reward_sum/n_terminated, step_idx)
-                else:
-                    print('Iteration {} - no terminations'.format(step_idx))
-                reward_sum = 0
-                n_terminated = 0
-            
-            state = next_state
+        if step_idx > 0 and step_idx % print_rate == 0:
+            if n_terminated > 0:
+                print('Iteration {} - Average reward team 0: {} [terminations = {}]'.format(
+                        step_idx, reward_sum/n_terminated, n_terminated))
+                ex.log_scalar('win_rate', reward_sum/n_terminated)
+            else:
+                print('Iteration {} - no terminations'.format(step_idx))
+            reward_sum = 0
+            n_terminated = 0
         
-        if save:
-            for agent in agents:
-                filename =  './marl/models/iql_agent_{}_{}.torch'.format(agent.idx, str(rand_int))
-                torch.save(agent.model.state_dict(), filename)
+        state = next_state
+    
+    # Save model when training is over
+    for agent in agents:
+        agent.save_model()
         
 def test(env, agents, filenames=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

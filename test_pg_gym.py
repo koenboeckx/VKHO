@@ -1,5 +1,3 @@
-# TODO: use this as test case for sacred
-
 import game
 from game import agents
 from game.gym_envs import Environment
@@ -18,10 +16,10 @@ ex.observers.append(MongoObserver(url='localhost',
 
 @ex.config
 def cfg():
-    rl_type = 'reinforce'
+    rl_type = 'actor-critic'
     n_hidden = 128
     lr = 0.001
-    n_episodes = 100
+    n_episodes = 10
     n_steps = 1000
 
 @ex.automain
