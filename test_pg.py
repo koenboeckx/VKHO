@@ -15,11 +15,11 @@ ex.observers.append(MongoObserver(url='localhost',
 
 @ex.config
 def cfg():
-    rl_type = 'actor-critic'
+    rl_type = 'reinforce'
     n_hidden = 128
     lr = 0.001
-    n_episodes = 10
-    n_steps = 1000
+    n_episodes = 50
+    n_steps = 2000
     board_size = 7
 
 @ex.automain

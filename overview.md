@@ -75,5 +75,6 @@
     1. [12Nov19]: implement critic and extend REINFORCE => [14Nov19]: actor-critic is partially done, but contains error; TODO: solve this
     1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
     1. [18Nov19]: open ai CartPole-v0 single agent works (well) with actor-critic2; however, this doesn't work with battlefield game => is this an error or is more going on? **To investigate**
+    1. [19Nov19]: removed SummaryWriter; all experiments are defined with `sacred` and stored in a MongoDB.
 
     
