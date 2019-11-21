@@ -48,3 +48,6 @@ def preprocess_extended(states):
     
 def preprocess_gym(states):
     return torch.tensor(states).float(), torch.tensor(0) # dummy var for consistency
+
+def preprocess_gym_iql(states):
+    return torch.tensor(states).float() 

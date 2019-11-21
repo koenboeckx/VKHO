@@ -1,5 +1,4 @@
 import game
-from game import agents
 from game.envs import Environment
 from marl import iql, agent_models
 from game.envs import unflatten, State
@@ -26,17 +25,26 @@ def cfg():
 @ex.automain
 def run(mini_batch_size, buffer_size, sync_rate,
          n_steps, lr, board_size, gamma):
-    agent0 = iql.IQLAgent(0, board_size=board_size)
-    agent1 = iql.IQLAgent(1, board_size=board_size)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    agent0 = iql.IQLAgent(0, device=device, board_size=board_size)
+    agent1 = iql.IQLAgent(1, device=device, board_size=board_size)
 
     agent_list = [
         agent0, # Team 1
         agent1, # Team 1
-        agents.RandomTank(2), # Team 2
-        agents.RandomTank(3)  # Team 2
+        game.agents.RandomTank(2), # Team 2
+        game.agents.RandomTank(3)  # Team 2
     ]
 
+    agents = [agent0, agent1]
     env = Environment(agent_list, size=board_size)
+
+    # create and initialize model for agent
+    input_shape = (1, env.board_size, env.board_size)
+    for agent in agents:
+        agent.set_model(input_shape, env.n_actions, lr)
+
     iql.train(env, [agent0, agent1],
                 mini_batch_size=mini_batch_size,
                 buffer_size=buffer_size,

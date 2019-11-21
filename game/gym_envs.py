@@ -31,5 +31,4 @@ class Environment:
         return self.done
     
     def get_reward(self, state):
-        return (self.reward, self.reward,
-                -self.reward, -self.reward)
+        return (self.reward,) * len(self.agents)

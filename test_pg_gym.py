@@ -30,15 +30,13 @@ def run(rl_type, n_hidden, lr, n_episodes, n_steps):
     agents = [agent]
     env = Environment(agents)
 
-    if __name__ == '__main__':
-        
-        for agent in agents:
-            agent.set_model(env.state_space[0], env.n_actions,
-                            n_hidden=n_hidden, lr=lr)
-        
-        if rl_type == 'reinforce':
-            pg.reinforce(env, agents, n_episodes=n_episodes,
-                        n_steps=n_steps, experiment=ex)
-        elif rl_type == 'actor-critic':
-            pg.actor_critic(env, agents, n_episodes=n_episodes,
-                        n_steps=n_steps, experiment=ex)
+    for agent in agents:
+        agent.set_model(env.state_space[0], env.n_actions,
+                        n_hidden=n_hidden, lr=lr)
+    
+    if rl_type == 'reinforce':
+        pg.reinforce(env, agents, n_episodes=n_episodes,
+                    n_steps=n_steps, experiment=ex)
+    elif rl_type == 'actor-critic':
+        pg.actor_critic(env, agents, n_episodes=n_episodes,
+                    n_steps=n_steps, experiment=ex)

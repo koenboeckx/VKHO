@@ -23,6 +23,23 @@ class GymModel(nn.Module):
         logits = self.policy(x)
         return value, logits
 
+class GymModelIQL(nn.Module):
+    """Module to be used with open AI gym 'CartPole-v0' """
+    def __init__(self, input_shape, n_actions, n_hidden=32, lr=0.01):
+        super(GymModelIQL, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_shape, n_hidden),
+            nn.ReLU()
+        )
+        self.value  = nn.Linear(n_hidden, n_actions)
+
+        self.optimizer = optim.Adam(self.parameters(), lr=lr, eps=1e-3)
+    
+    def forward(self, x): 
+        x = self.fc(x)
+        value = self.value(x)
+        return value
+
 class IQLModel(nn.Module):
     """Defines and learns the behavior of a single agent"""
     def __init__(self, input_shape, n_actions, lr=0.01, board_size=11):
