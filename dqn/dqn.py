@@ -3,6 +3,7 @@ import copy
 from collections import namedtuple
 
 import gym
+import numpy as np
 
 import torch
 from torch import nn
@@ -69,8 +70,9 @@ class ReplayBuffer:
             self.content.pop(0)
         self.content.append(item)
     
-    def sample(self, n):
-        return random.sample(self.content, n)
+    def sample(self, batch_size):
+        indices = np.random.choice(len(self.content), batch_size, replace=False)
+        return [self.content[idx] for idx in indices]
 
 def generate_episode(env, agent, eps=0.0):
     episode = []
@@ -114,8 +116,11 @@ def train(env, agent, ex, n_steps=1000, buffer_size=32, batch_size=16, sync_rate
     buffer = ReplayBuffer(buffer_size)
     test_env = copy.deepcopy(env)
     state = env.reset()
+    all_rewards = []
     for step_idx in range(n_steps):
-        action = agent.get_action(state, epsilon=0.1) # TODO: change fxed epsilon
+        eps = max(0.05, 1. - step_idx/5000.)
+        ex.log_scalar('epsilon', eps)
+        action = agent.get_action(state, epsilon=eps)
         next_state, reward, done, _  = env.step(action)
         buffer.insert(Experience(state, action, reward, next_state, done))
         state = next_state if not done else env.reset()
@@ -131,7 +136,12 @@ def train(env, agent, ex, n_steps=1000, buffer_size=32, batch_size=16, sync_rate
         loss_t.backward()
         agent.optimizer.step()
 
-        ex.log_scalar('duration', len(generate_episode(test_env, agent)))
+        cur_reward = len(generate_episode(test_env, agent))
+        ex.log_scalar('duration', cur_reward)
+
+        all_rewards.append(cur_reward)
+        if len(all_rewards) > 100:
+            ex.log_scalar('duration100', sum(all_rewards[-100:])/100)
 
         if step_idx > 0 and step_idx % sync_rate == 0:
             agent.sync_models()
@@ -139,12 +149,12 @@ def train(env, agent, ex, n_steps=1000, buffer_size=32, batch_size=16, sync_rate
 @ex.config
 def cfg():
     rl_type = 'q_learning'
-    gamma = 0.99
-    lr = 0.001
-    n_steps = 10000
+    gamma = 0.95
+    lr = 0.005
+    n_steps = 50000
     buffer_size = 32
     batch_size = 16
-    sync_rate = 2000
+    sync_rate = 200
 
 @ex.automain
 def run(gamma, lr, n_steps, buffer_size, batch_size, sync_rate):
