@@ -21,28 +21,24 @@ Experience = namedtuple('Experience', field_names = [
 ])
 
 class DQNModel(nn.Module):
-    def __init__(self, input_shape, n_hidden, n_actions):
+    def __init__(self, obs_size, hidden_size, n_actions):
         super(DQNModel, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_shape, n_hidden),
+        self.net = nn.Sequential(
+            nn.Linear(obs_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(n_hidden, n_actions)
+            nn.Linear(hidden_size, n_actions)
         )
     
     def forward(self, x):
-        if isinstance(x, list):
-            x = torch.tensor(x).float()
-        else:
-            x = x.float()
-        return self.fc(x)
+        return self.net(x)
 
 class DQNAgent:
-    def __init__(self, n_actions, gamma, lr, device):
+    def __init__(self, obs_size, n_hidden, n_actions, gamma, lr, device):
         self.n_actions = n_actions
         self.gamma = gamma
         self.device = device
-        self.model  = DQNModel(4, 32, n_actions).to(self.device)
-        self.target = DQNModel(4, 32, n_actions).to(self.device)
+        self.model  = DQNModel(obs_size, n_hidden, n_actions).to(self.device)
+        self.target = DQNModel(obs_size, n_hidden, n_actions).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
     
     def sync_models(self):
@@ -53,7 +49,7 @@ class DQNAgent:
         if d < epsilon:
             action = random.randint(0, self.n_actions-1)
         else:
-            q_vals = self.model([state])
+            q_vals = self.model(torch.FloatTensor(state))
             action = torch.argmax(q_vals).item()
         return action
 
@@ -97,10 +93,10 @@ def generate_samples(env, agent, n_samples, eps=0.0):
 
 def compute_loss(agent, batch):
     states, actions, rewards, next_states, dones = list(zip(*batch))
-    states_v  = torch.tensor(states).to(agent.device)
+    states_v  = torch.FloatTensor(states).to(agent.device)
     actions_v = torch.LongTensor(actions).to(agent.device)
-    rewards_v = torch.tensor(rewards).to(agent.device)
-    next_states_v = torch.tensor(next_states).to(agent.device)
+    rewards_v = torch.FloatTensor(rewards).to(agent.device)
+    next_states_v = torch.FloatTensor(next_states).to(agent.device)
     done_mask = torch.ByteTensor(dones).to(agent.device)
 
     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
@@ -151,16 +147,19 @@ def cfg():
     rl_type = 'q_learning'
     gamma = 0.95
     lr = 0.005
+    n_hidden = 128
     n_steps = 50000
     buffer_size = 32
     batch_size = 16
     sync_rate = 200
 
 @ex.automain
-def run(gamma, lr, n_steps, buffer_size, batch_size, sync_rate):
+def run(gamma, lr, n_hidden, n_steps, buffer_size, batch_size, sync_rate):
     env = gym.make('CartPole-v0')
+    obs_size = env.observation_space.shape[0]
+    n_actions = env.action_space.n
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    agent = DQNAgent(env.action_space.n, gamma, lr, device)
-    
+
+    agent = DQNAgent(obs_size, n_hidden, n_actions, gamma, lr, device)
     train(env, agent, ex, n_steps, buffer_size, batch_size, sync_rate)
     
