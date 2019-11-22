@@ -101,14 +101,14 @@ def compute_loss(agent, batch):
     actions_v = torch.LongTensor(actions).to(agent.device)
     rewards_v = torch.tensor(rewards).to(agent.device)
     next_states_v = torch.tensor(next_states).to(agent.device)
-    dones_v = torch.ByteTensor(dones).float().to(agent.device)
+    done_mask = torch.ByteTensor(dones).to(agent.device)
 
     values_v  = agent.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-    targets_v = rewards_v
-    targets_v += (1. - dones_v) * agent.gamma * torch.max(agent.target(next_states_v), dim=1)[0]
-    #targets_v += (1. - dones_v) * agent.gamma * torch.max(agent.model(next_states_v), dim=1)[0] # !! TODO: wrong 
-
-    loss_t = F.mse_loss(values_v, targets_v)
+    next_state_values_v = torch.max(agent.target(next_states_v), dim=1)[0]
+    next_state_values_v[done_mask] = 0.0
+    target_values_v = rewards_v + agent.gamma * next_state_values_v
+    
+    loss_t = F.mse_loss(values_v, target_values_v)
     return loss_t
 
 
