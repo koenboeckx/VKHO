@@ -1,6 +1,6 @@
 from . import agent_models
-#from .common import preprocess_extended as preprocess
-from .common import preprocess_gym as preprocess
+from .common import preprocess_extended as preprocess
+#from .common import preprocess_gym as preprocess
 
 from tensorboardX import SummaryWriter
 from collections import namedtuple

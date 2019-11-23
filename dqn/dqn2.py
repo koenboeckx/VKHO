@@ -10,6 +10,7 @@ from torch import nn
 from torch import optim
 from torch.nn import functional as F
 import gym
+from sklearn.linear_model import LogisticRegression
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -29,15 +30,12 @@ class Net(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class DQNAgent:
+class GenericAgent:
     def __init__(self, env, **kwargs):
-        obs_size  = env.observation_space.shape[0]
+        self.obs_size  = env.observation_space.shape[0]
         self.n_actions = env.action_space.n
-        hidden_size = kwargs.get('hidden_size', 24)
         self.gamma = kwargs.get('gamma', 0.95)
-        lr = kwargs.get('lr', 0.001)
-        self.model = Net(obs_size, hidden_size, self.n_actions)
-        self.optimizer = optim.Adam(params=self.model.parameters(), lr=lr)
+        hidden_size = kwargs.get('hidden_size', 24)
         
         self.epsilon = 1.0 # eps-greedy param for exploration
         self.epsilon_min = 0.01
@@ -51,6 +49,31 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
     
     def act(self, state):
+        raise NotImplementedError
+
+    def replay(self, batch_size):
+        raise NotImplementedError
+
+class LogisticRegressionAgent(GenericAgent):
+    """Agent that implements learning through Logistic Regressing"""
+    def __init__(self, env, **kwargs):
+        super(LogisticRegressionAgent, self).__init__(env, **kwargs)
+        self.model = LogisticRegression()
+        self.model.fit(np.array([[0,]*self.obs_size]), 0.0)
+
+    def act(self, state):
+        probs = self.model.predict(state)
+        
+class DQNAgent(GenericAgent):
+    def __init__(self, env, **kwargs):
+        super(DQNAgent, self).__init__(env, **kwargs)
+        hidden_size = kwargs.get('hidden_size', 24)
+        lr = kwargs.get('lr', 0.001)
+        self.model = Net(self.obs_size, hidden_size, self.n_actions)
+        self.optimizer = optim.Adam(params=self.model.parameters(),
+                                    lr=lr)
+    
+    def act(self, state):
         if np.random.rand() <= self.epsilon:
             action = random.randrange(self.n_actions)
         else:
@@ -59,39 +82,46 @@ class DQNAgent:
         return action 
 
     def replay(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            state_v = torch.FloatTensor([state])
-            next_state_v = torch.FloatTensor([next_state])
-            target = torch.FloatTensor([reward])
-            if not done:
-                target = reward + self.gamma * torch.max(self.model(next_state_v), dim=1)[0]
-            target_f = self.model(state_v)
+        self.optimizer.zero_grad()
 
-            self.optimizer.zero_grad()
-            loss_v = F.mse_loss(target.squeeze(), target_f[0][action])
-            self.ex.log_scalar('loss', loss_v.item())
-            loss_v.backward()
-            self.optimizer.step()
+        minibatch = random.sample(self.memory, batch_size)
+        states, actions, rewards, next_states, dones = zip(*minibatch)
+        states_v  = torch.FloatTensor(states)
+        actions_v = torch.LongTensor(actions)
+        rewards_v = torch.FloatTensor(rewards)
+        next_v    = torch.FloatTensor(next_states)
+        done_mask = torch.ByteTensor(dones)
+
+        q_vals_v = self.model(states_v)
+        vals_pred = q_vals_v.gather(1, actions_v.unsqueeze(1)).squeeze(-1)
+        next_q_vals = torch.max(self.model(next_v), dim=1)[0]
+        vals_target = rewards_v + (1.-done_mask) * self.gamma * next_q_vals
+
+        loss_v = F.mse_loss(vals_target, vals_pred)
+        self.ex.log_scalar('loss', loss_v.item())
+        loss_v.backward()
+        self.optimizer.step()
+
+
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
             self.ex.log_scalar('epsilon', self.epsilon)
 
 @ex.config
 def cfg():
-    n_episodes = 1000
+    n_episodes = 5000
     gamma = 0.95
     epsilon = 1.0
     epsilon_min = 0.01
     epsilon_decay = 0.995
-    lr = 0.001
-    hidden_size = 24
-    batch_size = 32
+    lr = 0.01
+    hidden_size = 128
+    batch_size = 256
 
 @ex.automain
 def run(n_episodes, batch_size, gamma, lr):
     env = gym.make('CartPole-v0')
-    agent = DQNAgent(env, gamma=gamma, lr=lr, ex=ex)
+    agent = LogisticRegressionAgent(env, gamma=gamma, lr=lr, ex=ex)
 
     for ep_idx in range(n_episodes):
         state = env.reset()
