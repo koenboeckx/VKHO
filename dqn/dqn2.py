@@ -1,3 +1,6 @@
+"""
+https://keon.io/deep-q-learning/
+"""
 import random
 from collections import deque
 
@@ -13,18 +16,6 @@ from sacred.observers import MongoObserver
 ex = Experiment('dqn2')
 ex.observers.append(MongoObserver(url='localhost',
                                   db_name='my_database'))
-
-@ex.config
-def cfg():
-    n_episodes = 100
-    gamma = 0.95
-    epsilon = 1.0
-    epsilon_min = 0.01
-    epsilon_decay = 0.995
-    lr = 0.001
-    hidden_size = 24
-    batch_size = 32
-
 
 class Net(nn.Module):
     def __init__(self, obs_size, hidden_size, n_actions):
@@ -53,6 +44,8 @@ class DQNAgent:
         self.epsilon_decay = 0.995
 
         self.memory = deque(maxlen=2000)
+
+        self.ex = kwargs.get('ex')
     
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
@@ -77,16 +70,28 @@ class DQNAgent:
 
             self.optimizer.zero_grad()
             loss_v = F.mse_loss(target.squeeze(), target_f[0][action])
+            self.ex.log_scalar('loss', loss_v.item())
             loss_v.backward()
             self.optimizer.step()
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+            self.ex.log_scalar('epsilon', self.epsilon)
 
+@ex.config
+def cfg():
+    n_episodes = 1000
+    gamma = 0.95
+    epsilon = 1.0
+    epsilon_min = 0.01
+    epsilon_decay = 0.995
+    lr = 0.001
+    hidden_size = 24
+    batch_size = 32
 
 @ex.automain
 def run(n_episodes, batch_size, gamma, lr):
     env = gym.make('CartPole-v0')
-    agent = DQNAgent(env, gamma=gamma, lr=lr)
+    agent = DQNAgent(env, gamma=gamma, lr=lr, ex=ex)
 
     for ep_idx in range(n_episodes):
         state = env.reset()
