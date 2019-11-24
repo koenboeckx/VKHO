@@ -10,7 +10,9 @@ from torch import nn
 from torch import optim
 from torch.nn import functional as F
 import gym
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.neural_network import MLPRegressor
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -54,15 +56,44 @@ class GenericAgent:
     def replay(self, batch_size):
         raise NotImplementedError
 
-class LogisticRegressionAgent(GenericAgent):
-    """Agent that implements learning through Logistic Regressing"""
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+class MLPAgent(GenericAgent):
+    """Agent that implements learning with Multilayer Perceptron"""
     def __init__(self, env, **kwargs):
-        super(LogisticRegressionAgent, self).__init__(env, **kwargs)
-        self.model = LogisticRegression()
-        self.model.fit(np.array([[0,]*self.obs_size]), 0.0)
+        super(MLPAgent, self).__init__(env, **kwargs)
+        hidden_size = kwargs.get('hidden_size', 24)
+        lr = kwargs.get('learning_rate', 0.001)
+        self.batch_size = kwargs.get('batch_size', 32)
+        self.model = MultiOutputRegressor(LinearRegression())
+
+        # initialize random weights
+        X = np.random.randn(self.batch_size, self.obs_size)
+        y = np.random.randn(self.batch_size, self.n_actions)
+        self.model.fit(X, y)
 
     def act(self, state):
-        probs = self.model.predict(state)
+        ""
+        # probs = softmax(self.model.predict([state]))[0]
+        # action = np.random.choice(range(self.n_actions), p=probs[0])
+        if np.random.rand() <= self.epsilon:
+            action = random.randrange(self.n_actions)
+        else:
+            act_values = self.model.predict([state])
+            action = np.argmax(act_values)
+        return action
+
+    def replay(self, batch_size):
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            predicted = self.model.predict([state])[0][action]
+            target = reward
+            if not done:
+                target += self.gamma * np.max(self.model.predict([next_state]))
+            self.model.fit()
+
         
 class DQNAgent(GenericAgent):
     def __init__(self, env, **kwargs):
@@ -121,7 +152,8 @@ def cfg():
 @ex.automain
 def run(n_episodes, batch_size, gamma, lr):
     env = gym.make('CartPole-v0')
-    agent = LogisticRegressionAgent(env, gamma=gamma, lr=lr, ex=ex)
+    agent = MLPAgent(env, gamma=gamma, lr=lr,
+                    batch_size=batch_size, ex=ex)
 
     for ep_idx in range(n_episodes):
         state = env.reset()
