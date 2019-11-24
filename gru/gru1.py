@@ -23,16 +23,20 @@ import time
 
 import numpy as np 
 import pandas as pd
-import mmatplotlib.pyplot as plt 
+import matplotlib.pyplot as plt 
 
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 
+from tqdm import tqdm_notebook
 from sklearn.preprocessing import MinMaxScaler
 
 # Define data root directory
-data_dir = "./data/"
+data_dir = "./gru/data/"
+
+# Visualise how our data looks
+pd.read_csv(data_dir + 'AEP_hourly.csv').head()
 
 # The scaler objects will be stored in this dictionary so that our output test data from the model can be re-scaled during evaluation
 label_scalers = {}
@@ -84,3 +88,47 @@ for file in tqdm_notebook(os.listdir(data_dir)):
         train_y = np.concatenate((train_y,labels[:-test_portion]))
     test_x[file] = (inputs[-test_portion:])
     test_y[file] = (labels[-test_portion:])
+
+batch_size = 1024
+train_data = TensorDataset(torch.from_numpy(train_x), torch.from_numpy(train_y))
+train_loader = DataLoader(train_data, shuffle=True, batch_size=batch_size, drop_last=True)
+
+is_cuda = torch.cuda.is_available()
+
+device = torch.device("cuda") if is_cuda else torch.device("cpu")
+
+class GRUNet(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_layers, drop_prob=0.2):
+        super(GRUNet, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+
+        self.gru = nn.GRU(input_dim, hidden_dim, n_layers, batch_first=True,
+                          drop_prob=drop_prob)
+        self.fc  = nn.Linear(hidden_dim, output_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, h):
+        out, h = self.gru(x, h)
+        out = self.fc(self.relu(out[:, -1]))
+        return out, h
+
+    def init_hidden(self, batch_size):
+        weight = next(self.parameters()).data 
+        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
+        return hidden
+
+def train(train_loader, learn_rate, hidden_dim=256, EPOCHS=5, model_type='GRU'):
+    # Setting hyperparameters
+    input_dim = next(iter(train_loader))[0].shape[2]
+    output_dim = 1
+    n_layers = 2
+    # Instantiating the model
+    model = GRUNet(input_dim, hidden_dim, output_dim, n_layers).to(device)
+
+    # Defining loss function and optimizer
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(),
+                                lr=learn_rate)
+
+    model.train() # set model to train mode !!                                

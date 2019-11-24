@@ -108,11 +108,13 @@ class DQNAgent(GenericAgent):
         if np.random.rand() <= self.epsilon:
             action = random.randrange(self.n_actions)
         else:
+            self.model.eval()
             act_values = self.model(torch.FloatTensor([state]))
             action = torch.argmax(act_values, dim=1)[0].item()
         return action 
 
     def replay(self, batch_size):
+        self.model.train()
         self.optimizer.zero_grad()
 
         minibatch = random.sample(self.memory, batch_size)
@@ -121,7 +123,7 @@ class DQNAgent(GenericAgent):
         actions_v = torch.LongTensor(actions)
         rewards_v = torch.FloatTensor(rewards)
         next_v    = torch.FloatTensor(next_states)
-        done_mask = torch.ByteTensor(dones)
+        done_mask = torch.FloatTensor(dones)
 
         q_vals_v = self.model(states_v)
         vals_pred = q_vals_v.gather(1, actions_v.unsqueeze(1)).squeeze(-1)
@@ -151,8 +153,9 @@ def cfg():
 
 @ex.automain
 def run(n_episodes, batch_size, gamma, lr):
+    print('running...')
     env = gym.make('CartPole-v0')
-    agent = MLPAgent(env, gamma=gamma, lr=lr,
+    agent = DQNAgent(env, gamma=gamma, lr=lr,
                     batch_size=batch_size, ex=ex)
 
     for ep_idx in range(n_episodes):
