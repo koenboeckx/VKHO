@@ -7,3 +7,4 @@ marl/models/*
 .vscode/settings.json
 test_sacred/online_retail.csv
 test_sacred/online_retail2.csv
+gru/data/*
