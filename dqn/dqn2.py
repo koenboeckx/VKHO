@@ -76,9 +76,9 @@ class GenericAgent:
         self.gamma = kwargs.get('gamma', 0.95)
         self.hidden_size = kwargs.get('hidden_size', 24)
         
-        self.epsilon = 1.0 # eps-greedy param for exploration
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
+        self.epsilon = kwargs.get('epsilon', 1.0) # eps-greedy param for exploration
+        self.epsilon_min = kwargs.get('epsilon_min', 0.01)
+        self.epsilon_decay = kwargs.get('epsilon_decay', 0.995)
 
         self.memory = deque(maxlen=2000)
 
@@ -148,7 +148,7 @@ class DQNAgent(GenericAgent):
             action = random.randrange(self.n_actions)
         else:
             self.model.eval()
-            act_values = self.model(torch.FloatTensor([state]))[0]
+            act_values = self.model(torch.FloatTensor([state]))
             action = torch.argmax(act_values, dim=1)[0].item()
         return action 
 
@@ -164,9 +164,9 @@ class DQNAgent(GenericAgent):
         next_v    = torch.FloatTensor(next_states)
         done_mask = torch.FloatTensor(dones)
 
-        q_vals_v = self.model(states_v)[0]
+        q_vals_v = self.model(states_v)
         vals_pred = q_vals_v.gather(1, actions_v.unsqueeze(1)).squeeze(-1)
-        next_q_vals = torch.max(self.model(next_v)[0], dim=1)[0]
+        next_q_vals = torch.max(self.model(next_v), dim=1)[0]
         vals_target = rewards_v + (1.-done_mask) * self.gamma * next_q_vals
 
         loss_v = F.mse_loss(vals_target, vals_pred)
@@ -181,22 +181,31 @@ class DQNAgent(GenericAgent):
 
 @ex.config
 def cfg():
-    n_episodes = 5000
+    n_episodes = 1000
     gamma = 0.95
     epsilon = 1.0
     epsilon_min = 0.01
-    epsilon_decay = 0.995
+    epsilon_decay = 0.999 # .995
     lr = 0.01
     hidden_size = 128
-    batch_size = 256
+    batch_size = 16 # 512
+
+"""
+DEGUGGING Idea: 1. set fixed seed
+                2. Execute run / store in MongoDB
+                3. In Ombniboard: find index when loss.item() makes jumps
+                4. Repeat run with same seed, set breakpoint at critical indexes
+"""
+
 
 @ex.automain
-def run(n_episodes, batch_size, gamma, lr):
+def run(n_episodes, batch_size, gamma, lr, epsilon_decay):
     print('running...')
     env = gym.make('CartPole-v0')
     agent = DQNAgent(env, gamma=gamma, lr=lr,
                     batch_size=batch_size, ex=ex,
-                    net=GRUNet)
+                    epsilon_decay=epsilon_decay,
+                    net=Net)
 
     for ep_idx in range(n_episodes):
         state = env.reset()
