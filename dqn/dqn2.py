@@ -32,12 +32,49 @@ class Net(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+class GRUNet(nn.Module):
+    def __init__(self, obs_size, hidden_size, n_actions, n_layers=1):
+        super(GRUNet, self).__init__()
+        self.hidden_dim = hidden_size
+        self.n_layers = n_layers
+        
+        # recurrent layer
+        self.rnn = nn.GRU(input_size=obs_size,      # The number of expected features in the input x
+                          hidden_size=hidden_size,  # The number of features in the hidden state h
+                          num_layers=n_layers,      # Number of recurrent layers (default=1)
+                          bias=True,                # Use bias weights
+                          )
+        # fully-connected layer
+        self.fc = nn.Linear(self.hidden_dim, n_actions)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        # initialize hidden state for first input using method defined below
+        hidden = self.init_hidden(batch_size)
+
+        # passing in the input and hidden state into the model and obtain outputs
+        out, hidden = self.rnn(x.unsqueeze(0), hidden)
+
+        # reshape the outputs such that they can be fit into fully-connected layer
+        out = out.contiguous().view(-1, self.hidden_dim)
+        out = self.fc(out)
+
+        return out, hidden
+    
+    def init_hidden(self, batch_size):
+        """This method generates the first hidden state of zeros which we'll use
+        in the forward pass. We'll send the tensor holding the hidden state to
+        the device we specified earlier as well."""
+        hidden = torch.zeros(self.n_layers, batch_size, self.hidden_dim)
+        return hidden
+
 class GenericAgent:
     def __init__(self, env, **kwargs):
         self.obs_size  = env.observation_space.shape[0]
         self.n_actions = env.action_space.n
         self.gamma = kwargs.get('gamma', 0.95)
-        hidden_size = kwargs.get('hidden_size', 24)
+        self.hidden_size = kwargs.get('hidden_size', 24)
         
         self.epsilon = 1.0 # eps-greedy param for exploration
         self.epsilon_min = 0.01
@@ -61,7 +98,8 @@ def softmax(x):
     return np.exp(x) / np.sum(np.exp(x), axis=0)
 
 class MLPAgent(GenericAgent):
-    """Agent that implements learning with Multilayer Perceptron"""
+    """Agent that implements learning with Multilayer Perceptron.
+    THIS DOESN'T WORK (yet)"""
     def __init__(self, env, **kwargs):
         super(MLPAgent, self).__init__(env, **kwargs)
         hidden_size = kwargs.get('hidden_size', 24)
@@ -100,7 +138,8 @@ class DQNAgent(GenericAgent):
         super(DQNAgent, self).__init__(env, **kwargs)
         hidden_size = kwargs.get('hidden_size', 24)
         lr = kwargs.get('lr', 0.001)
-        self.model = Net(self.obs_size, hidden_size, self.n_actions)
+        net = kwargs.get('net', Net)
+        self.model = net(self.obs_size, hidden_size, self.n_actions)
         self.optimizer = optim.Adam(params=self.model.parameters(),
                                     lr=lr)
     
@@ -109,7 +148,7 @@ class DQNAgent(GenericAgent):
             action = random.randrange(self.n_actions)
         else:
             self.model.eval()
-            act_values = self.model(torch.FloatTensor([state]))
+            act_values = self.model(torch.FloatTensor([state]))[0]
             action = torch.argmax(act_values, dim=1)[0].item()
         return action 
 
@@ -125,9 +164,9 @@ class DQNAgent(GenericAgent):
         next_v    = torch.FloatTensor(next_states)
         done_mask = torch.FloatTensor(dones)
 
-        q_vals_v = self.model(states_v)
+        q_vals_v = self.model(states_v)[0]
         vals_pred = q_vals_v.gather(1, actions_v.unsqueeze(1)).squeeze(-1)
-        next_q_vals = torch.max(self.model(next_v), dim=1)[0]
+        next_q_vals = torch.max(self.model(next_v)[0], dim=1)[0]
         vals_target = rewards_v + (1.-done_mask) * self.gamma * next_q_vals
 
         loss_v = F.mse_loss(vals_target, vals_pred)
@@ -156,7 +195,8 @@ def run(n_episodes, batch_size, gamma, lr):
     print('running...')
     env = gym.make('CartPole-v0')
     agent = DQNAgent(env, gamma=gamma, lr=lr,
-                    batch_size=batch_size, ex=ex)
+                    batch_size=batch_size, ex=ex,
+                    net=GRUNet)
 
     for ep_idx in range(n_episodes):
         state = env.reset()
