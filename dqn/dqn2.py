@@ -142,6 +142,7 @@ class DQNAgent(GenericAgent):
         self.model = net(self.obs_size, hidden_size, self.n_actions)
         self.optimizer = optim.Adam(params=self.model.parameters(),
                                     lr=lr)
+        self.loss_min = np.infty # for debugging
     
     def act(self, state):
         if np.random.rand() <= self.epsilon:
@@ -178,6 +179,13 @@ class DQNAgent(GenericAgent):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
             self.ex.log_scalar('epsilon', self.epsilon)
+        
+        if loss_v.item() < self.loss_min:
+            self.loss_min = loss_v.item()
+        if loss_v.item() > 3*self.loss_min:
+            print('loss too high')
+
+        return loss_v.item()
 
 @ex.config
 def cfg():
@@ -189,6 +197,7 @@ def cfg():
     lr = 0.01
     hidden_size = 128
     batch_size = 16 # 512
+    seed = 1234
 
 """
 DEGUGGING Idea: 1. set fixed seed
@@ -199,13 +208,14 @@ DEGUGGING Idea: 1. set fixed seed
 
 
 @ex.automain
-def run(n_episodes, batch_size, gamma, lr, epsilon_decay):
+def run(n_episodes, batch_size, gamma, lr, epsilon_decay, seed):
     print('running...')
     env = gym.make('CartPole-v0')
     agent = DQNAgent(env, gamma=gamma, lr=lr,
                     batch_size=batch_size, ex=ex,
                     epsilon_decay=epsilon_decay,
                     net=Net)
+    loss_min = np.infty
 
     for ep_idx in range(n_episodes):
         state = env.reset()
@@ -220,4 +230,4 @@ def run(n_episodes, batch_size, gamma, lr, epsilon_decay):
                 break
         
         if len(agent.memory) > batch_size:
-            agent.replay(batch_size)
+            loss = agent.replay(batch_size)
