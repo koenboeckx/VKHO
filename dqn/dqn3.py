@@ -56,7 +56,7 @@ def discretize(state, env):
     return tuple(new_state)
 
 class Agent:
-    def __init__(self, env, ex=ex, maxlen=100, gamma=0.99, alpha=0.1):
+    def __init__(self, env, ex=ex, maxlen=100, gamma=0.99, alpha=0.1, decay=0.995):
         self.env = env
         self.ex = ex
         self.n_actions = env.action_space.n
@@ -68,7 +68,7 @@ class Agent:
         self.min_alpha = alpha
 
         self.epsilon = 1.0
-        self.decay = 0.995
+        self.decay = decay
         self.epsilon_min = 0.05
      
     def act(self, state):
@@ -82,7 +82,18 @@ class Agent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
     
+    def update(self, state, action, reward, next_state, done):
+        "update Q based on single sample"
+        prediction = self.Q[discretize(state, self.env)][action]
+        if not done:
+            target = reward + self.gamma * max(self.Q[discretize(next_state, self.env)])
+        else:
+            target = reward
+        diff = target - prediction
+        self.Q[discretize(state, self.env)][action] += self.alpha * diff
+    
     def replay(self, batchsize):
+        "update Q based on sampled minibatch"
         minibatch = random.sample(self.memory, batchsize)
         cum_diff = 0
         for state, action, reward, next_state, done in minibatch:
@@ -107,17 +118,19 @@ class Agent:
 
 @ex.config
 def cfg():
-    n_episodes  = 5000
+    n_episodes  = 1000
     batchsize   = 8
     maxlen      = 2000
-    gamma       = 0.9
-    min_alpha   = 0.01
+    gamma       = 0.99
+    min_alpha   = 0.1
+    decay       = 0.995
 
-@ex.automain
-def run(n_episodes, batchsize, maxlen, gamma, min_alpha):
+#@ex.automain
+def run(n_episodes, batchsize, maxlen, gamma, min_alpha, decay):
+    "run with minibatch update"
     env = gym.make('CartPole-v0')
     env._max_episode_steps = 499
-    agent = Agent(env, ex=ex, maxlen=maxlen, gamma=gamma, alpha=min_alpha)
+    agent = Agent(env, ex=ex, maxlen=maxlen, gamma=gamma, alpha=min_alpha, decay=decay)
     for ep_idx in range(n_episodes):
         state = env.reset()
         for time_t in range(500):
@@ -134,4 +147,32 @@ def run(n_episodes, batchsize, maxlen, gamma, min_alpha):
         
         if len(agent.memory) > batchsize:
             agent.replay(batchsize)
+    env.close()
+
+@ex.automain
+def run2(n_episodes, maxlen, gamma, min_alpha, decay):
+    "run with update after every step"
+    env = gym.make('CartPole-v0')
+    env._max_episode_steps = 499
+    agent = Agent(env, ex=ex, maxlen=maxlen, gamma=gamma, alpha=min_alpha, decay=decay)
+    for ep_idx in range(n_episodes):
+        state = env.reset()
+        for time_t in range(500):
+            if ep_idx % 500 == 0:
+                env.render()
+            action = agent.act(state)
+            next_state, reward, done, _ = env.step(action)
+            agent.update(state, action, reward, next_state, done)
+
+            state = next_state
+            if done:
+                print('episode {}/{}, score: {}'.format(ep_idx, n_episodes, time_t))
+                ex.log_scalar('reward', time_t)
+                break
+
+        if agent.epsilon > agent.epsilon_min:
+            agent.epsilon *= agent.decay
+        if agent.alpha > agent.min_alpha:
+            agent.alpha *= agent.decay
+
     env.close()
