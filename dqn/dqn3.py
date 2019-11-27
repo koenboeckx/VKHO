@@ -91,20 +91,15 @@ class Agent:
             target = reward
         diff = target - prediction
         self.Q[discretize(state, self.env)][action] += self.alpha * diff
+        return diff
     
     def replay(self, batchsize):
         "update Q based on sampled minibatch"
         minibatch = random.sample(self.memory, batchsize)
         cum_diff = 0
         for state, action, reward, next_state, done in minibatch:
-            prediction = self.Q[discretize(state, self.env)][action]
-            if not done:
-                target = reward + self.gamma * max(self.Q[discretize(next_state, self.env)])
-            else:
-                target = reward
-            diff = target - prediction
+            diff = self.update(state, action, reward, next_state, done)
             cum_diff += diff
-            self.Q[discretize(state, self.env)][action] += self.alpha * diff
         
         self.ex.log_scalar('avg_diff', cum_diff/len(minibatch))
 
@@ -125,7 +120,7 @@ def cfg():
     min_alpha   = 0.1
     decay       = 0.995
 
-#@ex.automain
+@ex.automain
 def run(n_episodes, batchsize, maxlen, gamma, min_alpha, decay):
     "run with minibatch update"
     env = gym.make('CartPole-v0')
@@ -134,7 +129,7 @@ def run(n_episodes, batchsize, maxlen, gamma, min_alpha, decay):
     for ep_idx in range(n_episodes):
         state = env.reset()
         for time_t in range(500):
-            if ep_idx % 500 == 0:
+            if ep_idx % 499 == 0:
                 env.render()
             action = agent.act(state)
             next_state, reward, done, _ = env.step(action)
@@ -149,7 +144,7 @@ def run(n_episodes, batchsize, maxlen, gamma, min_alpha, decay):
             agent.replay(batchsize)
     env.close()
 
-@ex.automain
+#@ex.automain
 def run2(n_episodes, maxlen, gamma, min_alpha, decay):
     "run with update after every step"
     env = gym.make('CartPole-v0')
@@ -158,7 +153,7 @@ def run2(n_episodes, maxlen, gamma, min_alpha, decay):
     for ep_idx in range(n_episodes):
         state = env.reset()
         for time_t in range(500):
-            if ep_idx % 500 == 0:
+            if ep_idx % 499 == 0:
                 env.render()
             action = agent.act(state)
             next_state, reward, done, _ = env.step(action)
