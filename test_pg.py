@@ -15,16 +15,17 @@ ex.observers.append(MongoObserver(url='localhost',
 
 @ex.config
 def cfg():
-    rl_type = 'reinforce'
+    rl_type = 'reinforce' # 'reinforce' or 'actor-critic'
     n_hidden = 128
     lr = 0.001
     n_episodes = 50
     n_steps = 2000
     board_size = 7
-    agent_type = 'normal'
+    agent_type = 'gru' # 'normal or 'gru'
+    hidden_size = 512 # size of hidden vector in RNN
 
 @ex.automain
-def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size, agent_type):
+def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size, agent_type, hidden_size):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if agent_type == 'normal':
@@ -32,7 +33,7 @@ def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size, agent_type):
         agent1 = pg.PGAgent(1, device, board_size=board_size)
     elif agent_type == 'gru':
         agent0 = pg.PG_GRUAgent(0, device, board_size=board_size)
-        agent1 = pg.PG_GRUAgent(0, device, board_size=board_size)
+        agent1 = pg.PG_GRUAgent(1, device, board_size=board_size)
 
     agent_list = [
         agent0, # Team 1
@@ -45,8 +46,14 @@ def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size, agent_type):
     env = Environment(agent_list, size=board_size)
          
     for agent in agents:
-        agent.set_model((1, env.board_size, env.board_size), env.n_actions,
-                        lr=lr)
+        if agent_type == 'normal':
+            agent.set_model((1, env.board_size, env.board_size), env.n_actions,
+                            lr=lr)
+        elif agent_type == 'gru':
+            agent.set_model((1, env.board_size, env.board_size), env.n_actions,
+                            lr=lr, hidden_size=hidden_size)
+        print(agent)
+        print(agent.model)
     
     if rl_type == 'reinforce':
         pg.reinforce(env, agents, n_episodes=n_episodes,

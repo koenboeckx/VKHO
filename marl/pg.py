@@ -75,7 +75,10 @@ class PG_GRUAgent(PGAgent):
     def __init__(self, idx, device, board_size=11):
         super(PG_GRUAgent, self).__init__(idx, device, board_size=11)
 
-    def set_model(self, input_shape, n_actions, lr):
+    def __str__(self):
+        return 'GRU' + str(self.idx)
+
+    def set_model(self, input_shape, n_actions, lr, hidden_size):
         """
         Set the model (neural net) of the agent.
 
@@ -85,7 +88,8 @@ class PG_GRUAgent(PGAgent):
         :return: None
         """
         self.model = agent_models.PG_GRUNet(input_shape, n_actions,
-            lr=lr, board_size=self.board_size).to(self.device)
+                    lr=lr, board_size=self.board_size,
+                    hidden_size=hidden_size).to(self.device)
     
     def get_action(self, state):
         board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
@@ -232,7 +236,8 @@ def reinforce(env, agents, **kwargs):
             logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
             loss = - logprob_act_vals_v.mean()
 
-            print('Agent {}: Loss = {:.5f}'.format(str(agent), loss.item()))
+            print('Step {} - Agent {}: Loss = {:.5f}'.format(step_idx, 
+                                                    str(agent), loss.item()))
             ex.log_scalar('loss_{}'.format(str(agent)), loss.item())
 
             loss.backward()

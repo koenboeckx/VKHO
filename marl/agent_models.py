@@ -157,9 +157,12 @@ class PGExtendedModel(nn.Module):
 class PG_GRUNet(nn.Module):
     """Defines and learns the behavior of a single agent with a RNN.
     Enables (implicit) conditioning on trajectory in stead of state"""
-    def __init__(self, input_shape, n_actions, hidden_size=32, n_layers=1,
-                 lr=0.01, board_size=11):
+    def __init__(self, input_shape, n_actions, **kwargs):
         super(PG_GRUNet, self).__init__()
+        hidden_size=kwargs.get('hidden_size', 32)
+        n_layers=kwargs.get('n_layers', 1)
+        lr = kwargs.get('lr', 0.01)
+        board_size = kwargs.get('board_size', 11)
 
         # first Conv2d + fc (ammo, alive), then as input to GRU
 
@@ -179,16 +182,17 @@ class PG_GRUNet(nn.Module):
 
         self.conv_out_size = self._get_conv_out(input_shape)
         
+        rnn_input_size = 128
         self.fc = nn.Sequential(
-            nn.Linear(self.conv_out_size + 32, 128), # TODO: is 128 large enough for 11x11?
+            nn.Linear(self.conv_out_size + 32, rnn_input_size), # TODO: is 128 large enough for 11x11?
             nn.ReLU(),
         )
         
         # recurrent layer
-        self.rnn = nn.GRU(input_size=128,           # The number of expected features in the input x
-                          hidden_size=hidden_size,  # The number of features in the hidden state h
-                          num_layers=n_layers,      # Number of recurrent layers (default=1)
-                          bias=True,                # Use bias weights
+        self.rnn = nn.GRU(input_size=rnn_input_size,    #The number of expected features in the input x
+                          hidden_size=hidden_size,      # The number of features in the hidden state h
+                          num_layers=n_layers,          # Number of recurrent layers (default=1)
+                          bias=True,                    # Use bias weights
                           )
         # fully-connected layer
         self.policy_head = nn.Linear(self.hidden_dim, n_actions) # policy head
