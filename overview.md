@@ -76,5 +76,7 @@
     1. [14Nov19]: TODO: implement experiment manager like 'sacred' 
     1. [18Nov19]: open ai CartPole-v0 single agent works (well) with actor-critic2; however, this doesn't work with battlefield game => is this an error or is more going on? **To investigate**
     1. [19Nov19]: removed SummaryWriter; all experiments are defined with `sacred` and stored in a MongoDB.
+    1. [26Nov19]: Test simple implementation of DQN and tabular Q-learning on Cartpole (discretized if needed)
+    1. [27Nov19]: Began development of GRU agent model
 
     
