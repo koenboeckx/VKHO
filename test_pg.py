@@ -21,13 +21,18 @@ def cfg():
     n_episodes = 50
     n_steps = 2000
     board_size = 7
+    agent_type = 'normal'
 
 @ex.automain
-def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size):
+def run(rl_type, n_hidden, lr, n_episodes, n_steps, board_size, agent_type):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    agent0 = pg.PGAgent(0, device, board_size=board_size)
-    agent1 = pg.PGAgent(1, device, board_size=board_size)
+    if agent_type == 'normal':
+        agent0 = pg.PGAgent(0, device, board_size=board_size)
+        agent1 = pg.PGAgent(1, device, board_size=board_size)
+    elif agent_type == 'gru':
+        agent0 = pg.PG_GRUAgent(0, device, board_size=board_size)
+        agent1 = pg.PG_GRUAgent(0, device, board_size=board_size)
 
     agent_list = [
         agent0, # Team 1

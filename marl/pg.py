@@ -65,7 +65,31 @@ class PGAgent(agents.Tank):
     
     def get_action(self, state):
         board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
-        _, logits = self.model(board_v, state_v)
+        _, logits = self.model(board_v, state_v)[0]
+        probs = F.softmax(logits, dim=-1)
+        m = Categorical(probs)
+        action = m.sample()
+        return action.item()
+
+class PG_GRUAgent(PGAgent):
+    def __init__(self, idx, device, board_size=11):
+        super(PG_GRUAgent, self).__init__(idx, device, board_size=11)
+
+    def set_model(self, input_shape, n_actions, lr):
+        """
+        Set the model (neural net) of the agent.
+
+        :param input_shape: shape of input vector (channels, widht, height)
+        :param lr:          learning rate for model optimizer (=Adam)
+        :param device:      torch.device("cpu" or "cuda")
+        :return: None
+        """
+        self.model = agent_models.PG_GRUNet(input_shape, n_actions,
+            lr=lr, board_size=self.board_size).to(self.device)
+    
+    def get_action(self, state):
+        board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
+        _, logits = self.model(board_v, state_v)[0]
         probs = F.softmax(logits, dim=-1)
         m = Categorical(probs)
         action = m.sample()
@@ -203,7 +227,7 @@ def reinforce(env, agents, **kwargs):
             states_v  = [tensor.to(agent.device) for tensor in preprocess(episodes[0])]
             actions_v = torch.LongTensor([a[agent.idx] for a in episodes[1]]).to(agent.device)
 
-            _, logits_v = agent.model(*states_v)
+            _, logits_v = agent.model(*states_v)[0] # TODO: specific for GRU !! 
             logprob_v = F.log_softmax(logits_v, dim=1)
             logprob_act_vals_v = returns_v * logprob_v[range(n_states), actions_v]
             loss = - logprob_act_vals_v.mean()

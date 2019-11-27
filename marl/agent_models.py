@@ -152,12 +152,12 @@ class PGExtendedModel(nn.Module):
         fc_out = self.fc(first_layer_out)
         value = self.value(fc_out)
         log_probs = self.policy(fc_out)
-        return value, log_probs
+        return (value, log_probs), None # for consistency with GRU
 
 class PG_GRUNet(nn.Module):
     """Defines and learns the behavior of a single agent with a RNN.
     Enables (implicit) conditioning on trajectory in stead of state"""
-    def __init__(self, input_shape, hidden_size, n_actions, n_layers=1,
+    def __init__(self, input_shape, n_actions, hidden_size=32, n_layers=1,
                  lr=0.01, board_size=11):
         super(PG_GRUNet, self).__init__()
 
@@ -193,6 +193,8 @@ class PG_GRUNet(nn.Module):
         # fully-connected layer
         self.policy_head = nn.Linear(self.hidden_dim, n_actions) # policy head
         self.value_head  = nn.Linear(self.hidden_dim, 1)         # value head
+
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -200,14 +202,14 @@ class PG_GRUNet(nn.Module):
         o = self.conv_layer(torch.zeros(1, *shape))
         return int(np.prod(o.size()))
 
-    def forward(self, x):
-        """ x is tuple (board, other_vars)"""
-        board, other = x
+    def forward(self, board, other):
+        """ TODO: param x is tuple (board, other_vars)"""
+        #board, other = x
         batch_size = board.size(0)
 
-        conv_out  = self.conv_layer(board)
+        conv_out  = self.conv_layer(board).view(board.size()[0], -1)
         fc_out    = self.initial_fc(other)
-        rnn_input = torch.cat((conv_out, fc_out), 1)
+        rnn_input = self.fc(torch.cat((conv_out, fc_out), 1))
 
         # initialize hidden state for first input using method defined below
         hidden = self.init_hidden(batch_size)
@@ -217,10 +219,10 @@ class PG_GRUNet(nn.Module):
 
         # reshape the outputs such that they can be fit into fully-connected layer
         rnn_out = rnn_out.contiguous().view(-1, self.hidden_dim)
-        policy = self.policy_head(rnn_out)
+        logits = self.policy_head(rnn_out)
         value  = self.value_head(rnn_out)
 
-        return (policy, value), hidden
+        return (value, logits), hidden
     
     def init_hidden(self, batch_size):
         """This method generates the first hidden state of zeros which we'll use
