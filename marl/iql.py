@@ -227,7 +227,7 @@ def train(env, agents, **kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('Using device {} ...'.format(device))
         
-    get_epsilon = create_temp_schedule(1.0, 0.1, 500000)
+    get_epsilon = create_temp_schedule(1.0, 0.1, n_steps//2)
 
     buffers = [ReplayBuffer(buffer_size) for _ in agents]
     state = env.get_init_game_state()
@@ -236,7 +236,8 @@ def train(env, agents, **kwargs):
 
     for step_idx in range(n_steps):        
         eps = get_epsilon(step_idx)
-        eps = 0.1 # fixed epsilon
+        ex.log_scalar('epsilon', eps)
+
         actions = [0, 0, 0, 0]
         for agent in env.agents:
             if agent in agents:

@@ -18,7 +18,7 @@ def cfg():
     buffer_size = 10000
     sync_rate = 10000
     n_steps = 25000
-    lr = 0.00001
+    lr = 0.01
     board_size = 5
     gamma = 0.99
 

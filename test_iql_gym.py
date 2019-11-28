@@ -16,11 +16,11 @@ ex.observers.append(MongoObserver(url='localhost',
 
 @ex.config
 def cfg():
-    mini_batch_size = 128
-    buffer_size = 1000 # 10000
+    mini_batch_size = 8
+    buffer_size = 200 # 10000
     sync_rate = 5000 # 10000
     n_steps = 25000
-    lr = 0.001
+    lr = 0.1
     gamma = 0.99
     n_hidden = 128
 

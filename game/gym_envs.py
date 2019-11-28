@@ -4,6 +4,7 @@ class Environment:
     """A wrapper for the GYM environment"""
     def __init__(self, agents, **kwargs):
         self.environment = gym.make('CartPole-v0')
+        self.environment._max_episode_steps = 499
         self.agents = agents
         self.n_actions = self.environment.action_space.n
         self.state_space = self.environment.observation_space.shape

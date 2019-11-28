@@ -19,9 +19,9 @@ def cfg():
     n_hidden = 128
     lr = 0.001
     n_episodes = 50
-    n_steps = 2000
+    n_steps = 1000
     board_size = 7
-    agent_type = 'gru' # 'normal or 'gru'
+    agent_type = 'normal' # 'normal or 'gru'
     hidden_size = 512 # size of hidden vector in RNN
 
 @ex.automain
