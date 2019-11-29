@@ -21,6 +21,8 @@ class Net(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(in_size, hidden_size),
             nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
             nn.Linear(hidden_size, out_size)
         )
     
@@ -28,7 +30,7 @@ class Net(nn.Module):
         return self.fc(x)
 
 class GymAgent:
-    def __init__(self, buffer_size, gamma):
+    def __init__(self, buffer_size, gamma, epsilon_decay):
         self.idx = 0
 
         self.buffer = deque(maxlen=buffer_size)
@@ -36,7 +38,7 @@ class GymAgent:
 
         self.epsilon = 1.0
         self.epsilon_min = 0.1
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = epsilon_decay
     
     def __repr__(self):
         return 'gym0'
@@ -66,7 +68,7 @@ class GymAgent:
         return batch
 
     def compute_loss(self, batch):
-        states, actions, rewards, next_states, dones = list(zip(*batch))
+        states, actions, rewards, next_states, dones = zip(*batch)
 
         states_v = torch.FloatTensor(states)
         actions_v = torch.LongTensor(actions)
@@ -75,46 +77,52 @@ class GymAgent:
         done_mask = torch.ByteTensor(dones)
 
         predictions_v = self.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
-        next_vals_v = torch.max(self.target(next_states_v), dim=1)[0]
-        next_vals_v = next_vals_v.detach() # change compared to iql.py
-        next_vals_v[done_mask] = 0.0
+        next_vals_v = self.target(next_states_v).detach().max(1)[0]
+        #next_vals_v[done_mask] = 0.0
         targets_v = rewards_v + self.gamma * next_vals_v
 
-        loss = F.mse_loss(targets_v, predictions_v)
+        #loss = F.mse_loss(targets_v, predictions_v)
+        loss = F.smooth_l1_loss(targets_v, predictions_v)
         return loss
 
 
 @ex.config
 def cfg():
-    n_episodes = 1000
-    sync_rate  = 250
-    n_hidden = 64
-    lr = 0.05
-    buffer_size = 500
-    batch_size = 8
-    gamma = 0.99
+    n_episodes = 10000
+    sync_rate  = 1000
+    n_hidden = 256
+    lr = 0.001
+    buffer_size = 10000
+    batch_size = 64
+    gamma = 0.8
+    epsilon_decay = 0.9995
 
 @ex.automain
-def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, maxsteps=500):
+def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, epsilon_decay, maxsteps=500):
     env = gym.make('CartPole-v0')
     env._max_episode_steps = maxsteps-1
 
     n_state   = env.observation_space.shape[0]
     n_actions = env.action_space.n
-    agent = GymAgent(buffer_size, gamma)
+    agent = GymAgent(buffer_size, gamma, epsilon_decay)
     agent.set_model(n_state, n_actions, n_hidden, lr)
+    print(agent.model)
 
     for episode_idx in range(n_episodes):
         state = env.reset()
         for time_t in range(maxsteps):
             action = agent.get_action(state)
             next_state, reward, done, _ = env.step(action)
+            if done:
+                reward = -1
             agent.remember((state, action, reward, next_state, done))
             if done:
                 break
-        ex.log_scalar('reward', time_t)
     
-        if len(agent.buffer) > batch_size:
+            if len(agent.buffer) < batch_size: # don't train when not enough samples for batch
+                continue
+            
+            # learning after each step in the episode
             batch = agent.sample(batch_size)
             loss = agent.compute_loss(batch)
             ex.log_scalar('loss', loss.item())
@@ -123,9 +131,11 @@ def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, m
             loss.backward()
             agent.optimizer.step()
 
-            if agent.epsilon > agent.epsilon_min:
-                agent.epsilon *= agent.epsilon_decay
-            ex.log_scalar('epsilon', agent.epsilon)
+        ex.log_scalar('reward', time_t)
+
+        if agent.epsilon > agent.epsilon_min:
+            agent.epsilon *= agent.epsilon_decay
+        ex.log_scalar('epsilon', agent.epsilon)
         
         if (episode_idx + 1) % sync_rate == 0:
             agent.sync_models()

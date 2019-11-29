@@ -8,3 +8,4 @@ marl/models/*
 test_sacred/online_retail.csv
 test_sacred/online_retail2.csv
 gru/data/*
+tmp/*
