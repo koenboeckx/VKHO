@@ -57,8 +57,9 @@ class GymAgent:
         if random.random() < self.epsilon:
             return random.randint(0, 1)
         else:
-            values = self.model(torch.FloatTensor([state]))
-            return torch.argmax(values).item()
+            with torch.no_grad():
+                values = self.model(torch.FloatTensor([state]))
+                return torch.argmax(values).item()
     
     def remember(self, experience):
         self.buffer.append(experience)
@@ -78,7 +79,8 @@ class GymAgent:
 
         predictions_v = self.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
         next_vals_v = self.target(next_states_v).detach().max(1)[0]
-        #next_vals_v[done_mask] = 0.0
+        #next_vals_v = self.model(next_states_v).detach().max(1)[0]
+        next_vals_v[done_mask] = 0.0
         targets_v = rewards_v + self.gamma * next_vals_v
 
         #loss = F.mse_loss(targets_v, predictions_v)
@@ -92,10 +94,10 @@ def cfg():
     sync_rate  = 1000
     n_hidden = 256
     lr = 0.001
-    buffer_size = 10000
-    batch_size = 64
-    gamma = 0.8
-    epsilon_decay = 0.9995
+    buffer_size = 1000000
+    batch_size = 20
+    gamma = 0.
+    epsilon_decay = 0.995
 
 @ex.automain
 def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, epsilon_decay, maxsteps=500):
@@ -113,8 +115,8 @@ def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, e
         for time_t in range(maxsteps):
             action = agent.get_action(state)
             next_state, reward, done, _ = env.step(action)
-            if done:
-                reward = -1
+            #if done:
+            #    reward = -1
             agent.remember((state, action, reward, next_state, done))
             if done:
                 break
