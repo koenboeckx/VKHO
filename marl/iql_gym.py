@@ -8,6 +8,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
+import numpy as np
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -55,11 +56,12 @@ class GymAgent:
    
     def get_action(self, state):
         if random.random() < self.epsilon:
-            return random.randint(0, 1)
+            action = random.randint(0, 1)
         else:
             with torch.no_grad():
                 values = self.model(torch.FloatTensor([state]))
-                return torch.argmax(values).item()
+                action = torch.argmax(values).item()
+        return action
     
     def remember(self, experience):
         self.buffer.append(experience)
@@ -75,7 +77,8 @@ class GymAgent:
         actions_v = torch.LongTensor(actions)
         rewards_v = torch.FloatTensor(rewards)
         next_states_v = torch.FloatTensor(next_states)
-        done_mask = torch.ByteTensor(dones)
+        #done_mask = torch.ByteTensor(dones)
+        done_mask = torch.BoolTensor(dones)
 
         predictions_v = self.model(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
         next_vals_v = self.target(next_states_v).detach().max(1)[0]
@@ -87,20 +90,46 @@ class GymAgent:
         #loss = F.smooth_l1_loss(targets_v, predictions_v)
         return loss
 
+    def learn(self, batch_size):
+        if len(self.buffer) < batch_size: # don't train when not enough samples for batch
+            return None
+            
+        # learning after each step in the episode
+        batch = self.sample(batch_size)
+        loss = self.compute_loss(batch)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
+
+
+def normalize_state(x):
+    normalizer = [2., 3., 0.3, 2.]
+    y = x / normalizer
+    return y
 
 @ex.config
 def cfg():
     n_episodes = 10000
-    sync_rate  = 1000
-    n_hidden = 256
-    lr = 0.001
-    buffer_size = 1000000
-    batch_size = 20
-    gamma = 0.
+    sync_rate  = 100
+    n_hidden = 128
+    lr = 0.1
+    buffer_size = 5000
+    batch_size = 32
+    gamma = 0.8
     epsilon_decay = 0.995
+    debug = True
+    comment = "original with normalizer"
+
+
 
 @ex.automain
-def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, epsilon_decay, maxsteps=500):
+def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma,
+             sync_rate, epsilon_decay, debug, comment,
+             maxsteps=500):
+    gym.logger.set_level(40) # remove warning about gym.spaces.Box
     env = gym.make('CartPole-v0')
     env._max_episode_steps = maxsteps-1
 
@@ -108,34 +137,31 @@ def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, e
     n_actions = env.action_space.n
     agent = GymAgent(buffer_size, gamma, epsilon_decay)
     agent.set_model(n_state, n_actions, n_hidden, lr)
+    
+    print(comment)
     print(agent.model)
 
     for episode_idx in range(n_episodes):
-        state = env.reset()
-        for time_t in range(maxsteps):
-            if (episode_idx + 1) % 50 == 0:
+        state = normalize_state(env.reset())
+        done = False
+        n_steps = 0
+        while not done:
+            if debug and (episode_idx + 1) % 100 == 0:
                 env.render()
             action = agent.get_action(state)
-            next_state, reward, done, _ = env.step(action)
+
+            next_state, reward, done, _ = env.step(int(action))
+            next_state = normalize_state(next_state)
             #if done:
             #    reward = -1
             agent.remember((state, action, reward, next_state, done))
-            if done:
-                break
-    
-            if len(agent.buffer) < batch_size: # don't train when not enough samples for batch
-                continue
-            
-            # learning after each step in the episode
-            batch = agent.sample(batch_size)
-            loss = agent.compute_loss(batch)
-            ex.log_scalar('loss', loss.item())
 
-            agent.optimizer.zero_grad()
-            loss.backward()
-            agent.optimizer.step()
+            loss = agent.learn(batch_size)
+            n_steps += 1
+            state = next_state
 
-        ex.log_scalar('reward', time_t)
+        ex.log_scalar('reward', n_steps)
+        if loss: ex.log_scalar('loss', loss) # only store loss if present
 
         if agent.epsilon > agent.epsilon_min:
             agent.epsilon *= agent.epsilon_decay
