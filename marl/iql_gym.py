@@ -83,8 +83,8 @@ class GymAgent:
         next_vals_v[done_mask] = 0.0
         targets_v = rewards_v + self.gamma * next_vals_v
 
-        #loss = F.mse_loss(targets_v, predictions_v)
-        loss = F.smooth_l1_loss(targets_v, predictions_v)
+        loss = F.mse_loss(targets_v, predictions_v)
+        #loss = F.smooth_l1_loss(targets_v, predictions_v)
         return loss
 
 
@@ -113,6 +113,8 @@ def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, e
     for episode_idx in range(n_episodes):
         state = env.reset()
         for time_t in range(maxsteps):
+            if (episode_idx + 1) % 50 == 0:
+                env.render()
             action = agent.get_action(state)
             next_state, reward, done, _ = env.step(action)
             #if done:
@@ -141,6 +143,7 @@ def train(n_episodes, n_hidden, lr, buffer_size, batch_size, gamma, sync_rate, e
         
         if (episode_idx + 1) % sync_rate == 0:
             agent.sync_models()
+
 
 
 
