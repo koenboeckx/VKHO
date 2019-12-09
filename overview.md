@@ -79,19 +79,6 @@
     1. [26Nov19]: Test simple implementation of DQN and tabular Q-learning on Cartpole (discretized if needed)
     1. [27Nov19]: Began development of GRU agent model
     1. [07Dec19]: TODO: use variable identifiers in parameter lists
-    1. [08Dec19]: Video Whitston COMA:
-        * Inductive bias in MARL: multiple learning agents are present!
-        * Types of Multi-Agent systems:
-            1. Cooperative:
-                * Shared team reward
-                * Coordination problem
-            1. Competitive:
-                * Zero-sum games
-                * Individual opposing rewards
-                * Minimax equilibria
-            1. Mixed
-                * General-sum games
-                * Nash equilibria
-                * What is the question?
+    1. [09Dec19]: Created separate branch (iac) to develop independent actor-critic (see arxiv.org/abs/1902.04043)
 
     
