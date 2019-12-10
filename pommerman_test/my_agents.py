@@ -50,7 +50,6 @@ class Model01(nn.Module):
             x[idx, 1, :, :] = torch.tensor(inp['blast_strength'])
             x[idx, 2, :, :] = torch.tensor(inp['bomb_life'])
         return x
-
     
     def forward(self, inputs):
         x = self._proces_inputs(inputs)
@@ -58,6 +57,12 @@ class Model01(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
+
+class Model02(nn.Module):
+    """(Flat) Model that includes other info than pure board (e.g. bombs left)"""
+    def __init__(input_shape, args):
+        super().__init__()
+        # TODO: finish this
 
 class IPGAgent(agents.BaseAgent):
     "Independent Policy Gradients Agent"
@@ -123,9 +128,12 @@ def reinforce(learners, args):
 
         ex.log_scalar("episode_length", len(episode))
         for agent in learners:
-            ex.log_scalar("reward_{}".format(agent.idx), episode[-1].reward[agent.idx])
+            ex.log_scalar("reward_{}".format(agent.idx),
+                          episode[-1].reward[agent.idx],
+                          i_episode)
             print('rewards = ', episode[-1].reward)
-            ex.log_scalar("temperature{}".format(agent.idx), agent.temperature)
+            ex.log_scalar("temperature{}".format(agent.idx),
+                          agent.temperature, i_episode)
         
         episode = list(zip(*episode))
         returns = list(zip(*returns))
