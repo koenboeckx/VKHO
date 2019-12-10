@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 
 import pommerman
-from pommerman import agents as pommerman_agents
+from pommerman import agents
 from pommerman import characters
 
 import torch
@@ -59,8 +59,7 @@ class Model01(nn.Module):
         x = self.fc2(x)
         return x
 
-
-class IPGAgent(pommerman_agents.BaseAgent):
+class IPGAgent(agents.BaseAgent):
     "Independent Policy Gradients Agent"
     def __init__(self, args, character=characters.Bomber):
         super().__init__(character)
@@ -69,14 +68,21 @@ class IPGAgent(pommerman_agents.BaseAgent):
         self.actor = Model01((3, 11, 11), args).to(args.device)
         self.optimizer = optim.Adam(self.actor.parameters(),
                                     lr=args.lr)
+        self.temperature = 100.0
+        self.temp_decay  = 0.9999
     
     def act(self, obs, action_space):
         """Choose action from P(action|obs),
         represented by Agent.actor"""
         logits = self.actor([obs])[0]
-        probs = F.softmax(logits, dim=-1)
+        probs = F.softmax(logits / self.temperature, dim=-1)
         m = torch.distributions.Categorical(probs)
         action = m.sample()
+
+        print(self.idx, ' -> ', probs.data, 'chosen action = ', action.item(), ' temp = ', self.temperature)
+
+        self.temperature *= self.temp_decay
+
         return action.item()
 
 def generate_episode(env, render=False):
@@ -87,6 +93,7 @@ def generate_episode(env, render=False):
         if render: env.render()
         actions = env.act(state)
         next_state, reward, done, info = env.step(actions)
+        print('actions = ', actions, ' alive = ', next_state[0]['alive'])
         episode.append(Experience(state, actions, reward, next_state, done))
         state = next_state
     return episode
@@ -99,37 +106,58 @@ def compute_returns(env, episode, gamma):
         returns.append(cum_reward)
     return list(reversed(returns))
 
-def reinforce(agents, args):
-    agent = agents[0]
-    agent_list = [agent,
-                  pommerman_agents.SimpleAgent()]
-    
-    agent.idx = 0
-    env = pommerman.make('PommeFFACompetition-v0', agent_list)
+def reinforce(learners, args):
+    agent_list = [learners[0],
+                  agents.SimpleAgent(),
+                  #agents.PlayerAgent(agent_control="arrows"),
+                  learners[1],
+                  agents.SimpleAgent(),
+                  #agents.PlayerAgent(agent_control="wasd")
+                ]
+
+    env = pommerman.make('PommeTeamCompetition-v0', agent_list)
 
     for i_episode in range(args.n_episodes):
-        episode = generate_episode(env)
+        episode = generate_episode(env, render=args.render)
         returns = compute_returns(env, episode, args.gamma)
 
-        ex.log_scalar("reward", episode[-1].reward[agent.idx])
+        ex.log_scalar("episode_length", len(episode))
+        for agent in learners:
+            ex.log_scalar("reward_{}".format(agent.idx), episode[-1].reward[agent.idx])
+            print('rewards = ', episode[-1].reward)
+            ex.log_scalar("temperature{}".format(agent.idx), agent.temperature)
         
         episode = list(zip(*episode))
         returns = list(zip(*returns))
-        for agent in agents:
+        for agent in learners:
             agent.actor.zero_grad()
+            
             returns_v = torch.tensor(returns[agent.idx]).to(agent.device)
             states  = [state[agent.idx] for state in episode[0]]
             actions_v = torch.LongTensor([action[agent.idx] for action in episode[1]]).to(agent.device)
 
-            logits_v = agent.actor(states)
+            logits_v = agent.actor(states).to(agent.device)
             logprob_v = F.log_softmax(logits_v, dim=1)
+            prob_v = F.softmax(logits_v, dim=1)
+            
             logprob_act_vals_v = returns_v * logprob_v[range(len(states)), actions_v]
+            loss_policy_v = -logprob_act_vals_v.mean()
 
-            loss = - logprob_act_vals_v.mean()
-            args.ex.log_scalar('loss_{}'.format(str(agent.idx)), loss.item())
+            entropy_v = - (prob_v * logprob_v).sum(dim=1).mean()
+            loss_entropy_v = -args.entropy_beta * entropy_v
 
-            loss.backward()
+            loss_v = loss_policy_v + loss_entropy_v
+            
+            print('Agent {} - Episode {} -> loss = {}'.format(agent.idx, i_episode, loss_v.item()))
+
+            ex.log_scalar('policy_loss_{}'.format(str(agent.idx)), loss_policy_v.item())
+            ex.log_scalar('entropy_loss_{}'.format(str(agent.idx)), loss_entropy_v.item())
+            ex.log_scalar('loss_{}'.format(str(agent.idx)), loss_v.item())
+
+            loss_v.backward()
             agent.optimizer.step()
+
+            # TODO: add comparison new and old policy with KL
 
         
     env.close()
@@ -156,22 +184,35 @@ def main(agent):
         print('Episode {} finished'.format(i_episode))
     env.close()
 
-class Arguments:
-    agent_type = 'REINFORCE'
-    device = device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    n_episodes = 100000
-    n_actions = 6
-    gamma = 0.9
-    lr = 0.01
-
 @ex.config
 def cfg():
-    args = Arguments()
+    agent_type = 'REINFORCE'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    n_episodes = 100000
+    gamma = 0.99
+    lr = 0.0001
+    entropy_beta = 0.01
+
+class Arguments:
+    def __init__(self, device, n_episodes, n_actions, gamma, lr, entropy_beta, render):
+        self.device = device
+        self.n_episodes = n_episodes
+        self.n_actions = n_actions
+        self.gamma = gamma
+        self.lr = lr
+        self.entropy_beta = entropy_beta
+        self.render = render
 
 @ex.automain
-def run(args):
-    print(args.agent_type)
-    args.ex = ex
-    agent = IPGAgent(args)
-    print(agent.actor)
-    reinforce([agent], args)
+def run(device, n_episodes, gamma, lr, entropy_beta):
+    n_actions = 6
+    args = Arguments(device, n_episodes, n_actions, gamma, lr, entropy_beta, render=False)
+
+    # create the two learning agents
+    learners = []
+    for idx in [0, 2]: # team 0 contains agents 0 and 2
+        agent = IPGAgent(args)
+        agent.idx = idx
+        learners.append(agent)
+    print(learners[0].actor)
+    reinforce(learners, args)
