@@ -82,7 +82,7 @@
     1. [08Dec19]: Video Whitston COMA:
         * Inductive bias in MARL: multiple learning agents are present!
         * Types of Multi-Agent systems:
-            1. Cooperative:
+            1. Cooperative: **subject of this talk**
                 * Shared team reward
                 * Coordination problem
             1. Competitive:
@@ -93,5 +93,9 @@
                 * General-sum games
                 * Nash equilibria
                 * What is the question?
+        * Coordination problems are everywhere
+            * Cars on a highway
+            * Multiple drones in the air.
+        * Multi-agent MDP
 
     
