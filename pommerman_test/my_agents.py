@@ -59,8 +59,60 @@ class Model01(nn.Module):
         return x
 
 class Model02(nn.Module):
-    """(Flat) Model that includes other info than pure board (e.g. bombs left)"""
-    def __init__(input_shape, args):
+    """(Flat) Model that includes other info than pure board.
+    Extends model above with additional layer for ammo, alive,
+    blast_strength, can_kick."""
+    def __init__(self, input_shape, args):
+        super().__init__()
+        self.in_fc = nn.Sequential( # input fully-connected layer
+            nn.Linear(7, 32), # additional input: ammo (4) , alive (1), blast_strength (1), can_kick (1)
+            nn.ReLU()
+        )
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_shape[0], 16, 3),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 5),
+        )
+        conv_out_size = self._get_conv_out(input_shape)
+
+        self.fc1 = nn.Linear(conv_out_size + 32, 128)
+        self.fc2 = nn.Linear(128, args.n_actions)
+    
+    def _get_conv_out(self, shape):
+        """returns the size for fully-connected layer, 
+        after passage through convolutional layer"""
+        o = self.conv(torch.zeros(1, *shape))
+        return int(np.prod(o.size()))
+    
+    def _proces_inputs(self, inputs):
+        x = torch.zeros((len(inputs), 3, 11, 11))
+        y = torch.zeros(len(inputs), 7)
+        for idx, inp in enumerate(inputs):
+            x[idx, 0, :, :] = torch.tensor(inp['board'])
+            x[idx, 1, :, :] = torch.tensor(inp['blast_strength'])
+            x[idx, 2, :, :] = torch.tensor(inp['bomb_life'])
+            for pidx, player in enumerate([11, 12, 13, 14]):
+                y[idx, pidx] = 1 if player in inp['alive'] else 0
+            y[idx, 4] = torch.tensor(inp['ammo'])
+            y[idx, 5] = torch.tensor(inp['blast_strength'])
+            y[idx, 6] = torch.tensor(int(inp['can_kick']))
+        return x, y
+    
+    def forward(self, inputs):
+        x, y = self._proces_inputs(inputs)
+        x = self.conv(x).view(x.size()[0], -1)
+        y = self.in_fc(y)
+        xy = torch.cat((x, y), 1)
+        xy = F.relu(self.fc1(xy))
+        pol = self.fc2(xy)
+        return pol
+
+class Model03(nn.Module):
+    """(Recurrent) Model that includes other info than pure board.
+    Extends model above with additional layer for ammo, alive,
+    blast_strength, can_kick."""
+    def __init__(self, input_shape, args):
         super().__init__()
         # TODO: finish this
 
@@ -70,7 +122,7 @@ class IPGAgent(agents.BaseAgent):
         super().__init__(character)
         self.args = args
         self.device = args.device
-        self.actor = Model01((3, 11, 11), args).to(args.device)
+        self.actor = Model02((3, 11, 11), args).to(args.device)
         self.optimizer = optim.Adam(self.actor.parameters(),
                                     lr=args.lr)
         self.temperature = 100.0
