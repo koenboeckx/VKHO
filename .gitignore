@@ -9,3 +9,4 @@ test_sacred/online_retail.csv
 test_sacred/online_retail2.csv
 gru/data/*
 tmp/*
+pommerman_test/my_agents.log
