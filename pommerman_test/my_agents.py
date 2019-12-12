@@ -1,4 +1,5 @@
 import random
+import logging
 from collections import namedtuple
 import numpy as np
 
@@ -20,6 +21,39 @@ ex.observers.append(MongoObserver(url='localhost',
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
 ])
+
+logging.basicConfig(filename='./pommerman_test/my_agents.log',level=logging.DEBUG)
+
+class Model00(nn.Module):
+    def __init__(self, input_shape, args):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(1, 16, 3),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 5),
+        )
+        conv_out_size = self._get_conv_out((1, 11, 11))
+
+        self.fc1 = nn.Linear(conv_out_size, 128)
+        self.fc2 = nn.Linear(128, args.n_actions)
+
+    def _get_conv_out(self, shape):
+        o = self.conv(torch.zeros(1, *shape))
+        return int(np.prod(o.size()))
+    
+    def _proces_inputs(self, inputs):
+        x = torch.zeros((len(inputs), 1, 11, 11))
+        for idx, inp in enumerate(inputs):
+            x[idx, 0, :, :] = torch.tensor(inp['board'])
+        return x
+    
+    def forward(self, inputs):
+        x = self._proces_inputs(inputs)
+        x = self.conv(x).view(x.size()[0], -1)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
 
 class Model01(nn.Module):
     """Simple flat model with only the different 'boards'
@@ -122,16 +156,22 @@ class IPGAgent(agents.BaseAgent):
         super().__init__(character)
         self.args = args
         self.device = args.device
-        self.actor = Model02((3, 11, 11), args).to(args.device)
+        self.actor = args.model((3, 11, 11), args).to(args.device)
         self.optimizer = optim.Adam(self.actor.parameters(),
                                     lr=args.lr)
-        self.temperature = 100.0
-        self.temp_decay  = 0.9999
+        self.temperature = 1.0 #100.0
+        self.temp_decay  = 1.0 #0.9999
     
     def act(self, obs, action_space):
         """Choose action from P(action|obs),
         represented by Agent.actor"""
+
         logits = self.actor([obs])[0]
+
+        #logging.debug(self.actor._proces_inputs([obs]))
+        logging.debug('agent {} - obs = {}'.format(self.idx, self.actor._proces_inputs([obs])))
+        logging.debug(logits)
+
         probs = F.softmax(logits / self.temperature, dim=-1)
         m = torch.distributions.Categorical(probs)
         action = m.sample()
@@ -150,7 +190,7 @@ def generate_episode(env, render=False):
         if render: env.render()
         actions = env.act(state)
         next_state, reward, done, info = env.step(actions)
-        print('actions = ', actions, ' alive = ', next_state[0]['alive'])
+        #print('actions = ', actions, ' alive = ', next_state[0]['alive'])
         episode.append(Experience(state, actions, reward, next_state, done))
         state = next_state
     return episode
@@ -244,35 +284,38 @@ def main(agent):
         print('Episode {} finished'.format(i_episode))
     env.close()
 
+Arguments = namedtuple('Arguments', 
+                        ['device', 'n_episodes', 'n_actions', 'gamma',
+                         'lr', 'entropy_beta', 'model', 'render'])
+
 @ex.config
 def cfg():
     agent_type = 'REINFORCE'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    n_episodes = 100000
-    gamma = 0.99
-    lr = 0.0001
-    entropy_beta = 0.01
+    args = {
+        'device': torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+        'n_episodes': 100000,
+        'n_actions': 6,
+        'gamma': 0.99,
+        'lr': 0.0001,
+        'entropy_beta': 0.01,
+        'model': Model00, 
+        'render': False
+    }
 
-class Arguments:
-    def __init__(self, device, n_episodes, n_actions, gamma, lr, entropy_beta, render):
-        self.device = device
-        self.n_episodes = n_episodes
-        self.n_actions = n_actions
-        self.gamma = gamma
-        self.lr = lr
-        self.entropy_beta = entropy_beta
-        self.render = render
+class DictWrapper:
+    def __init__(self, d):
+        self.d = d
+    def __getattr__(self, attr):
+        return self.d[attr]
 
 @ex.automain
-def run(device, n_episodes, gamma, lr, entropy_beta):
-    n_actions = 6
-    args = Arguments(device, n_episodes, n_actions, gamma, lr, entropy_beta, render=False)
-
+def run(args):
+    args_ = DictWrapper(args)
     # create the two learning agents
     learners = []
     for idx in [0, 2]: # team 0 contains agents 0 and 2
-        agent = IPGAgent(args)
+        agent = IPGAgent(args_)
         agent.idx = idx
         learners.append(agent)
     print(learners[0].actor)
-    reinforce(learners, args)
+    reinforce(learners, args_)
