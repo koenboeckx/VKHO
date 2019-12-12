@@ -125,8 +125,8 @@ class IPGAgent(agents.BaseAgent):
         self.actor = Model02((3, 11, 11), args).to(args.device)
         self.optimizer = optim.Adam(self.actor.parameters(),
                                     lr=args.lr)
-        self.temperature = 100.0
-        self.temp_decay  = 0.9999
+        self.temperature = 1.0 #100.0
+        self.temp_decay  = 1.0 #0.9999
     
     def act(self, obs, action_space):
         """Choose action from P(action|obs),
@@ -218,8 +218,7 @@ def reinforce(learners, args):
             agent.optimizer.step()
 
             # TODO: add comparison new and old policy with KL
-
-        
+     
     env.close()
 
 def main(agent):
