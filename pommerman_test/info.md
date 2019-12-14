@@ -31,3 +31,4 @@ _____________________
 1. https://github.com/rwightman/pytorch-pommerman-rl
 1. https://github.com/eugene/pommerman
 1. https://github.com/tambetm/pommerman-baselines
+1. For data visualization: https://github.com/facebookresearch/visdom

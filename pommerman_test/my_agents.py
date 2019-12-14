@@ -4,13 +4,14 @@ from collections import namedtuple
 import numpy as np
 
 import pommerman
-from pommerman import agents
+from pommerman import agents 
 from pommerman import characters
 
 import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
+from torch.distributions import Categorical
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -22,7 +23,7 @@ Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
 ])
 
-logging.basicConfig(filename='./pommerman_test/my_agents.log',level=logging.DEBUG)
+logging.basicConfig(filename='./pommerman_test/my_agents.log', level=logging.DEBUG)
 
 class Model00(nn.Module):
     def __init__(self, input_shape, args):
@@ -53,7 +54,6 @@ class Model00(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
-
 
 class Model01(nn.Module):
     """Simple flat model with only the different 'boards'
@@ -150,6 +150,93 @@ class Model03(nn.Module):
         super().__init__()
         # TODO: finish this
 
+class Policy(nn.Module):
+    """Wrapper for neural network `nn` that samples from 
+    actor_features"""
+    def __init__(self, nn, action_space):
+        self.nn = nn
+    
+    def act(self, inputs, hidden, masks):
+        """Choose action from action space, based on logits that result form
+        applying inputs to self.nn(inputs, masks)
+        :param inputs:
+        :param masks:
+        :return: value, action log_probs
+        """
+        value, logits, rnn_hxs = self.nn(inputs, hidden, masks)
+        dist = Categorical(logits=logits)
+        action = dist.sample()
+        log_probs = dist.log_probs(action)
+        return value, action, log_probs, rnn_hxs
+    
+    def get_value(self, inputs, hidden, masks):
+        value, _, _ = self.nn(inputs, hidden, masks)
+        return value
+    
+    def evaluate_actions(self, inputs, hidden, masks, actions):
+        value, logits, rnn_hxs = self.nn(inputs, hidden, masks)
+        dist = Categorical(logits=logits)
+        log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+        return value, log_probs, dist_entropy, rnn_hxs
+
+
+class BaseModel(nn.Module):
+    def __init__(self, input_size, hidden_size, n_actions):
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_size, hidden_size)
+        )
+    
+    def forward(self, x):
+        pass
+
+def create_policy(obs_space, action_space, name='basic', nn_kwargs={}, train=True):
+    if name == 'basic':
+        nn = BaseModel(obs_shape[0], **nn_kwargs)
+    
+    if train: nn.train() # has only effect on Dropout, BatchNorm, ...
+    else:     nn.eval()
+
+    policy = Policy(nn, action_space=action_space)
+    return policy
+
+class A2C_Agent():
+    def __init__(self, actor_critic, value_loss_coef, entropy_coef,
+                 lr, eps, alpha, max_grad_norm):
+        self.actor_critic = actor_critic
+        self.value_loss_coef = value_loss_coef
+        self.entropy_coef = entropy_coef
+        self.max_grad_norm = max_grad_norm
+
+        self.optimizer = optim.RMSprop(actor_critic.parameters(), lr=lr,
+                                        eps=eps, alpha=alpha)
+    
+    def update(self, rollouts, update_index, replay=None):
+        obs_shape = rollouts.obs.size()[2:]
+        action_shape = rollouts.actions.size()[-1] # always gives 1 ?
+        num_steps, num_processes, _ = rollouts.rewards.size()
+        values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+            rollouts.obs[:-1].view(-1, *obs_shape),
+            None, # dummy for hidden states
+            rollouts.masks[:-1].view(-1, 1),
+            rollouts.actions.view(-1, action_shape)
+        )
+
+        values = values.view(num_steps, num_processes, 1)
+        action_log_probs = action_log_probs.view(num_steps, num_processes, 1)
+
+        advantages = rollouts.returns[:-1] - values
+        value_loss = advantages.pow(2).mean()
+        action_loss = -(advantages.detach() * action_log_probs).mean()
+
+        self.optimizer.zero_grad()
+        loss = value_loss * self.value_loss_coef + action_loss + dist_entropy * self.entropy_coef
+        loss.backward()
+
+        nn.utils.clip_grad_norm(self.actor_critic.parameters(),
+                                self.max_grad_norm))
+        return value_loss.item(), action_loss.item(), dist_entropy.item(), {}
+
 class IPGAgent(agents.BaseAgent):
     "Independent Policy Gradients Agent"
     def __init__(self, args, character=characters.Bomber):
@@ -159,8 +246,6 @@ class IPGAgent(agents.BaseAgent):
         self.actor = args.model((3, 11, 11), args).to(args.device)
         self.optimizer = optim.Adam(self.actor.parameters(),
                                     lr=args.lr)
-        self.temperature = 1.0 #100.0
-        self.temp_decay  = 1.0 #0.9999
     
     def act(self, obs, action_space):
         """Choose action from P(action|obs),
@@ -172,14 +257,11 @@ class IPGAgent(agents.BaseAgent):
         logging.debug('agent {} - obs = {}'.format(self.idx, self.actor._proces_inputs([obs])))
         logging.debug(logits)
 
-        probs = F.softmax(logits / self.temperature, dim=-1)
+        probs = F.softmax(logits, dim=-1)
         m = torch.distributions.Categorical(probs)
         action = m.sample()
 
         print(self.idx, ' -> ', probs.data, 'chosen action = ', action.item(), ' temp = ', self.temperature)
-
-        self.temperature *= self.temp_decay
-
         return action.item()
 
 def generate_episode(env, render=False):
@@ -203,6 +285,54 @@ def compute_returns(env, episode, gamma):
         returns.append(cum_reward)
     return list(reversed(returns))
 
+class RolloutStorage:
+    """Store all information (observations, actions, ...) directly in torch tensors.
+    Only possible because number of steps `num_steps` is known a priori."""
+    def __init__(self, num_steps, num_processes, obs_shape):
+        self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape) # +1 for initial state
+        self.actions = torch.zeros(num_steps, num_processes, 1).long() # is '1' correct?
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
+        self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
+        self.rewards = torch.zeros(num_steps, num_processes, 1)
+        self.returns = torch.zeros(num_steps + 1, num_processes, 1)
+        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+
+        self.num_steps = num_steps
+        self.step = 0
+    
+    def to(self, device):
+        "move all tensor to device"
+        raise NotImplementedError # TODO: implement this
+    
+    def insert(self, obs, actions, action_log_probs, value_preds, rewards, masks):
+        self.obs[self.step + 1].copy_(obs) # alternative to self.obs[self.step + 1] = obs - avoids copying??
+        self.actions[self.step].copy_(actions)
+        self.action_log_probs[self.step].copy_(action_log_probs)
+        self.value_preds[self.step].copy_(value_preds)
+        self.rewards[self.step].copy_(rewards)
+        self.masks[self.step + 1].copy_(masks)
+
+        self.step = (self.step + 1) % self.num_steps
+    
+    def after_update(self):
+        """Call fter update of the agent; move last value to first position where it matters (obs, masks);
+        This allows to reuse the RolloutStorage in next update."""
+        self.obs[0].copy_(self.obs[-1])
+        self.rewards[0].copy_(self.rewards[-1])
+    
+    def compute_returns(self, next_value, gamma, tau = 0.0):
+        """Compute returns at the end of sequence to perform update.
+        :param next_value:  the predicted value after num_steps
+        :param gamma:       discount factor
+        :param tau:         [only used for GAE] # TODO: Implement this
+        """
+        self.returns[-1] = next_value # next_value is the predicted
+        for step in reversed(range(self.num_steps)):
+            self.returns[step] = gamma * self.masks[step + 1] * \
+                self.returns[step + 1] + self.rewards[step]
+
+
+
 def reinforce(learners, args):
     agent_list = [learners[0],
                   agents.SimpleAgent(),
@@ -224,8 +354,6 @@ def reinforce(learners, args):
                           episode[-1].reward[agent.idx],
                           i_episode)
             print('rewards = ', episode[-1].reward)
-            ex.log_scalar("temperature{}".format(agent.idx),
-                          agent.temperature, i_episode)
         
         episode = list(zip(*episode))
         returns = list(zip(*returns))
