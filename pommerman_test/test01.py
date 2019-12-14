@@ -12,11 +12,14 @@ from pommerman import agents
 import torch
 from torch import nn
 from torch import optim
+from torch.nn import functional as F
+from torch.distributions import Categorical
 
 class Policy(nn.Module):
     """Wrapper for neural network `nn` that samples from 
     actor_features"""
     def __init__(self, nn, action_space):
+        super().__init__()
         self.nn = nn
     
     def act(self, inputs, hidden, masks):
@@ -45,14 +48,21 @@ class Policy(nn.Module):
 
 class BaseModel(nn.Module):
     def __init__(self, input_size, hidden_size, n_actions):
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_size, hidden_size)
-        )
-    
-    def forward(self, x):
-        pass
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
 
-def create_policy(obs_space, action_space, name='basic', nn_kwargs={}, train=True):
+        self.value = nn.Linear(hidden_size, 1)
+        self.logits = nn.Linear(hidden_size, n_actions)
+    
+    def forward(self, inputs, *args):
+        x = F.relu(self.fc1(inputs))
+        x = F.relu(self.fc2(x))
+        value = self.value(x)
+        logits = self.logits(x)
+        return value, logits, None
+
+def create_policy(obs_shape, action_space, name='basic', nn_kwargs={}, train=True):
     if name == 'basic':
         nn = BaseModel(obs_shape[0], **nn_kwargs)
     
@@ -181,7 +191,7 @@ class ListEnvWrapper:
         return [env.step(action) for env in self.list]
     
     def reset(self):
-        return [env.reset() for env in self.list]
+        return torch.tensor([env.reset() for env in self.list])
 
 def make_vec_env(num_processes):
     return ListEnvWrapper([make_env() for _ in range(num_processes)])
@@ -204,9 +214,12 @@ class Arguments:
     num_updates = 1
     num_steps = 10
     num_processes = 1
-    obs_space = None # to change
-    action_space = 5 # to check
-    nn_kwargs = {}   # to change
+    obs_shape = (372,)
+    action_space = 5 
+    nn_kwargs = {
+        'hidden_size': 512,
+        'n_actions': action_space
+    }
     lr = 0.001
     eps = 0.1
     alpha = 0.1 # what is this? to change
@@ -214,10 +227,16 @@ class Arguments:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     gamma = 0.99
     tau = None # not important now; change later
+    poliycy_name = 'basic'
+    value_loss_coef = 1.0
+    entropy_coef = 1.0
 
 def main(args):
     train_envs = make_vec_env(args.num_processes)
-    actor_critic = create_policy(args.obs_space, args.action_space, args.nn_kwargs)
+    obs = train_envs.reset()
+    #args.obs_space = 
+    actor_critic = create_policy(args.obs_shape, args.action_space,
+                                name=args.poliycy_name, nn_kwargs=args.nn_kwargs)
     agent = A2C_Agent(actor_critic, args.value_loss_coef, args.entropy_coef,
                       args.lr, args.eps, args.alpha, args.max_grad_norm)
     rollouts = RolloutStorage(args.num_steps, args.num_processes, args.obs_shape)
@@ -225,12 +244,12 @@ def main(args):
     obs = train_envs.reset()
     rollouts.obs[0].copy_(obs)
 
-    for j in range(num_updates):
+    for j in range(args.num_updates):
         for step in range(args.num_steps):
             with torch.no_grad():
                 value, action, log_probs, rnn_hxs = actor_critic.act(
                     rollouts.obs[step], None, # dummy for hidden state
-                    rollouts.maks[step])
+                    rollouts.masks[step])
             obs, reward, done, infos = train_envs.step(action)
             masks = torch.tensor([[0.0] if done_ else [1.0]
                                     for done_ in done], device=args.device)
