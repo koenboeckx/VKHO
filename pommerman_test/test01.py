@@ -32,7 +32,7 @@ class Policy(nn.Module):
         value, logits, rnn_hxs = self.nn(inputs, hidden, masks)
         dist = Categorical(logits=logits)
         action = dist.sample()
-        log_probs = dist.log_probs(action)
+        log_probs = dist.log_prob(action)
         return value, action, log_probs, rnn_hxs
     
     def get_value(self, inputs, hidden, masks):
@@ -42,7 +42,7 @@ class Policy(nn.Module):
     def evaluate_actions(self, inputs, hidden, masks, actions):
         value, logits, rnn_hxs = self.nn(inputs, hidden, masks)
         dist = Categorical(logits=logits)
-        log_probs = dist.log_probs(action)
+        log_probs = dist.log_prob(actions.squeeze()) # FIXME: can give problem when num_processes > 1
         dist_entropy = dist.entropy().mean()
         return value, log_probs, dist_entropy, rnn_hxs
 
@@ -107,14 +107,14 @@ class A2C_Agent():
 
         nn.utils.clip_grad_norm(self.actor_critic.parameters(),
                                 self.max_grad_norm)
-        return value_loss.item(), action_loss.item(), dist_entropy.item(), {}
+        return value_loss.item(), action_loss.item(), dist_entropy.item()
 
 class RolloutStorage:
     """Store all information (observations, actions, ...) directly in torch tensors.
     Only possible because number of steps `num_steps` is known a priori."""
-    def __init__(self, num_steps, num_processes, obs_shape):
+    def __init__(self, num_steps, num_processes, obs_shape, action_space):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape) # +1 for initial state
-        self.actions = torch.zeros(num_steps, num_processes, 1).long() # is '1' correct?
+        self.actions = torch.zeros(num_steps, num_processes, 1).long()
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.rewards = torch.zeros(num_steps, num_processes, 1)
@@ -171,6 +171,8 @@ class PommermanEnvWrapper(gym.Wrapper):
         random.seed(seed)
 
     def step(self, actions):
+        if isinstance(actions, torch.Tensor):
+            actions = actions.item() # adapt for multiple actions (i.e. multiple learning agents)
         obs = self.env.get_observations()
         all_actions = [actions] + self.env.act(obs)
         state, reward, done, _ = self.env.step(all_actions)
@@ -184,14 +186,19 @@ class PommermanEnvWrapper(gym.Wrapper):
         return agent_obs
 
 class ListEnvWrapper:
-    def __init__(self, list_):
-        self.list = list_
+    def __init__(self, envs):
+        self.envs = envs
     
     def step(self, action):
-        return [env.step(action) for env in self.list]
+        num_processes = len(self.envs)
+        env = self.envs[0] # FIXME: should be applicable for multiple environments
+        obs, reward, done, info = env.step(action)
+        obs = torch.tensor(obs)
+        reward = torch.tensor(reward)
+        return obs, reward, [done], info
     
     def reset(self):
-        return torch.tensor([env.reset() for env in self.list])
+        return torch.tensor([env.reset() for env in self.envs])
 
 def make_vec_env(num_processes):
     return ListEnvWrapper([make_env() for _ in range(num_processes)])
@@ -211,7 +218,7 @@ def make_env():
     return PommermanEnvWrapper(env)
 
 class Arguments:
-    num_updates = 1
+    num_updates = 20
     num_steps = 10
     num_processes = 1
     obs_shape = (372,)
@@ -223,7 +230,7 @@ class Arguments:
     lr = 0.001
     eps = 0.1
     alpha = 0.1 # what is this? to change
-    max_grad_norm = None
+    max_grad_norm = 0.1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     gamma = 0.99
     tau = None # not important now; change later
@@ -239,12 +246,14 @@ def main(args):
                                 name=args.poliycy_name, nn_kwargs=args.nn_kwargs)
     agent = A2C_Agent(actor_critic, args.value_loss_coef, args.entropy_coef,
                       args.lr, args.eps, args.alpha, args.max_grad_norm)
-    rollouts = RolloutStorage(args.num_steps, args.num_processes, args.obs_shape)
+    rollouts = RolloutStorage(args.num_steps, args.num_processes,
+                              args.obs_shape, args.action_space)
 
     obs = train_envs.reset()
     rollouts.obs[0].copy_(obs)
 
     for j in range(args.num_updates):
+        print(f'Update {j}')
         for step in range(args.num_steps):
             with torch.no_grad():
                 value, action, log_probs, rnn_hxs = actor_critic.act(
