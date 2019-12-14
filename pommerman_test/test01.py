@@ -103,6 +103,7 @@ class A2C_Agent():
 
         self.optimizer.zero_grad()
         loss = value_loss * self.value_loss_coef + action_loss + dist_entropy * self.entropy_coef
+        print(f'Step {update_index:3} -> loss = {loss.item():.3}')
         loss.backward()
 
         nn.utils.clip_grad_norm(self.actor_critic.parameters(),
@@ -125,11 +126,15 @@ class RolloutStorage:
         self.step = 0
     
     def to(self, device):
-        "move all tensor to device"
-        raise NotImplementedError # TODO: implement this
-    
+        "move all tensors to device"
+        for var in vars(self):
+            if isinstance(self.__dict__[var], torch.Tensor):
+                self.__dict__[var].to(device)
+
     def insert(self, obs, actions, action_log_probs, value_preds, rewards, masks):
-        self.obs[self.step + 1].copy_(obs) # alternative to self.obs[self.step + 1] = obs - avoids copying??
+        """Add results to corresponding tensors"""
+        
+        self.obs[self.step + 1].copy_(obs) # alternative to 'self.obs[self.step + 1] = obs' - avoids copying??
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
@@ -139,12 +144,13 @@ class RolloutStorage:
         self.step = (self.step + 1) % self.num_steps
     
     def after_update(self):
-        """Call fter update of the agent; move last value to first position where it matters (obs, masks);
+        """Call after update of the agent; move last value to first position 
+        for those tensors where it matters (obs, masks);
         This allows to reuse the RolloutStorage in next update."""
         self.obs[0].copy_(self.obs[-1])
         self.rewards[0].copy_(self.rewards[-1])
     
-    def compute_returns(self, next_value, gamma, tau = 0.0):
+    def compute_returns(self, next_value, gamma, use_gae=False, tau=0.0):
         """Compute returns at the end of sequence to perform update.
         :param next_value:  the predicted value after num_steps
         :param gamma:       discount factor
@@ -160,7 +166,8 @@ class TrainingAgent(agents.BaseAgent):
         super().__init__(character)
     
     def act(self, obs, action_space):
-        return action_space.sample()
+        """This agent has its own way of inducing actions."""
+        return None
 
 class PommermanEnvWrapper(gym.Wrapper):
     def __init__(self, env):
@@ -176,13 +183,13 @@ class PommermanEnvWrapper(gym.Wrapper):
         obs = self.env.get_observations()
         all_actions = [actions] + self.env.act(obs)
         state, reward, done, _ = self.env.step(all_actions)
-        agent_state  = self.env.featurize(state[self.env.training_agent])
+        agent_state  = self.env.featurize(state[self.env.training_agent]) # TODO: overwrite featurize
         agent_reward = reward[self.env.training_agent]
         return agent_state, agent_reward, done, {}
     
     def reset(self):
         obs = self.env.reset()
-        agent_obs = self.env.featurize(obs[self.env.training_agent]) 
+        agent_obs = self.env.featurize(obs[self.env.training_agent]) # TODO: overwrite featurize
         return agent_obs
 
 class ListEnvWrapper:
@@ -218,42 +225,41 @@ def make_env():
     return PommermanEnvWrapper(env)
 
 class Arguments:
-    num_updates = 20
-    num_steps = 10
+    num_updates = 1000
+    num_steps = 5000
     num_processes = 1
-    obs_shape = (372,)
+    obs_shape = (372, )
     action_space = 5 
     nn_kwargs = {
         'hidden_size': 512,
         'n_actions': action_space
     }
-    lr = 0.001
+    lr = 0.01
     eps = 0.1
     alpha = 0.1 # what is this? to change
     max_grad_norm = 0.1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     gamma = 0.99
     tau = None # not important now; change later
-    poliycy_name = 'basic'
+    policy_name = 'basic'
     value_loss_coef = 1.0
-    entropy_coef = 1.0
+    entropy_coef    = 1.0
+    use_gae = False
 
 def main(args):
     train_envs = make_vec_env(args.num_processes)
-    obs = train_envs.reset()
-    #args.obs_space = 
     actor_critic = create_policy(args.obs_shape, args.action_space,
-                                name=args.poliycy_name, nn_kwargs=args.nn_kwargs)
+                                name=args.policy_name, nn_kwargs=args.nn_kwargs)
     agent = A2C_Agent(actor_critic, args.value_loss_coef, args.entropy_coef,
                       args.lr, args.eps, args.alpha, args.max_grad_norm)
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               args.obs_shape, args.action_space)
+    rollouts.to(device=args.device)                              
 
     obs = train_envs.reset()
     rollouts.obs[0].copy_(obs)
 
     for j in range(args.num_updates):
-        print(f'Update {j}')
         for step in range(args.num_steps):
             with torch.no_grad():
                 value, action, log_probs, rnn_hxs = actor_critic.act(
@@ -268,7 +274,7 @@ def main(args):
             next_value = actor_critic.get_value(rollouts.obs[-1],
                                                 None, # dummy for hidden state
                                                 rollouts.masks[-1]).detach()
-        rollouts.compute_returns(next_value, args.gamma, args.tau) 
+        rollouts.compute_returns(next_value, args.gamma, args.use_gae, args.tau) 
         value_loss, action_loss, dist_entropy = agent.update(rollouts, j)
         rollouts.after_update()                                            
 
