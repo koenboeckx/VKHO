@@ -183,6 +183,7 @@ class PommermanEnvWrapper(gym.Wrapper):
         obs = self.env.get_observations()
         all_actions = [actions] + self.env.act(obs)
         state, reward, done, _ = self.env.step(all_actions)
+        self.env.render()
         agent_state  = self.env.featurize(state[self.env.training_agent]) # TODO: overwrite featurize
         agent_reward = reward[self.env.training_agent]
         return agent_state, agent_reward, done, {}
@@ -226,10 +227,10 @@ def make_env():
 
 class Arguments:
     num_updates = 1000
-    num_steps = 5000
-    num_processes = 1
+    num_steps = 200
+    num_processes = 6
     obs_shape = (372, )
-    action_space = 5 
+    action_space = 1 
     nn_kwargs = {
         'hidden_size': 512,
         'n_actions': action_space
@@ -240,7 +241,7 @@ class Arguments:
     max_grad_norm = 0.1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     gamma = 0.99
-    tau = None # not important now; change later
+    tau = None # not important now (GAE); change later
     policy_name = 'basic'
     value_loss_coef = 1.0
     entropy_coef    = 1.0
