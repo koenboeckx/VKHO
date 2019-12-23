@@ -1,4 +1,6 @@
 import time, os
+import math
+from collections import Counter
 
 import numpy as np
 
@@ -12,6 +14,8 @@ from torch import optim
 from torch.distributions import Categorical
 from torch.nn import functional as F
 from pommerman import agents
+
+ROLLOUTS_PER_BATCH = 2
 
 class Agent(agents.BaseAgent):
     def __init__(self, model):
@@ -200,7 +204,9 @@ class A2CNet(nn.Module):
 class World():
     def __init__(self, init_model=True):
         if init_model:
-            self.model = A2CNet(gpu=True)
+            self.gmodel = A2CNet(gpu = True) # global model
+
+        self.model = A2CNet(gpu = False)    # Agent (local) model
         self.agent = Agent(self.model)
         self.agent_list = [
             self.agent,
@@ -237,22 +243,25 @@ def do_rollout(env, agent, do_print=False):
         rewards.append(reward[0])
         dones.append(done)
     
-    hidden = hidden[:-1].copy() # ??
+    hidden = hidden[:-1].copy() # copy of agent.hidden -> stores tuples (hn, cn)
     hns, cns = [], []
-    for hns_cns_tuple in hidden:
-        hns.append(hns_cns_tuple[0])
-        cns.append(hns_cns_tuple[1])
+    #for hns_cns_tuple in hidden:
+    #    hns.append(hns_cns_tuple[0])
+    #    cns.append(hns_cns_tuple[1])
+    for hn, cn in hidden: # by koen
+        hns.append(hn)
+        cns.append(cn)
     
-    return (states.copy(), actions.copy(),
+    return (states.copy(), actions.copy(), # states and actions refer to agent.states and agent.actions
             rewards, dones, (hns, cns),
-            probs.copy(), values.copy())
+            probs.copy(), values.copy()) # probs and values refer to agent.probs and agent.values
 
 def gmodel_train(gmodel, states, hns, cns, actions, rewards, gae):
     states, hns, cns = torch.stack(states), torch.stack(hns, dim=0), torch.stack(cns, dim=0)
     gmodel.train() # effect on batchnorm and dropout
-    probs, values, _, _ = gmodel(states.to(model.device),
-                                hns.to(model.device),
-                                cns.to(model.device), debug=False)
+    probs, values, _, _ = gmodel(states.to(gmodel.device),
+                                hns.to(gmodel.device),
+                                cns.to(gmodel.device), debug=False)
     
     prob     = F.softmax(probs, dim=-1)
     log_prob = F.log_softmax(probs, dim=-1)
@@ -261,8 +270,64 @@ def gmodel_train(gmodel, states, hns, cns, actions, rewards, gae):
     log_probs   = log_prob[range(0, len(actions)), actions]
     advantages  = torch.tensor(rewards).to(gmodel.device) - values.squeeze(1)
     value_loss  = 0.5 * advantages.pow(2)
-    policy_loss = -log_probs
+    policy_loss = -log_probs*torch.tensor(gae).to(gmodel.device) - gmodel.entropy_coeff*entropy
 
+    gmodel.optimizer.zero_grad()
+    pl = policy_loss.sum()
+    vl = value_loss.sum()
+    loss = pl + vl
+    loss.backward()
+    gmodel.optimizer.step()
+
+    return loss.item(), pl.item(), vl.item()
+
+def unroll_rollouts(gmodel, list_of_full_rollouts):
+    gamma = gmodel.gamma
+    tau   = 1
+
+    states, actions, rewards, hns, cns, gae = [], [], [], [], [], []
+    for (s, a, r, d, h, p, v) in list_of_full_rollouts:
+        states.extend(torch.tensor(s))
+        actions.extend(a)
+        rewards.extend(gmodel.discount_rewards(r))
+
+        hns.extend([torch.tensor(hh) for hh in h[0]])
+        cns.extend([torch.tensor(hh) for hh in h[1]])
+
+        # Compute GAE TODO: check this in detail
+        last_i, _gae, __gae = len(r)-1, [], 0
+        for i in reversed(range(len(r))):
+            next_val = v[i+1] if i != last_i else 0
+            delta_t = r[i] + gamma * next_val - v[i]
+            __gae = __gae * gamma * tau + delta_t
+            _gae.insert(0, __gae)
+        gae.extend(_gae)
+    
+    return states, hns, cns, actions, rewards, gae
+
+def train(world: World):
+    model, gmodel = world.model, world.gmodel
+    agent, env    = world.agent, world.env
+
+    rr = -1
+    ii = 0
+    for i in range(40000):
+        full_rollouts = [do_rollout(env, agent) for _ in range(ROLLOUTS_PER_BATCH)]
+        last_rewards = [roll[2][-1] for roll in full_rollouts]
+        not_discounted_rewards = [roll[2] for roll in full_rollouts]
+        states, hns, cns, actions, rewards, gae = unroll_rollouts(gmodel, full_rollouts)
+        gmodel.gamma = .5 + .5 / (1+math.exp(-0.0003*(i-20000))) # adaptive gamma
+        l, pl, vl = gmodel_train(gmodel, states, hns, cns, actions, rewards, gae)
+        rr = .99 * rr + .01 *  np.mean(last_rewards)/ROLLOUTS_PER_BATCH   
+        ii += len(actions)
+
+        print(i, "\t", round(gmodel.gamma, 3), round(rr,3), "\twins:",
+              last_rewards.count(1), Counter(actions), round(sum(rewards),3),
+              round(l,3), round(pl,3), round(vl,3))
+        model.load_state_dict(gmodel.state_dict()) # sync models
+
+
+    
 if __name__ == '__main__':
     world = World(init_model=True)
-    do_rollout(world.env, world.agent, do_print=True)
+    train(world)
