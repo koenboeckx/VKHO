@@ -1,0 +1,67 @@
+import argparse
+
+import gym
+import ptan
+import torch
+import torch.optim as optim
+from tensorboardX import SummaryWriter
+import numpy as np
+
+from lib import common, dqn_model
+
+STATES_TO_EVALUATE = 1000
+EVAL_EVERY_FRAME   = 100
+
+if __name__ == '__main__':
+    params = common.HYPERPARAMS['pong']
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cuda", default=False, action='store_true', help='Enable cuda')
+    parser.add_argument("--double", default=False, action='store_true', help='Enable double DQN')
+    args = parser.parse_args()
+    device = torch.device("cuda" if args.cuda else "cpu")
+
+    env = gym.make(params['env_name'])
+    env = ptan.common.wrappers.wrap_dqn(env)
+
+    writer = SummaryWriter(comment="-"+params['run_name']+"-double")
+    net = dqn_model.DQN(env.observation_space.shape, env.action_space.n).to(device)
+    tgt_net = ptan.agent.TargetNet(net)
+    selector = ptan.actions.EpsilonGreedyActionSelector(epsilon=params['epsilon_start'])
+    epsilon_tracker = common.EpsilonTracker(selector, params)
+    agent = ptan.agent.DQNAgent(net, selector, device=device) # observation -> (actions, [])
+
+    exp_source = ptan.experience.ExperienceSourceFirstLast(env, agent, gamma=params['gamma'], steps_count=1)
+    buffer = ptan.experience.ExperienceReplayBuffer(exp_source, buffer_size=params['replay_size'])
+
+    optimizer = optim.Adam(net.parameters(), lr=params['learning_rate'])
+    frame_idx = 0
+    eval_states = None # to be filled with held-out states after initial replay buffer fill
+    with common.RewardTracker(writer, params['stop_reward']) as reward_tracker:
+        while True:
+            frame_idx += 1
+            buffer.populate(1) # add one transition to the buffer
+            epsilon_tracker.frame(frame_idx) # update epsilon
+            new_rewards = exp_source.pop_total_rewards() # get rewards from finished episodes, if any
+            if new_rewards:
+                if reward_tracker.reward(new_rewards[0], frame_idx, selector.epsilon):
+                    break
+            if len(buffer) < params['replay_initial']: # check if lenght of buffer is large enough to start training
+                continue
+            if eval_states is None:
+                eval_states = buffer.sample(STATES_TO_EVALUATE)
+                eval_states = [np.array(transition.state, copy=False)
+                                for transition in eval_states]
+                eval_states = np.array(eval_states, copy=False)
+            optimizer.zero_grad()
+            batch = buffer.sample(params['batch_size'])
+            loss_v = common.calc_loss_dqn(batch, net, tgt_net.target_model,
+                                         gamma=params['gamma'], device=device, double=args.double)
+            loss_v.backward()
+            optimizer.step()
+
+            if frame_idx % params['target_net_sync'] == 0:
+                tgt_net.sync()        
+
+            if frame_idx % EVAL_EVERY_FRAME == 0:    
+                mean_val = common.calc_values_of_states(eval_states, net, device=device)
+                writer.add_scalar("values_mean", mean_val, frame_idx)

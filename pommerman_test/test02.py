@@ -15,7 +15,11 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 from pommerman import agents
 
-ROLLOUTS_PER_BATCH = 2
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment('eugene')
+ex.observers.append(MongoObserver(url='localhost',
+                                  db_name='my_database'))
 
 class Agent(agents.BaseAgent):
     def __init__(self, model):
@@ -305,29 +309,46 @@ def unroll_rollouts(gmodel, list_of_full_rollouts):
     
     return states, hns, cns, actions, rewards, gae
 
-def train(world: World):
+@ex.config
+def cfg():
+    rollouts_per_batch = 20
+
+@ex.automain
+def train(rollouts_per_batch):
+    world = World(init_model=True)
     model, gmodel = world.model, world.gmodel
     agent, env    = world.agent, world.env
+
+    print(gmodel)
 
     rr = -1
     ii = 0
     for i in range(40000):
-        full_rollouts = [do_rollout(env, agent) for _ in range(ROLLOUTS_PER_BATCH)]
+        full_rollouts = [do_rollout(env, agent) for _ in range(rollouts_per_batch)]
         last_rewards = [roll[2][-1] for roll in full_rollouts]
         not_discounted_rewards = [roll[2] for roll in full_rollouts]
         states, hns, cns, actions, rewards, gae = unroll_rollouts(gmodel, full_rollouts)
         gmodel.gamma = .5 + .5 / (1+math.exp(-0.0003*(i-20000))) # adaptive gamma
         l, pl, vl = gmodel_train(gmodel, states, hns, cns, actions, rewards, gae)
-        rr = .99 * rr + .01 *  np.mean(last_rewards)/ROLLOUTS_PER_BATCH   
+        rr = .99 * rr + .01 *  np.mean(last_rewards)/rollouts_per_batch   
         ii += len(actions)
 
         print(i, "\t", round(gmodel.gamma, 3), round(rr,3), "\twins:",
               last_rewards.count(1), Counter(actions), round(sum(rewards),3),
               round(l,3), round(pl,3), round(vl,3))
+        ex.log_scalar('gamma', gmodel.gamma)
+        ex.log_scalar('reward', rr)
+        ex.log_scalar('wins', last_rewards.count(1))
+        ex.log_scalar('loss', l)
+        ex.log_scalar('policy_loss', pl)
+        ex.log_scalar('value_loss', vl)
+        
+        
         model.load_state_dict(gmodel.state_dict()) # sync models
 
 
-    
+"""    
 if __name__ == '__main__':
     world = World(init_model=True)
     train(world)
+"""
