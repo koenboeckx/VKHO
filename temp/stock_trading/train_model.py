@@ -65,3 +65,6 @@ if __name__ == "__main__":
     
     with common.RewardTracker(writer, np.inf) as reward_tracker:
         while True:
+            step_idx += 1
+            buffer.populate(1)
+            selector.epsilon = max(EPSILON_STOP, EPSILON_START - step_idx / EPSILON_STEPS)
