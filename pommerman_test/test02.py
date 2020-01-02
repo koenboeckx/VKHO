@@ -1,3 +1,6 @@
+"""
+From https://github.com/eugene/pommerman
+"""
 import time, os
 import math
 from collections import Counter

@@ -93,5 +93,12 @@
                 * General-sum games
                 * Nash equilibria
                 * What is the question?
+    1. [02Jan20]: Idea: add "Actio-Filter" as in "Skynet: A Top Deep RL Agent in the Inaugural Pommerman Team Competition" to improve learning speed by telling the agent initially which actions not to take.
+    1. [02Jan20]: Apply 'curriculum learning', where agents are trained against progressivley stronger opponents (see Bengio et al, Curriculum Learning, 2009):
+        1. 'StaticAgentsAgent'
+        1. 'RandomNoFireAgent'
+        1. 'RandomFireAgent'
+        1. 'PreviouslyTrainedAgent'
+
 
     
