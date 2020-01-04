@@ -13,7 +13,7 @@ params = {
     'n_episodes':           20000,
     'gamma':                0.99,
     'stop_length':          400,
-    'episodes_to_train':    50,
+    'episodes_to_train':    10,
 }
 
 class Model(nn.Module):
@@ -60,7 +60,11 @@ class Agent:
 
         loss.backward()
         self.optimizer.step()
-        return loss.item()
+
+        statistics = {
+            'loss':     loss.item()
+        }
+        return statistics
     
     def play_episode(self, env, show=False):
         state, done = env.reset(), False
@@ -115,8 +119,8 @@ def train(env):
         batch_episodes += 1
         if batch_episodes < params['episodes_to_train']:
             continue
-        loss = agent.update(batch)
-        print(f'Episode {episode_idx:4}: loss: {loss:8.2f}, current length: {len(episode):3}, running length: {float(running_length):7.3f}')
+        stats = agent.update(batch)
+        print(f"Episode {episode_idx:4}: loss: {stats['loss']:8.2f}, current length: {len(episode):3}, running length: {float(running_length):7.3f}")
         if running_length > params['stop_length']:
             print(f'Solved after {episode_idx} episodes')
             break
