@@ -1,3 +1,8 @@
+"""
+TODO: compare with https://github.com/yc930401/Actor-Critic-pytorch/blob/master/Actor-Critic.py
+      especially: computing advantage (with compute_returns) -> requires rewrite to episode based 
+"""      
+
 import collections, random
 
 import numpy as np
@@ -21,48 +26,55 @@ params = {
     'entropy_coeff':        0.01,
 }
 
-class Model(nn.Module):
+class Actor(nn.Module):
     def __init__(self, obs_shape, n_actions, n_hidden=128):
         super().__init__()
-        self.common = nn.Sequential(
+        self.net = nn.Sequential(
             nn.Linear(obs_shape, n_hidden),
             nn.ReLU(),
-            nn.Linear(n_hidden, n_hidden),
-            nn.ReLU(),
-        )
-        self.value  = nn.Sequential(
-            nn.Linear(n_hidden, n_hidden),
-            nn.ReLU(),
-            nn.Linear(n_hidden, 1)
-        )
-        self.policy = nn.Sequential(
             nn.Linear(n_hidden, n_hidden),
             nn.ReLU(),
             nn.Linear(n_hidden, n_actions)
         )
 
     def forward(self, x):
-        x = self.common(x.float())
-        val = self.value(x)
-        pol = self.policy(x)
-        return pol, val
+        logits = self.net(x.float())
+        return logits
+
+class Critic(nn.Module):
+    def __init__(self, obs_shape, n_hidden=128):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_shape, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, 1)
+        )
+
+    def forward(self, x):
+        values = self.net(x.float())
+        return values
 
 class Agent:
     def __init__(self, obs_shape, n_actions):
         self.n_actions = n_actions
-        self.model = Model(obs_shape, n_actions)
-        self.optimizer = optim.Adam(self.model.parameters(), params['learning_rate'])
+        self.actor = Actor(obs_shape, n_actions)
+        self.critic = Critic(obs_shape)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), params['learning_rate'])
+        self.critic_optimizer = optim.Adam(self.actor.parameters(), params['learning_rate'])
     
     def choose_action(self, observation):
         with torch.no_grad():
-            logits, _ = self.model(torch.tensor(observation))
+            logits = self.actor(torch.tensor(observation))
             action = Categorical(logits=logits).sample().item()
         return action
     
     def update(self, batch):
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        self.optimizer.zero_grad()
+        self.actor_optimizer.zero_grad()
+        self.critic_optimizer.zero_grad()
 
         states_v = torch.tensor(states)
         next_states_v = torch.tensor(next_states)
@@ -70,8 +82,9 @@ class Agent:
         rewards_v = torch.tensor(rewards)
 
         # value loss
-        logits, curr_vals = self.model(states_v)
-        _, next_vals      = self.model(next_states_v)
+        logits    = self.actor(states_v)
+        curr_vals = self.critic(states_v)
+        next_vals = self.critic(next_states_v)
         next_vals[dones]  = 0.0 # mask away terminal states
         pred_vals = rewards_v.unsqueeze(1) + params['gamma'] * next_vals 
         loss_val = F.mse_loss(curr_vals, pred_vals)
@@ -80,25 +93,24 @@ class Agent:
         probs = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
         log_prob_actions = log_probs[range(len(batch)), actions_v]
-        loss_pol = log_prob_actions * (pred_vals - curr_vals.detach()).squeeze()
+        loss_pol = log_prob_actions * (pred_vals.detach() - curr_vals.detach()).squeeze()
         loss_pol = -loss_pol.sum() # used to be .sum() (sometimes .mean())
 
         # entropy loss
-        loss_entropy = -(probs * log_probs).sum(dim=1).mean()
+        # loss_entropy = -(probs * log_probs).sum(dim=1).mean()
 
-        loss = loss_val + loss_pol + params['entropy_coeff'] * loss_entropy
-        loss.backward()
-        self.optimizer.step()
+        #loss = loss_val + loss_pol + params['entropy_coeff'] * loss_entropy
+        #loss.backward()
+        loss_val.backward()
+        self.critic_optimizer.step()
+        
+        loss_pol.backward()
+        self.actor_optimizer.step()
 
         ## compute statistics
-        # 1. KL divergence before and after update
-        new_logits, _ = self.model(states_v)
-        new_probs = F.softmax(new_logits, dim=1)
-        kl_div = -((new_probs/probs).log() * probs).sum(dim=1).mean()
-
         # 2. gradients
         grad_max, grad_means, grad_counts = 0.0, 0.0, 0
-        for p in self.model.parameters():
+        for p in self.actor.parameters():
             grad_max = max(grad_max, p.grad.abs().max().item())
             grad_means  += (p.grad ** 2).mean().sqrt().item()
             grad_counts += 1
@@ -106,11 +118,11 @@ class Agent:
         statistics = {
             'loss_pol':     loss_pol.item(),
             'loss_val':     loss_val.item(),
-            'loss':         loss.item(),
-            'kl_div':       kl_div.item(),
+            #'loss':         loss.item(),
+            #'kl_div':       kl_div.item(),
             'grad_max':     grad_max,
             'grad_l2':      grad_means/grad_counts,
-            'entropy':      loss_entropy.item(),
+            #'entropy':      loss_entropy.item(),
         }
 
         return statistics
@@ -188,7 +200,7 @@ def train(env, test_env):
         if idx > 0 and idx % params['eval_rate'] == 0:
             length = eval(agent, test_env)
             running_length = length if running_length is None else .9 * running_length + .1 * length
-            print(f"""Step {idx:4}: policy loss: {stats['loss_pol']:8.4f}, value loss: {stats['loss_val']:8.4f}, grad_l2: {stats['grad_l2']:5.3f}, entropy: {stats['entropy']:7.5f}, running length: {float(running_length):7.3f}""")
+            print(f"""Step {idx:4}: policy loss: {stats['loss_pol']:8.4f}, value loss: {stats['loss_val']:8.4f}, grad_l2: {stats['grad_l2']:5.3f}, running length: {float(running_length):7.3f}""")
             if running_length > params['stop_length']:
                 print(f'Solved after {idx} steps')
                 break
