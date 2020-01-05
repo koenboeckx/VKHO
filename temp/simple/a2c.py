@@ -30,8 +30,16 @@ class Model(nn.Module):
             nn.Linear(n_hidden, n_hidden),
             nn.ReLU(),
         )
-        self.value  = nn.Linear(n_hidden, 1)
-        self.policy = nn.Linear(n_hidden, n_actions)
+        self.value  = nn.Sequential(
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, 1)
+        )
+        self.policy = nn.Sequential(
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_actions)
+        )
 
     def forward(self, x):
         x = self.common(x.float())
@@ -136,16 +144,6 @@ class Buffer:
     
     def sample(self, batch_size):
         return random.sample(self.content, batch_size)
-
-def generate_episode(env, agent):
-    episode = []
-    state, done = env.reset(), False
-    while not done:
-        action = agent.choose_action(state)
-        next_state, reward, done, _ = env.step(action)
-        episode.append(Experience(state, action, reward, next_state, done))
-        state = next_state
-    return episode
 
 class Source:
     def __init__(self, env, agent):
