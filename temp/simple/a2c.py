@@ -1,9 +1,5 @@
-"""
-TODO: compare with https://github.com/yc930401/Actor-Critic-pytorch/blob/master/Actor-Critic.py
-      especially: computing advantage (with compute_returns) -> requires rewrite to episode based 
-"""      
-
 import collections, random
+from itertools import count
 
 import numpy as np
 import gym
@@ -13,15 +9,17 @@ from torch import optim
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
+ALPHA = 0.7
+
 params = {
-    'learning_rate':        0.0001,
+    'env_name':             'CartPole-v0',
+    'learning_rate':        0.001,
     'n_steps':              10000,
     'buffer_size':          500,
     'batch_size':           10,
     'gamma':                0.99,
-    'stop_length':          400,
+    'stop_length':          198,
     'episodes_to_train':    100,
-    'env_name':             'CartPole-v1',
     'eval_rate':            100,
     'entropy_coeff':        0.01,
 }
@@ -70,37 +68,41 @@ class Agent:
             action = Categorical(logits=logits).sample().item()
         return action
     
-    def update(self, batch):
-        states, actions, rewards, next_states, dones = zip(*batch)
+    def compute_returns(self, next_value, episode):
+        returns = []
+        R = next_value
+        for exp in reversed(episode):
+            mask = 0.0 if exp.done else 1.0
+            R = params['gamma'] * R * mask + exp.reward
+            returns.insert(0, R)
+        return returns
+    
+    def update(self, episode):
+        states, actions, rewards, next_states, dones = zip(*episode)
 
         self.actor_optimizer.zero_grad()
         self.critic_optimizer.zero_grad()
 
-        states_v = torch.tensor(states)
-        next_states_v = torch.tensor(next_states)
-        actions_v = torch.tensor(actions)
-        rewards_v = torch.tensor(rewards)
+        next_state = torch.tensor(next_states[-1])
+        next_value = self.critic(next_state).detach().item()
+        returns = self.compute_returns(next_value, episode)
 
-        # value loss
-        logits    = self.actor(states_v)
-        curr_vals = self.critic(states_v)
-        next_vals = self.critic(next_states_v)
-        next_vals[dones]  = 0.0 # mask away terminal states
-        pred_vals = rewards_v.unsqueeze(1) + params['gamma'] * next_vals 
-        loss_val = F.mse_loss(curr_vals, pred_vals)
+        states_v = torch.tensor(states)
+        actions_v = torch.tensor(actions)
+        returns_v = torch.tensor(returns).detach()
+
+        logits_v = self.actor(states_v)
+        values_v = self.critic(states_v)
+
+        advantages = returns_v - values_v.squeeze()
 
         # policy loss
-        probs = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        log_prob_actions = log_probs[range(len(batch)), actions_v]
-        loss_pol = log_prob_actions * (pred_vals.detach() - curr_vals.detach()).squeeze()
-        loss_pol = -loss_pol.sum() # used to be .sum() (sometimes .mean())
+        log_probs = F.log_softmax(logits_v, dim=1)
+        log_prob_actions = log_probs[range(len(episode)), actions_v]
+        loss_pol = log_prob_actions * advantages.detach()
+        loss_pol = -loss_pol.mean() # used to be .sum()
 
-        # entropy loss
-        # loss_entropy = -(probs * log_probs).sum(dim=1).mean()
-
-        #loss = loss_val + loss_pol + params['entropy_coeff'] * loss_entropy
-        #loss.backward()
+        loss_val = advantages.pow(2).mean()
         loss_val.backward()
         self.critic_optimizer.step()
         
@@ -108,7 +110,6 @@ class Agent:
         self.actor_optimizer.step()
 
         ## compute statistics
-        # 2. gradients
         grad_max, grad_means, grad_counts = 0.0, 0.0, 0
         for p in self.actor.parameters():
             grad_max = max(grad_max, p.grad.abs().max().item())
@@ -118,11 +119,8 @@ class Agent:
         statistics = {
             'loss_pol':     loss_pol.item(),
             'loss_val':     loss_val.item(),
-            #'loss':         loss.item(),
-            #'kl_div':       kl_div.item(),
             'grad_max':     grad_max,
             'grad_l2':      grad_means/grad_counts,
-            #'entropy':      loss_entropy.item(),
         }
 
         return statistics
@@ -134,6 +132,7 @@ class Agent:
                 env.render()
             action = self.choose_action(state)
             state, _, done, _ = env.step(action)
+    
 
 Experience = collections.namedtuple('Experience', 
                 field_names = ['state', 'action', 'reward', 'next_state', 'done'])
@@ -186,30 +185,37 @@ def eval(agent, test_env, n=20):
 def train(env, test_env):
     agent = Agent(env.observation_space.shape[0],
                   env.action_space.n)
-    running_length = None
-    buffer = Buffer(size=params['buffer_size'])
-    exp_source = Source(env, agent)
-    episode_length = 0
+    run_length = 10
     for idx in range(params['n_steps']):
-        buffer.insert(exp_source.get_steps(10))
-        if len(buffer) < params['batch_size']:
-            continue
-        batch = buffer.sample(params['batch_size'])
-        stats = agent.update(batch)
-
-        if idx > 0 and idx % params['eval_rate'] == 0:
-            length = eval(agent, test_env)
-            running_length = length if running_length is None else .9 * running_length + .1 * length
-            print(f"""Step {idx:4}: policy loss: {stats['loss_pol']:8.4f}, value loss: {stats['loss_val']:8.4f}, grad_l2: {stats['grad_l2']:5.3f}, running length: {float(running_length):7.3f}""")
-            if running_length > params['stop_length']:
-                print(f'Solved after {idx} steps')
+        batch = []
+        state = env.reset()
+        for i in count():
+            if idx % 100 == 0: env.render()
+            action = agent.choose_action(state)
+            next_state, reward, done, _ = env.step(action)
+            batch.append(Experience(state, action, reward, next_state, done))
+            if done:
+                run_length = ALPHA * run_length + (1.-ALPHA) * i
                 break
+            state = next_state
+        stats = agent.update(batch)
+        if idx % 100 == 0:
+            print(f"Iteration {idx:5}: run length: {run_length:8.2f}, critic loss: {stats['loss_val']:8.3f}, actor loss: {stats['loss_pol']:8.3f}, l2 grad: {stats['grad_l2']:8.3f}, ")
+            if run_length > params['stop_length']:
+                return agent
+        
+        torch.save(agent.actor, './temp/simple/model/actor.pkl')
+        torch.save(agent.critic, './temp/simple/model/critic.pkl')
+
     return agent
 
 if __name__ == '__main__':
-    env = gym.make(params['env_name'])
-    test_env = gym.make(params['env_name'])
-    #env.tags['wrapper_config.TimeLimit.max_episode_steps'] = 500
+    env = gym.make(params['env_name'])#.unwrapped
+    test_env = gym.make(params['env_name'])#.unwrapped
     agent = train(env, test_env)
+    agent = Agent(env.observation_space.shape[0],
+                  env.action_space.n)
+    agent.actor  = torch.load('./temp/simple/model/actor.pkl')
+    agent.critic = torch.load('./temp/simple/model/critic.pkl')
     agent.play_episode(env, show=True)
     env.close()
