@@ -1,3 +1,7 @@
+"""
+Uses indenpendent reinforcement learning to train two agents
+"""
+
 import random
 import logging
 from collections import namedtuple
@@ -164,18 +168,18 @@ class IPGAgent(agents.BaseAgent):
     def act(self, obs, action_space):
         """Choose action from P(action|obs),
         represented by Agent.actor"""
+        with torch.no_grad():
+            logits = self.actor([obs])[0]
 
-        logits = self.actor([obs])[0]
+            #logging.debug(self.actor._proces_inputs([obs]))
+            logging.debug('agent {} - obs = {}'.format(self.idx, self.actor._proces_inputs([obs])))
+            logging.debug(logits)
 
-        #logging.debug(self.actor._proces_inputs([obs]))
-        logging.debug('agent {} - obs = {}'.format(self.idx, self.actor._proces_inputs([obs])))
-        logging.debug(logits)
+            probs = F.softmax(logits, dim=-1)
+            m = torch.distributions.Categorical(probs)
+            action = m.sample()
 
-        probs = F.softmax(logits, dim=-1)
-        m = torch.distributions.Categorical(probs)
-        action = m.sample()
-
-        print(self.idx, ' -> ', probs.data, 'chosen action = ', action.item(), ' temp = ', self.temperature)
+        print(self.idx, ' -> ', probs.data, 'chosen action = ', action.item())
         return action.item()
 
 def generate_episode(env, render=False):
