@@ -4,8 +4,11 @@ from envs import Environment, all_actions
 from collections import namedtuple
 import random
 
+import numpy as np
 import torch
 from torch import nn
+from torch import optim
+from torch.distributions import Categorical
 from torch.nn import functional as F
 
 Experience = namedtuple('Experience', [
@@ -14,10 +17,30 @@ Experience = namedtuple('Experience', [
 
 class A2CModel(nn.Module):
     def __init__(self, input_shape, n_actions):
-        pass
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
+
+        self.conv_out_size = self._get_conv_out(input_shape)
+
+        self.policy = nn.Sequential(
+            nn.Linear(self.conv_out_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_actions)
+        )
+    
+    def _get_conv_out(self, shape):
+        """returns the size for fully-connected layer, 
+        after passage through convolutional layer"""
+        o = self.conv(torch.zeros(1, *shape))
+        return int(np.prod(o.size()))
 
     def forward(self, x):
-        pass
+        x = self.conv(x.float()).view(x.size()[0], -1)
+        logits = self.policy(x)
+        return logits
 
 class Tank:
     def __init__(self, idx):
@@ -48,17 +71,62 @@ class RandomTank(Tank):
 class A2CAgent(Tank):
     def __init__(self, idx, device):
         super().__init__(idx)
-        self.model = A2CModel(params['board_size'], n_actions=8)
+        input_shape = (1, params['board_size'], params['board_size'])
+        self.model = A2CModel(input_shape, n_actions=8)
+        self.optimizer = optim.Adam(self.model.parameters(),
+                                    lr=params['learning_rate'])
     
-    def get_action(self, obs):
-        return random.randint(0, 7)
+    def get_action(self, state):
+        with torch.no_grad():
+            logits = self.model(preprocess([state]))
+            action = Categorical(logits=logits).sample()
+        return action.item()
     
+    def discount_rewards(self, rewards):
+        returns, R = [], 0.0
+        own_rewards = [reward[self.idx] for reward in rewards]
+        for reward in reversed(own_rewards):
+            R = reward + params['gamma'] * R
+            returns.insert(0, R)
+        return returns
+
     def update(self, episode):
-        pass
+        self.optimizer.zero_grad()
+
+        states, actions, rewards, _, dones = zip(*episode)
+        logits_v = self.model(preprocess(states))
+        own_actions = [action[self.idx] for action in actions]
+        actions_v = torch.tensor(own_actions)
+        
+        returns_v = torch.tensor(self.discount_rewards(rewards))
+        log_probs = F.log_softmax(logits_v, dim=1)
+        log_prob_actions = log_probs[range(len(episode)), actions_v]
+        loss = returns_v * log_prob_actions
+        loss = -loss.mean()
+
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
+
+
 
 params = {
+    'n_episodes':       100,
     'board_size':       11,
+    'gamma':            0.99,
+    'learning_rate':    0.001,
 }
+
+def preprocess(states):
+    """Process state to serve as input to convolutionel net."""
+    bs = params['board_size']
+    boards = np.zeros((len(states), 1, bs, bs))
+    for idx, state in enumerate(states):
+        board = np.array([int(b) for b in state.board])
+        board = np.reshape(board, (1, bs, bs))
+        boards[idx] = board
+    return torch.tensor(boards)
 
 def play_episode(env, agents):
     episode = []
@@ -68,20 +136,20 @@ def play_episode(env, agents):
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
         done = env.terminal(next_state) != 0
-        if done:
-            print('done')
         episode.append(Experience(state, actions, reward, next_state, done))
         if done:
             return episode
         state = next_state
 
 def train(env, learners, opponents):
+    loss = [None, ] * len(learners)
     agents = learners + opponents
-    episode = play_episode(env, agents)
-    for exp in episode:
-        print([all_actions[a] for a in exp.actions])
-        print(exp.next_state)
-        print('______________')
+    for epi_idx in range(params['n_episodes']):
+        episode = play_episode(env, agents)
+        for agent in learners:
+            loss[agent.idx] = agent.update(episode)
+        print(f"{epi_idx:5d}: len(episode) = {len(episode)}, loss0 = {loss[0]:8.5f}")
+    
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
