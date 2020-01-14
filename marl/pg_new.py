@@ -29,7 +29,7 @@ params = {
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.,
-    'n_episodes_per_step':  20,
+    'n_episodes_per_step':  50,
     'init_ammo':            500,
 }
 
@@ -51,11 +51,13 @@ class A2CModel(nn.Module):
             nn.ReLU(),
         )
 
-        self.policy = nn.Sequential(
+        self.common = nn.Sequential(
             nn.Linear(self.conv_out_size + 64, 128),
             nn.ReLU(),
-            nn.Linear(128, n_actions)
         )
+
+        self.policy = nn.Linear(128, n_actions)
+        self.value  = nn.Linear(128, 1)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -73,9 +75,11 @@ class A2CModel(nn.Module):
         other = x[:, :, 0, bs:bs + 8].view(x.size()[0], -1)
         conv_out = self.conv(board).view(x.size()[0], -1)
         full_out = self.full_in(other)
-        policy_in = torch.cat((conv_out, full_out), 1)
-        logits = self.policy(policy_in)
-        return logits
+        common_in  = torch.cat((conv_out, full_out), 1)
+        common_out = self.common(common_in)
+        logits = self.policy(common_out)
+        value  = self.value(common_out)
+        return value, logits
 
 class Tank:
     def __init__(self, idx):
@@ -111,11 +115,10 @@ class A2CAgent(Tank):
         self.model = A2CModel(input_shape, n_actions=8)
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=params['learning_rate'])
-        self.temperature = 1.
     
     def get_action(self, state):
         with torch.no_grad():
-            logits = self.model(preprocess([state]))
+            _, logits = self.model(preprocess([state]))
             probs  = F.softmax(logits, dim=-1)
             action = Categorical(probs).sample()
         return action.item()
@@ -140,16 +143,19 @@ class A2CAgent(Tank):
         actions_v = torch.LongTensor(own_actions)
         returns_v = torch.tensor(self.discount_rewards(batch))
 
-        logits_v = self.model(preprocess(states))
+        values_v, logits_v = self.model(preprocess(states))
+        values_v = values_v.squeeze()
         logprobs_v = F.log_softmax(logits_v, dim=-1)
         logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
-        logprob_act_vals_v = returns_v * logprob_actions_v
+        logprob_act_vals_v = (returns_v - values_v.detach()) * logprob_actions_v
         policy_loss = -logprob_act_vals_v.mean()
+
+        value_loss = F.mse_loss(returns_v, values_v)
         
         probs_v = F.softmax(logits_v, dim=1)
         entropy = -(probs_v * logprobs_v).sum(dim=1)
         
-        loss = policy_loss - params['entropy_beta'] * entropy.mean()
+        loss = policy_loss + value_loss + params['entropy_beta'] * entropy.mean()
         loss.backward()
 
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -160,6 +166,8 @@ class A2CAgent(Tank):
 
         stats = {
             'loss':         loss.item(),
+            'policy_loss':  policy_loss.item(),
+            'value_loss':   value_loss.item(),
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
             'entropy':      entropy.mean(),
         }
@@ -221,11 +229,14 @@ def process_stats(idx, reward, stats):
     ex.log_scalar('reward', reward, step=idx)
     for agent_idx in [0, 1]:
         ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
+        ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+        ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
         ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-    print(f"{idx:5d}: running reward = {reward:08.7f}")
+    #print(f"{idx:5d}: running reward = {reward:08.7f}")
 
 @ex.automain
 def run():
+    print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners  = [A2CAgent(idx, device) for idx in [0, 1]]
     opponents = [RandomTank(idx) for idx in [2, 3]]
