@@ -83,3 +83,6 @@
         1. 'RandomNoFireAgent'
         1. 'RandomFireAgent'
         1. 'PreviouslyTrainedAgent'
+    1. [14Jan20]: important: NORMALIZE inputs => e.g. ammo: if used on face value (e.g. 500) -> leads initially to large logits, then to prob dist centered on a single value and hence:
+        1. no exploration
+        1. log pi(a|s) very close to zero -> small gradients
