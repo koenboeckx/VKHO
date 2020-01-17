@@ -2,7 +2,7 @@ import sys; sys.path.insert(1, '/home/koen/Programming/VKHO/game')
 
 from envs import Environment, all_actions
 from collections import namedtuple
-import random, time
+import random, time, pickle
 
 import numpy as np
 import torch
@@ -101,6 +101,10 @@ class Tank:
     
     def __repr__(self):
         return self.type + str(self.idx)
+    
+    def save(self, filename):
+        with open(filename, 'wb') as output_file:
+            pickle.dump(self, output_file)
 
 class RandomTank(Tank):
     def __init__(self, idx):
@@ -129,6 +133,8 @@ class A2CAgent(Tank):
         _, _, rewards, _, dones = zip(*batch)
         returns, R = [], 0.0
         own_rewards = [reward[self.idx] for reward in rewards]
+        if self.idx in [2, 3]: # invert rewards if agent of opponent
+            own_rewards = [-reward for reward in own_rewards]
         for reward, done in reversed(list(zip(own_rewards, dones))):
             if done: 
                 R = 0.0
@@ -206,8 +212,7 @@ def play_episode(env, agents, render=False):
         state = next_state
 
 def train(env, learners, opponents):
-    loss = [None, ] * len(learners)
-    grads_l2 = [None, ] * len(learners)
+    stats = {}
     running_reward = None
     agents = learners + opponents
     for idx in range(params['n_steps']):
@@ -221,7 +226,6 @@ def train(env, learners, opponents):
             running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA)*reward
             batch.extend(episode)
         
-        stats = [None] * len(learners)
         for agent in learners:
             stats[agent.idx] = agent.update(batch)
         process_stats(idx, running_reward, stats)
@@ -230,7 +234,7 @@ def train(env, learners, opponents):
 def process_stats(idx, reward, stats):
     if STORE:
         ex.log_scalar('reward', reward, step=idx)
-        for agent_idx in [0, 1]:
+        for agent_idx in stats:
             ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
             ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
             ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
@@ -248,6 +252,8 @@ def run():
 
     env = Environment(agents, size=params['board_size'])
     train(env, learners, opponents)
+    for agent in learners:
+        agent.save(f'agent{agent.idx}.pkl')
 
 if __name__ == "__main__":
     run()

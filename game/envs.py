@@ -28,14 +28,14 @@ import math     # compute distance between agents
 import numpy as np  # used in computing LOS
 from collections import namedtuple
 
-
+"""
 try:
     from . import agents
 except:
     print('Running from file')
     import agents
-
-#import agents # temporary, to avoid error from above when running in debug mode
+"""
+import agents # temporary, to avoid error from above when running in debug mode
 # helper functions
 
 # Observation: what does each agent know/see?
@@ -323,6 +323,9 @@ class Environment:
                         window.append((x+i, y+j))
         window.remove((x, y)) # remove own position
         return window
+    
+    def get_actions(self, state):
+        return [agent.get_action(state) for agent in self.agents]
 
     def step(self, state, actions):
         """Perform actions, part of joint action space.
@@ -402,10 +405,10 @@ class Environment:
         :return: 1 if player 0 wins, -1 if player 1 wins, 0 otherwise
         """
         # TODO: add tie (return 0) if all agents out of ammo
-        if all([ammo == 0 for ammo in state.ammo[:2]]): # ! should be 'all'
+        if all([ammo == 0 for ammo in state.ammo[:2]]): 
             return -1 # team0 out of ammo
-        if all([ammo == 0 for ammo in state.ammo[2:]]): # ! should be 'all'
-            return 1 # team0 out of ammo
+        if all([ammo == 0 for ammo in state.ammo[2:]]): 
+            return 1 # team1 out of ammo
         if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
             return -1
         elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead

@@ -2,7 +2,7 @@
 
 import pygame
 import time
-from game.envs import all_actions # to display actions
+from envs import all_actions # to display actions
 
 DEBUG = True
 
@@ -27,13 +27,13 @@ def visualize(env, period=None):
     else:
         period = int(period * 1000) # in ms
 
-    def show_aiming(agent, action):
+    def show_aiming(state, agent, action):
         if action == 1:
             opponent = env.agents[2] if agent.idx in [0, 1] else env.agents[0]
         elif action == 2:
             opponent = env.agents[3] if agent.idx in [0, 1] else env.agents[1]
-        start = [x*STEP for x in agent.pos]
-        stop  = [x*STEP for x in opponent.pos]
+        start = [x*STEP for x in state.positions[agent.idx]]
+        stop  = [x*STEP for x in state.positions[opponent.idx]]
         pygame.draw.line(screen, WHITE, start, stop)
         pygame.display.flip()
 
@@ -48,10 +48,10 @@ def visualize(env, period=None):
     pygame.time.set_timer(STEPEVENT, period) # fire STEPEVENT event every period
     
     # create the initial game state and initialze objects
-    obs = env.set_init_game_state()
+    state = env.get_init_game_state()
     tanks = []
     for idx in range(4):
-        init_pos = obs[idx].position
+        init_pos = state.positions[idx]
         tanks.append(Tank(idx, init_pos))
 
     running = True
@@ -59,22 +59,28 @@ def visualize(env, period=None):
         for event in pygame.event.get():    # global event handling loop
             if event.type == pygame.QUIT:   # did the user click the window close button?
                 running = False
+            if env.terminal(state):
+                if env.terminal(state) == 1:
+                    print('Team 0 won!')
+                elif env.terminal(state) == -1:
+                    print('Team 1 won!')
+                running = False
             elif event.type == STEPEVENT:
-                actions = env.act(obs)
+                actions = env.get_actions(state)
                 if DEBUG:
                     print('------------------------') 
                     parse_actions(actions)
                 
                 # draw lines between agents when aiming
                 for agent, action in zip(env.agents, actions):
-                    if agent.alive == 0:
+                    if state.alive[agent.idx] == 0:
                         tanks[agent.idx].set_dead()
                     if action in [1, 2]:
-                        show_aiming(agent, action)
+                        show_aiming(state, agent, action)
 
-                obs = env.step(actions)
+                state = env.step(state, actions)
                 for idx, tank in enumerate(tanks):
-                    pos = obs[idx].position
+                    pos = state.positions[idx]
                     tank.update(pos)
         
         screen.fill((0, 0, 0))
