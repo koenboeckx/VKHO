@@ -16,7 +16,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = True # set to true to store results with sacred
+STORE = False # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -26,7 +26,7 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              1000,
+    'n_steps':              100,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
@@ -213,7 +213,7 @@ def play_episode(env, agents, render=False):
 
 def train(env, learners, opponents):
     stats = {}
-    running_reward = None
+    running_reward = 0
     agents = learners + opponents
     for idx in range(params['n_steps']):
         batch = []
@@ -224,7 +224,8 @@ def train(env, learners, opponents):
             if STORE:
                 ex.log_scalar('immediate_reward', reward)
                 ex.log_scalar('episode_length', len(episode))
-            running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA)*reward
+            #running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA) * reward
+            running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
             batch.extend(episode)
         
         for agent in learners:
@@ -243,7 +244,7 @@ def process_stats(idx, reward, stats):
             ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
-@ex.automain
+#@ex.automain
 def run():
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -254,9 +255,8 @@ def run():
     env = Environment(agents, size=params['board_size'])
     train(env, learners, opponents)
     for agent in learners:
-        agent.save(f'agent{agent.idx}.pkl')
+        agent.save(f'agent{agent.idx}-temp.pkl')
 
-"""
+
 if __name__ == "__main__":
     run()
-"""
