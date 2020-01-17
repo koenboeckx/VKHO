@@ -11,25 +11,27 @@ from torch import optim
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
-from sacred import Experiment
-from sacred.observers import MongoObserver
-ex = Experiment('new_pg')
-ex.observers.append(MongoObserver(url='localhost',
-                                  db_name='my_database'))
-
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
+STORE = False # set to true to store results with sacred
+
+if STORE:
+    from sacred import Experiment
+    from sacred.observers import MongoObserver
+    ex = Experiment('new_pg')
+    ex.observers.append(MongoObserver(url='localhost',
+                                    db_name='my_database'))
 
 params = {
     'n_steps':              1000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
-    'entropy_beta':         0.,
-    'n_episodes_per_step':  50,
+    'entropy_beta':         0.01,
+    'n_episodes_per_step':  20,
     'init_ammo':            500,
 }
 
@@ -155,7 +157,7 @@ class A2CAgent(Tank):
         probs_v = F.softmax(logits_v, dim=1)
         entropy = -(probs_v * logprobs_v).sum(dim=1)
         
-        loss = policy_loss + value_loss + params['entropy_beta'] * entropy.mean()
+        loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
         loss.backward()
 
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -169,7 +171,7 @@ class A2CAgent(Tank):
             'policy_loss':  policy_loss.item(),
             'value_loss':   value_loss.item(),
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
-            'entropy':      entropy.mean(),
+            'entropy':      entropy.mean().item(),
         }
 
         return stats
@@ -213,9 +215,9 @@ def train(env, learners, opponents):
         for epi_idx in range(params['n_episodes_per_step']):
             render = True if DEBUG and epi_idx % 10 == 0 else False
             episode = play_episode(env, agents, render=render)
-            ex.log_scalar('episode_length', len(episode))
+            if STORE: ex.log_scalar('episode_length', len(episode))
             reward = episode[-1].reward[0]
-            ex.log_scalar('immediate_reward', reward)
+            if STORE: ex.log_scalar('immediate_reward', reward)
             running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA)*reward
             batch.extend(episode)
         
@@ -226,15 +228,17 @@ def train(env, learners, opponents):
         
     
 def process_stats(idx, reward, stats):
-    ex.log_scalar('reward', reward, step=idx)
-    for agent_idx in [0, 1]:
-        ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-        ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-        ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
-        ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-    #print(f"{idx:5d}: running reward = {reward:08.7f}")
+    if STORE:
+        ex.log_scalar('reward', reward, step=idx)
+        for agent_idx in [0, 1]:
+            ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
+            ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+            ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+            ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
+            ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+    print(f"{idx:5d}: running reward = {reward:08.7f}")
 
-@ex.automain
+#@ex.automain
 def run():
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -244,3 +248,6 @@ def run():
 
     env = Environment(agents, size=params['board_size'])
     train(env, learners, opponents)
+
+if __name__ == "__main__":
+    run()
