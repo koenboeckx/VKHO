@@ -13,9 +13,11 @@ def visualize_game(env,agents):
     state = env.get_init_game_state()
     while not env.terminal(state):
         env.render(state)
-        actions = [agent.get_action(state) for agent in agents]
+        actions = env.get_actions(state)
         print(f"Actions = {[all_actions[a] for a in actions]}")
         state = env.step(state, actions)
+    print(state)
+    print(f'Game won by team {0 if env.terminal(state) == 1 else 1}.')
 
 
 def run():
@@ -26,8 +28,8 @@ def run():
     opponents = [RandomTank(idx) for idx in [2, 3]]
     agents = learners + opponents
     env = Environment(agents, size=params['board_size'])
-    #visualize_game(env, agents)
-    visualize(env, period=1)
+    visualize_game(env, agents)
+    #visualize(env, period=0.2)
 
 if __name__ == '__main__':
     run()

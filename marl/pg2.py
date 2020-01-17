@@ -16,7 +16,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = False # set to true to store results with sacred
+STORE = True # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -133,8 +133,6 @@ class A2CAgent(Tank):
         _, _, rewards, _, dones = zip(*batch)
         returns, R = [], 0.0
         own_rewards = [reward[self.idx] for reward in rewards]
-        if self.idx in [2, 3]: # invert rewards if agent of opponent
-            own_rewards = [-reward for reward in own_rewards]
         for reward, done in reversed(list(zip(own_rewards, dones))):
             if done: 
                 R = 0.0
@@ -149,7 +147,9 @@ class A2CAgent(Tank):
         
         own_actions = [action[self.idx] for action in actions]
         actions_v = torch.LongTensor(own_actions)
-        returns_v = torch.tensor(self.discount_rewards(batch))
+        discounted = self.discount_rewards(batch)
+        returns_v = torch.tensor(discounted)
+        #returns_v = torch.tensor(self.discount_rewards(batch))
 
         values_v, logits_v = self.model(preprocess(states))
         values_v = values_v.squeeze()
@@ -220,9 +220,10 @@ def train(env, learners, opponents):
         for epi_idx in range(params['n_episodes_per_step']):
             render = True if DEBUG and epi_idx % 10 == 0 else False
             episode = play_episode(env, agents, render=render)
-            if STORE: ex.log_scalar('episode_length', len(episode))
             reward = episode[-1].reward[0]
-            if STORE: ex.log_scalar('immediate_reward', reward)
+            if STORE:
+                ex.log_scalar('immediate_reward', reward)
+                ex.log_scalar('episode_length', len(episode))
             running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA)*reward
             batch.extend(episode)
         
@@ -242,12 +243,12 @@ def process_stats(idx, reward, stats):
             ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
-#@ex.automain
+@ex.automain
 def run():
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners  = [A2CAgent(idx, device) for idx in [0, 1]]
-    opponents = [RandomTank(idx) for idx in [2, 3]]
+    learners  = [A2CAgent(idx, device) for idx in [2, 3]]
+    opponents = [RandomTank(idx) for idx in [0, 1]]
     agents = learners + opponents
 
     env = Environment(agents, size=params['board_size'])
@@ -255,5 +256,7 @@ def run():
     for agent in learners:
         agent.save(f'agent{agent.idx}.pkl')
 
+"""
 if __name__ == "__main__":
     run()
+"""

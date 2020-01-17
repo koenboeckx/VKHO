@@ -325,7 +325,8 @@ class Environment:
         return window
     
     def get_actions(self, state):
-        return [agent.get_action(state) for agent in self.agents]
+        # return [agent.get_action(state) for agent in self.agents  ] # next line takes alive into account
+        return [agent.get_action(state) if state.alive[agent.idx] else 0 for agent in self.agents]
 
     def step(self, state, actions):
         """Perform actions, part of joint action space.

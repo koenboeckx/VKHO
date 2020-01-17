@@ -3,8 +3,10 @@
 import pygame
 import time
 from envs import all_actions # to display actions
+import imageio # for generation of gifs
 
-DEBUG = True
+DEBUG = False
+MAKE_GIF = False
 
 STEP = 50 # number of pixels per case
 PERIOD = 75 # screen update frequency
@@ -36,9 +38,12 @@ def visualize(env, period=None):
         stop  = [x*STEP for x in state.positions[opponent.idx]]
         pygame.draw.line(screen, WHITE, start, stop)
         pygame.display.flip()
-
+    
     SCREEN_HEIGHT = STEP * env.board_size
     SCREEN_WIDTH  = STEP * env.board_size
+
+    def screenshot(idx):
+        pygame.image.save(screen, f"screenshot0{idx}.png")
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -55,6 +60,7 @@ def visualize(env, period=None):
         tanks.append(Tank(idx, init_pos))
 
     running = True
+    idx = 0
     while running:
         for event in pygame.event.get():    # global event handling loop
             if event.type == pygame.QUIT:   # did the user click the window close button?
@@ -82,6 +88,11 @@ def visualize(env, period=None):
                 for idx, tank in enumerate(tanks):
                     pos = state.positions[idx]
                     tank.update(pos)
+                
+                if MAKE_GIF:
+                    #surf = pygame.Surface() # I'm going to use 100x200 in examples
+                    screenshot(idx)
+                    idx += 1
         
         screen.fill((0, 0, 0))
         for tank in tanks:
