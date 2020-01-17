@@ -9,3 +9,9 @@ test_sacred/online_retail.csv
 test_sacred/online_retail2.csv
 gru/data/*
 tmp/*
+pommerman_test/my_agents.log
+temp/data/*
+
+temp/stock_trading/data/*
+temp/dqn_extensions/runs/*
+game/powers.gif

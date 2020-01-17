@@ -1,3 +1,6 @@
+
+# Summary
+
 1. Implement simple game:
     * symmetric (2 players with each 2 tanks)
     * only 8 possible actions:
@@ -13,21 +16,17 @@
     * no fuel attribute
     * actions are executed simutaneously (a0, a1, a2, a3)
     * implement visulisation tool based on PyGame
-    
 1. Implement MCTS to develop non-trivial strategies for both players
     * centralised control with shared observations
     * consider global game state?
     * how to analyze (NE?, ESS?)
-    
 1. Deploy MARL algorithms to develop strategies
     * First: IQL with DQN for each agent of player 1
     * First: IQL with DQN for each agent of player 1
     * compare with MCTS results
-    
 1. Extend game to more realistic situations with
     * richer action space
     * more evolved sta te / observations (e.g. partial observability?)
-
 1. Other ideas:
     * MCTS: reduce the game to turn-based game:
         * first execute team1's actions: (a0, a1, 0, 0)
@@ -37,7 +36,6 @@
     -> otherwise, joint action space become too large (8**4 = 4096)
     * MCTS: based on FULL state information (thus not only individual observations)
     * MCTS flow graph created with https://www.lucidchart.com
-
 1. Development summary:
     1. [15Oct19] An infinte loop in while not player.is_leaf()
         * rewrote envs.Environment as 'functional' class: step(state, action) -> new_state
@@ -79,23 +77,14 @@
     1. [26Nov19]: Test simple implementation of DQN and tabular Q-learning on Cartpole (discretized if needed)
     1. [27Nov19]: Began development of GRU agent model
     1. [07Dec19]: TODO: use variable identifiers in parameter lists
-    1. [08Dec19]: Video Whitston COMA:
-        * Inductive bias in MARL: multiple learning agents are present!
-        * Types of Multi-Agent systems:
-            1. Cooperative: **subject of this talk**
-                * Shared team reward
-                * Coordination problem
-            1. Competitive:
-                * Zero-sum games
-                * Individual opposing rewards
-                * Minimax equilibria
-            1. Mixed
-                * General-sum games
-                * Nash equilibria
-                * What is the question?
-        * Coordination problems are everywhere
-            * Cars on a highway
-            * Multiple drones in the air.
-        * Multi-agent MDP
-
-    
+    1. [02Jan20]: Idea: add "Action-Filter" as in "Skynet: A Top Deep RL Agent in the Inaugural Pommerman Team Competition" to improve learning speed by telling the agent initially which actions not to take.
+    1. [02Jan20]: Apply 'curriculum learning', where agents are trained against progressivley stronger opponents (see Bengio et al, Curriculum Learning, 2009):
+        1. 'StaticAgentsAgent'
+        1. 'RandomNoFireAgent'
+        1. 'RandomFireAgent'
+        1. 'PreviouslyTrainedAgent'
+    1. [14Jan20]: important: NORMALIZE inputs => e.g. ammo: if used on face value (e.g. 500) -> leads initially to large logits, then to prob dist centered on a single value and hence:
+        1. no exploration
+        1. log pi(a|s) very close to zero -> small gradients
+    TODO: test all this on newly initiated network to confirm hypothesis.
+    1. [16Jan20]: can we compute variance of gradient with and without baseline?

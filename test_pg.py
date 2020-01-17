@@ -18,7 +18,7 @@ def cfg():
     rl_type = 'reinforce' # 'reinforce' or 'actor-critic'
     n_hidden = 128
     lr = 0.001
-    n_episodes = 50
+    n_episodes = 1
     n_steps = 1000
     board_size = 7
     agent_type = 'normal' # 'normal or 'gru'
