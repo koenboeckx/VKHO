@@ -143,10 +143,11 @@ class A2CAgent(Tank):
     def update(self, batch):
         self.optimizer.zero_grad()
 
-        states, actions, rewards, _, dones = zip(*batch)
+        states, actions, _, _, _ = zip(*batch)
         
         own_actions = [action[self.idx] for action in actions]
         actions_v = torch.LongTensor(own_actions)
+
         discounted = self.discount_rewards(batch)
         returns_v = torch.tensor(discounted)
         #returns_v = torch.tensor(self.discount_rewards(batch))
@@ -220,12 +221,13 @@ def train(env, learners, opponents):
         for epi_idx in range(params['n_episodes_per_step']):
             render = True if DEBUG and epi_idx % 10 == 0 else False
             episode = play_episode(env, agents, render=render)
-            reward = episode[-1].reward[0]
+            reward  = episode[-1].reward[0] 
             if STORE:
                 ex.log_scalar('immediate_reward', reward)
                 ex.log_scalar('episode_length', len(episode))
             #running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA) * reward
             running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
+           
             batch.extend(episode)
         
         for agent in learners:
