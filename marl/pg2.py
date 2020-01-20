@@ -16,7 +16,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = False # set to true to store results with sacred
+STORE = True # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -26,12 +26,12 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              100,
+    'n_steps':              1000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
-    'n_episodes_per_step':  20,
+    'n_episodes_per_step':  20, # 20
     'init_ammo':            500,
 }
 
@@ -212,10 +212,10 @@ def play_episode(env, agents, render=False):
             return episode
         state = next_state
 
-def train(env, learners, opponents):
+def train(env, learners, others):
     stats = {}
     running_reward = 0
-    agents = learners + opponents
+    agents = sorted(learners + others, key=lambda x: x.idx)
     for idx in range(params['n_steps']):
         batch = []
         for epi_idx in range(params['n_episodes_per_step']):
@@ -246,19 +246,19 @@ def process_stats(idx, reward, stats):
             ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
-#@ex.automain
+@ex.automain
 def run():
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners  = [A2CAgent(idx, device) for idx in [2, 3]]
-    opponents = [RandomTank(idx) for idx in [0, 1]]
-    agents = learners + opponents
+    learners = [A2CAgent(idx, device) for idx in [2, 3]]
+    others   = [RandomTank(idx) for idx in [0, 1]]
+    agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'])
-    train(env, learners, opponents)
+    train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-temp.pkl')
+        agent.save(f'agent{agent.idx}.pkl')
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and not STORE:
     run()
