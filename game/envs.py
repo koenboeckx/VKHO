@@ -28,14 +28,13 @@ import math     # compute distance between agents
 import numpy as np  # used in computing LOS
 from collections import namedtuple
 
-"""
 try:
     from . import agents
 except:
     print('Running from file')
     import agents
-"""
-import agents # temporary, to avoid error from above when running in debug mode
+
+#import agents # temporary, to avoid error from above when running in debug mode
 # helper functions
 
 # Observation: what does each agent know/see?

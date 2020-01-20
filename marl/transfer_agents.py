@@ -11,7 +11,7 @@ from envs import Environment, all_actions
 from gui import visualize
 from pg2 import A2CAgent, A2CModel, RandomTank, params, train
 
-STORE = True
+STORE = False
 if STORE:
     from sacred import Experiment
     from sacred.observers import MongoObserver
@@ -35,7 +35,7 @@ def visualize_game(env,agents):
 def run():
     learners = []
     for agent_idx in [0, 1]:
-        with open(f'agent{agent_idx}-long.pkl', 'rb') as input_file:
+        with open(f'agent{agent_idx}.pkl', 'rb') as input_file:
             learners.append(pickle.load(input_file))
     opponents = [RandomTank(idx) for idx in [2, 3]]
     agents = learners + opponents
@@ -43,7 +43,7 @@ def run():
     visualize_game(env, agents)
     #visualize(env, period=0.2)
 
-@ex.automain
+#@ex.automain
 def test():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -59,7 +59,6 @@ def test():
     train(env, learners, opponents, ex)
     for agent in learners:
         agent.save(f'agent{agent.idx}-long.pkl')
-"""
+
 if __name__ == '__main__':
-    test()
-"""
+    run()

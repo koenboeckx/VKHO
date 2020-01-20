@@ -63,8 +63,8 @@
     1. [04Nov19] After 1M step simulation, evaluate and find the errors in the two created model files.
     1. [04Nov19] Work on TAN game (Independent Q-Learning article)
     1. [09Nov19] Corrections to game:
-        * included Linr-Of-Sight criterion for aiming
-        * Working with window around future position to avoid agents comming too close
+        * included Linr-Of-Sight criterion for aiming UPDATE: done
+        * Working with window around future position to avoid agents coming too close UPDATE: done
     1. [10Nov19] Began development of Policy Gradients
     1. [11Nov19] IDEA: implement a wrapper for a AI Gym Env (like CartPole) to (1) allow same interface as game Environment, and (2) allow for easy (and secure) experimenting for a single agent before moving on to multiple agents in the battlefield setting. => [18Nov19] **DONE** works with actor-critic2
     1. [11Nov19] PG (in REINFORCE) works (even two simultaneous learners) for small board (5x5) against RANDOM OPPONENT without additional measures (i.e. actor)-> To improve for more complex settings. Doesn't work on 11x11 board (even with extended state repr for net) but [14Nov19] works on 7x7 and results have been documented.
@@ -79,15 +79,17 @@
     1. [07Dec19]: TODO: use variable identifiers in parameter lists
     1. [02Jan20]: Idea: add "Action-Filter" as in "Skynet: A Top Deep RL Agent in the Inaugural Pommerman Team Competition" to improve learning speed by telling the agent initially which actions not to take.
     1. [02Jan20]: Apply 'curriculum learning', where agents are trained against progressivley stronger opponents (see Bengio et al, Curriculum Learning, 2009):
-        1. 'StaticAgentsAgent'
-        1. 'RandomNoFireAgent'
-        1. 'RandomFireAgent'
-        1. 'PreviouslyTrainedAgent'
+        1. `StaticAgentsAgent`
+        1. `RandomNoFireAgent`
+        1. `RandomFireAgent`
+        1. `PreviouslyTrainedAgent`
     1. [14Jan20]: important: NORMALIZE inputs => e.g. ammo: if used on face value (e.g. 500) -> leads initially to large logits, then to prob dist centered on a single value and hence:
         1. no exploration
-        1. log pi(a|s) very close to zero -> small gradients
+        1. `ln pi(a|s)` very close to zero -> small gradients
     TODO: test all this on newly initiated network to confirm hypothesis.
     1. [16Jan20]: can we compute variance of gradient with and without baseline?
         * [20Jan20] UPDATE: an attempt was made -> results are non-conclusive
     1. [17Jan20]: write infrastructure to transfer learning from own troops to enemies
         * [20Jan20] UPDATE: implemented correction so that all agents can be trained (both own agents and opponents)
+    1. [20Jan20]: write routine to capture statistiscs (e.g. how many times `fire` after `aim`)
+    

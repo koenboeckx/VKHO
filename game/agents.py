@@ -60,7 +60,7 @@ class Tank(BaseAgent):
 
         # specific parameters
         self.alive = 1
-        self.ammo = 5
+        self.ammo = 5000
         self.max_range = 5
         self.pos = None     # initialized by environment
         self.aim = None     # set by aim action  

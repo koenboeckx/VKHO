@@ -43,7 +43,8 @@ def preprocess_extended(states):
             for j in range(size):
                 if board[size*i + j] != -1:
                     tensor0[idx, 0, i, j] = int(board[size*i + j][-1]) + 1
-        tensor1[idx, :] = torch.tensor(list(state.alive) + list(state.ammo))
+        ammo_norm = [ammo/5000 for ammo in state.ammo] # !! TODO !!  normalization is needed !! avoid magic number
+        tensor1[idx, :] = torch.tensor(list(state.alive) + ammo_norm)
     return (tensor0, tensor1)
     
 def preprocess_gym(states):

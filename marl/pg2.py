@@ -26,12 +26,12 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              2500,
+    'n_steps':              5000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
-    'n_episodes_per_step':  1, # 20
+    'n_episodes_per_step':  20, # 20
     'init_ammo':            500,
 }
 
@@ -140,7 +140,53 @@ class A2CAgent(Tank):
             returns.insert(0, R)
         return returns
 
-    def update(self, batch):
+    def _compute_returns(self, next_values, rewards, done_mask):
+        pass
+
+    def update_a2c(self, batch):
+        """Perform true A2C update."""
+ 
+        self.optimizer.zero_grad()
+
+        states, actions, rewards, next_states, dones = zip(*batch)
+        
+        own_actions = [action[self.idx] for action in actions]
+        own_rewards = [reward[self.idx] for reward in rewards]
+        actions_v = torch.LongTensor(own_actions)
+        rewards_v = torch.Tensor(own_rewards)
+        dones_v   = torch.FloatTensor(dones)
+
+        values_v, logits_v = self.model(preprocess(states))
+        values_v = values_v.squeeze()
+        next_values_v, _ = self.model(preprocess(next_states))
+        next_values_v = next_values_v.squeeze().detach() # no learning for these states
+        returns_v = (rewards_v + params['gamma'] * (1. - dones_v) * next_values_v).detach()
+        advantages_v = returns_v - values_v
+        
+        ## discounting ...
+        #for ii in range(len(values_v)-1, -1, -1):
+        #    values_v[ii] *= params['gamma']**(len(values_v)-ii+1)
+        #    predicted_v[ii] *= params['gamma']**(len(predicted_v)-ii+1)
+        
+        logprobs_v = F.log_softmax(logits_v, dim=-1)
+        logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
+        logprob_act_vals_v = advantages_v.detach() * logprob_actions_v
+        policy_loss = -logprob_act_vals_v.mean()
+
+        value_loss = advantages_v.pow(2).mean()
+        
+        probs_v = F.softmax(logits_v, dim=1)
+        entropy = -(probs_v * logprobs_v).sum(dim=1)
+        
+        loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
+        loss.backward()
+
+        stats = self._create_stats(loss, policy_loss, value_loss, entropy)
+
+        self.optimizer.step()
+        return stats
+
+    def update_standard(self, batch):
         self.optimizer.zero_grad()
 
         states, actions, _, _, _ = zip(*batch)
@@ -167,12 +213,47 @@ class A2CAgent(Tank):
         loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
         loss.backward()
 
+        stats = self._create_stats(loss, policy_loss, value_loss, entropy)
+
+        self.optimizer.step()
+        return stats
+
+    def update_pg(self, batch):
+        self.optimizer.zero_grad()
+
+        states, actions, _, _, _ = zip(*batch)
+        
+        own_actions = [action[self.idx] for action in actions]
+        actions_v = torch.LongTensor(own_actions)
+
+        returns = self.discount_rewards(batch)
+        returns_v = torch.tensor(returns)
+
+        _, logits_v = self.model(preprocess(states))
+        logprobs_v = F.log_softmax(logits_v, dim=-1)
+        logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
+        logprob_act_vals_v = returns_v * logprob_actions_v
+        loss = -logprob_act_vals_v.mean()
+
+        loss.backward()
+        
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
                                 for p in self.model.parameters()
                                 if p.grad is not None])
-
+        stats = {
+            'loss':         loss.item(),
+            'grads_l2':     np.sqrt(np.mean(np.square(grads))),
+        }
         self.optimizer.step()
+        return stats
 
+    def update(self, batch): # TODO: don't forget
+        return self.update_pg(batch)
+
+    def _create_stats(self, loss, policy_loss, value_loss, entropy):
+        grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                for p in self.model.parameters()
+                                if p.grad is not None])
         stats = {
             'loss':         loss.item(),
             'policy_loss':  policy_loss.item(),
@@ -180,8 +261,7 @@ class A2CAgent(Tank):
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
             'entropy':      entropy.mean().item(),
         }
-
-        return stats
+        return stats 
 
 def preprocess(states):
     """Process state to serve as input to convolutionel net."""
@@ -225,13 +305,12 @@ def train(env, learners, others):
             render = True if DEBUG and epi_idx % 10 == 0 else False
             episode = play_episode(env, agents, render=render)
             reward  = episode[-1].reward[0] 
-            if STORE:
-                ex.log_scalar('immediate_reward', reward)
-                ex.log_scalar('episode_length', len(episode))
             #running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA) * reward
             running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
-           
+
             batch.extend(episode)
+        if STORE:
+            ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'])
         
         for agent in learners:
             stats[agent.idx] = agent.update(batch)
@@ -255,10 +334,10 @@ def process_stats(idx, reward, stats):
         ex.log_scalar('reward', reward, step=idx)
         for agent_idx in stats:
             ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-            ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-            ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+            #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+            #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
             ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-            ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+            #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
 def compute_grad_variance(grads):
@@ -279,7 +358,7 @@ def run():
     env = Environment(agents, size=params['board_size'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}.pkl')
+        agent.save(f'agent{agent.idx}-temp.pkl')
 
 
 if __name__ == "__main__" and not STORE:

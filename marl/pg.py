@@ -64,11 +64,12 @@ class PGAgent(agents.Tank):
         self.model.load_state_dict(torch.load(filename))
     
     def get_action(self, state):
-        board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
-        _, logits = self.model(board_v, state_v)[0]
-        probs = F.softmax(logits, dim=-1)
-        m = Categorical(probs)
-        action = m.sample()
+        with torch.no_grad():
+            board_v, state_v = [tensor.to(self.device) for tensor in preprocess([state])]
+            _, logits = self.model(board_v, state_v)[0]
+            probs = F.softmax(logits, dim=-1)
+            m = Categorical(probs)
+            action = m.sample()
         return action.item()
 
 class PG_GRUAgent(PGAgent):
@@ -133,16 +134,17 @@ def generate_episode(env):
     """Generates one episode."""
     episode = []
     state = env.get_init_game_state()
-    while env.terminal(state) == 0:
+    while True:
         actions = [agent.get_action(state) for agent in env.agents]
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
-        done = True if env.terminal(next_state) else False
+        done = True if env.terminal(next_state) != 0 else False
         episode.append(Experience(state, actions, reward,
                                 next_state, done))
+        if done:
+            return episode
         state = next_state
-    return episode
-
+    
 def generate_steps(env, n_steps, gamma=0.99):
     """
     Generate n_steps through interaction with environment env. Actions are
