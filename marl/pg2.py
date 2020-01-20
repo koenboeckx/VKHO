@@ -26,12 +26,12 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              1000,
+    'n_steps':              2500,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
-    'n_episodes_per_step':  20, # 20
+    'n_episodes_per_step':  1, # 20
     'init_ammo':            500,
 }
 
@@ -213,8 +213,11 @@ def play_episode(env, agents, render=False):
         state = next_state
 
 def train(env, learners, others):
-    stats = {}
+    stats, grads = {}, {}
+    for agent in learners:
+        grads[agent.idx] = []
     running_reward = 0
+
     agents = sorted(learners + others, key=lambda x: x.idx)
     for idx in range(params['n_steps']):
         batch = []
@@ -232,9 +235,21 @@ def train(env, learners, others):
         
         for agent in learners:
             stats[agent.idx] = agent.update(batch)
+            grads[agent.idx].append(stats[agent.idx]['grads_l2'])
         process_stats(idx, running_reward, stats)
-        
-    
+    if STORE:
+        log_grad_variance(learners, grads)
+
+def log_grad_variance(learners, grads):    
+    """Compute and log variance of gradients of all learning agents"""
+    for agent in learners:
+        variance = compute_grad_variance(grads[agent.idx])
+        for idx, var in enumerate(variance):
+            ex.log_scalar(f'var_grad{agent.idx}', var, step=idx)
+
+
+# ------- helper functions -----------------
+
 def process_stats(idx, reward, stats):
     if STORE:
         ex.log_scalar('reward', reward, step=idx)
@@ -246,12 +261,19 @@ def process_stats(idx, reward, stats):
             ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
+def compute_grad_variance(grads):
+    variance = []
+    for idx in range(5, len(grads)-5):
+        grad_var = np.var(grads[idx-5:idx+5])
+        variance.append(grad_var)
+    return variance
+
 @ex.automain
 def run():
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners = [A2CAgent(idx, device) for idx in [2, 3]]
-    others   = [RandomTank(idx) for idx in [0, 1]]
+    learners = [A2CAgent(idx, device) for idx in [0, 1]]
+    others   = [RandomTank(idx) for idx in [2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'])

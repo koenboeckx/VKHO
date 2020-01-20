@@ -88,4 +88,6 @@
         1. log pi(a|s) very close to zero -> small gradients
     TODO: test all this on newly initiated network to confirm hypothesis.
     1. [16Jan20]: can we compute variance of gradient with and without baseline?
+        * [20Jan20] UPDATE: an attempt was made -> results are non-conclusive
     1. [17Jan20]: write infrastructure to transfer learning from own troops to enemies
+        * [20Jan20] UPDATE: implemented correction so that all agents can be trained (both own agents and opponents)
