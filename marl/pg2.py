@@ -32,7 +32,7 @@ params = {
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
     'n_episodes_per_step':  20, # 20
-    'init_ammo':            500,
+    'init_ammo':            5,
 }
 
 
@@ -279,7 +279,7 @@ def play_episode(env, agents, render=False):
     episode = []
     state = env.get_init_game_state()
     while True:
-        actions = [agent.get_action(state) for agent in agents]
+        actions = env.get_actions(state)
         if render:
             env.render(state)
             print(f"Actions = {[all_actions[a] for a in actions]}")

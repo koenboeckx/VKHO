@@ -404,15 +404,12 @@ class Environment:
         
         :return: 1 if player 0 wins, -1 if player 1 wins, 0 otherwise
         """
-        # TODO: add tie (return 0) if all agents out of ammo
-        if all([ammo == 0 for ammo in state.ammo[:2]]): 
-            return -1 # team0 out of ammo
-        if all([ammo == 0 for ammo in state.ammo[2:]]): 
-            return 1 # team1 out of ammo
-        if state.alive[0] == 0 and state.alive[1] == 0: # both agents of team 1 are dead
+        # both agents of team 0 are dead or out of ammo
+        if all([alive*ammo == 0 for alive, ammo in zip(state.alive[:2], state.ammo[:2])]):
             return -1
-        elif state.alive[2] == 0 and state.alive[3] == 0: # both agents of team 2 are dead
-            return 1
+        # both agents of team 1 are dead or out of ammo
+        elif all([alive*ammo == 0 for alive, ammo in zip(state.alive[2:], state.ammo[2:])]):
+            return 1 
         else:
             return 0
     
