@@ -85,7 +85,7 @@
         1. 'PreviouslyTrainedAgent'
     1. [14Jan20]: important: NORMALIZE inputs => e.g. ammo: if used on face value (e.g. 500) -> leads initially to large logits, then to prob dist centered on a single value and hence:
         1. no exploration
-        1. $\log pi(a|s)$ very close to zero -> small gradients
+        1. log pi(a|s) very close to zero -> small gradients
     TODO: test all this on newly initiated network to confirm hypothesis.
     1. [16Jan20]: can we compute variance of gradient with and without baseline?
         * [20Jan20] UPDATE: an attempt was made -> results are non-conclusive
