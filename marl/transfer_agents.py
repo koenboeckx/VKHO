@@ -8,7 +8,7 @@ import pickle
 import torch
 
 from envs import Environment, all_actions
-from gui import visualize
+from gui import visualize, create_gif
 from pg2 import A2CAgent, A2CModel, RandomTank, params, train
 
 STORE = False
@@ -35,30 +35,14 @@ def visualize_game(env,agents):
 def run():
     learners = []
     for agent_idx in [0, 1]:
-        with open(f'agent{agent_idx}.pkl', 'rb') as input_file:
+        with open(f'agent{agent_idx}-with_penalty.pkl', 'rb') as input_file:
             learners.append(pickle.load(input_file))
     opponents = [RandomTank(idx) for idx in [2, 3]]
     agents = learners + opponents
     env = Environment(agents, size=params['board_size'])
-    visualize_game(env, agents)
-    #visualize(env, period=0.2)
-
-#@ex.automain
-def test():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    opponents = []
-    for agent_idx in [0, 1]:
-        with open(f'agent{agent_idx}-long.pkl', 'rb') as input_file:
-            opponents.append(pickle.load(input_file))
-    learners  = [A2CAgent(idx, device) for idx in [2, 3]]
-
-    agents = learners + opponents
-
-    env = Environment(agents, size=params['board_size'])
-    train(env, learners, opponents, ex)
-    for agent in learners:
-        agent.save(f'agent{agent.idx}-temp.pkl')
+    #visualize_game(env, agents)
+    visualize(env, period=0.1)
 
 if __name__ == '__main__':
     run()
+    create_gif('./game/screenshots/')

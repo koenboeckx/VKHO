@@ -26,14 +26,14 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              2000,
+    'n_steps':              1200,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
-    'step_penalty':        0.01, # to induce shorter episodes
+    'step_penalty':         0.05, # to induce shorter episodes
 }
 
 @ex.config
@@ -300,28 +300,29 @@ def train(env, learners, others):
     stats, grads = {}, {}
     for agent in learners:
         grads[agent.idx] = []
-    running_reward = 0
-
     agents = sorted(learners + others, key=lambda x: x.idx)
     for idx in range(params['n_steps']):
         batch = []
+        total_reward = 0
         for epi_idx in range(params['n_episodes_per_step']):
             render = True if DEBUG and epi_idx % 10 == 0 else False
             episode = play_episode(env, agents, render=render)
             reward  = episode[-1].reward[0] 
             #running_reward = reward if running_reward is None else ALPHA * running_reward + (1.-ALPHA) * reward
-            running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
-
+            #running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
+            total_reward += reward
             batch.extend(episode)
         if STORE:
-            ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'])
+            ex.log_scalar('win_rate', total_reward/ params['n_episodes_per_step'], step=idx)
+            ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
+            #print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
         
         for agent in learners:
             stats[agent.idx] = agent.update(batch)
             grads[agent.idx].append(stats[agent.idx]['grads_l2'])
-        process_stats(idx, running_reward, stats)
-    if STORE:
-        log_grad_variance(learners, grads)
+        if STORE:
+            process_stats(idx, stats)
+            log_grad_variance(learners, grads)
 
 def log_grad_variance(learners, grads):    
     """Compute and log variance of gradients of all learning agents"""
@@ -333,16 +334,14 @@ def log_grad_variance(learners, grads):
 
 # ------- helper functions -----------------
 
-def process_stats(idx, reward, stats):
-    if STORE:
-        ex.log_scalar('reward', reward, step=idx)
-        for agent_idx in stats:
-            ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-            #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-            #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
-            ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-            #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
-    print(f"{idx:5d}: running reward = {reward:08.7f}")
+def process_stats(idx, stats):
+    for agent_idx in stats:
+        ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
+        #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+        #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+        ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
+        #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+    
 
 def compute_grad_variance(grads):
     variance = []
@@ -363,7 +362,7 @@ def run(params):
                         step_penality=params['step_penalty'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-with_penalty.pkl')
+        agent.save(f'agent{agent.idx}-with_penalty_test2.pkl')
 
 if __name__ == "__main__" and not STORE:
     run(params)
