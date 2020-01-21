@@ -26,13 +26,14 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              5000,
+    'n_steps':              2000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
+    'step_penalty':        0.01, # to induce shorter episodes
 }
 
 @ex.config
@@ -250,7 +251,7 @@ class A2CAgent(Tank):
         return stats
 
     def update(self, batch): # TODO: don't forget
-        return self.update_pg_baseline(batch)
+        return self.update_pg(batch)
 
     def _create_stats(self, loss, policy_loss, value_loss, entropy):
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -337,10 +338,10 @@ def process_stats(idx, reward, stats):
         ex.log_scalar('reward', reward, step=idx)
         for agent_idx in stats:
             ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-            ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-            ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+            #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+            #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
             ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-            ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+            #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
 def compute_grad_variance(grads):
@@ -358,10 +359,11 @@ def run(params):
     others   = [RandomTank(idx) for idx in [2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
-    env = Environment(agents, size=params['board_size'])
+    env = Environment(agents, size=params['board_size'],
+                        step_penality=params['step_penalty'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-temp.pkl')
+        agent.save(f'agent{agent.idx}-with_penalty.pkl')
 
 if __name__ == "__main__" and not STORE:
     run(params)

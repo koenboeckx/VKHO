@@ -58,7 +58,7 @@ def test():
     env = Environment(agents, size=params['board_size'])
     train(env, learners, opponents, ex)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-long.pkl')
+        agent.save(f'agent{agent.idx}-temp.pkl')
 
 if __name__ == '__main__':
     run()

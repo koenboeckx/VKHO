@@ -169,6 +169,7 @@ class Environment:
         self.n_actions = len(self.action_space)
         self.board_size = self.args.get('size', 11) # board size fixed on 11x11
         self.los = get_line_of_sight_dict(self.board_size)
+        self.step_penality = kwargs.get('step_penality', 0.0) # to induce shorter episodes
     
     def get_init_game_state(self):
         """Get the initial game state.
@@ -422,6 +423,9 @@ class Environment:
         reward = self.terminal(state)
         if reward == 'out-of-ammo':
             return (-1, -1, -1, -1)
+        elif reward == 0:
+            penality = self.step_penality
+            return (-penality, -penality, -penality, -penality)
         else:
             return (reward, reward, -reward, -reward)
 
