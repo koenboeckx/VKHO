@@ -92,4 +92,6 @@
     1. [17Jan20]: write infrastructure to transfer learning from own troops to enemies
         * [20Jan20] UPDATE: implemented correction so that all agents can be trained (both own agents and opponents)
     1. [20Jan20]: write routine to capture statistiscs (e.g. how many times `fire` after `aim`)
+    1. [21Jan20]: Can agent choose and execute action when dead, i.e. does it matter if we use `actions = [agent.get_action(state) if agent.alive else 0 for agent in agents]` or is `actions = [agent.get_action(state) for agent in agents]` correct? -> this goes to exploration. Anyhow, the former way doesn't work.
+    1. [21Jan20]: TODO: Idea: explore how NN works when own agent alive flag is set to 0 (e.g. quid generated logits?)
     

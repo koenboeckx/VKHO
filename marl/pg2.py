@@ -31,10 +31,13 @@ params = {
     'gamma':                0.99,
     'learning_rate':        0.001,
     'entropy_beta':         0.01,
-    'n_episodes_per_step':  20, # 20
+    'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
 }
 
+@ex.config
+def cfg():
+    params = params
 
 class A2CModel(nn.Module):
     def __init__(self, input_shape, n_actions):
@@ -186,7 +189,7 @@ class A2CAgent(Tank):
         self.optimizer.step()
         return stats
 
-    def update_standard(self, batch):
+    def update_pg_baseline(self, batch):
         self.optimizer.zero_grad()
 
         states, actions, _, _, _ = zip(*batch)
@@ -196,7 +199,6 @@ class A2CAgent(Tank):
 
         discounted = self.discount_rewards(batch)
         returns_v = torch.tensor(discounted)
-        #returns_v = torch.tensor(self.discount_rewards(batch))
 
         values_v, logits_v = self.model(preprocess(states))
         values_v = values_v.squeeze()
@@ -248,7 +250,7 @@ class A2CAgent(Tank):
         return stats
 
     def update(self, batch): # TODO: don't forget
-        return self.update_pg(batch)
+        return self.update_pg_baseline(batch)
 
     def _create_stats(self, loss, policy_loss, value_loss, entropy):
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -279,7 +281,8 @@ def play_episode(env, agents, render=False):
     episode = []
     state = env.get_init_game_state()
     while True:
-        actions = env.get_actions(state)
+        #actions = env.get_actions(state) # !! avoids dead agents take action -> gives wrong idea to agent (or) disuades exploration?
+        actions = [agent.get_action(state) for agent in agents]
         if render:
             env.render(state)
             print(f"Actions = {[all_actions[a] for a in actions]}")
@@ -334,10 +337,10 @@ def process_stats(idx, reward, stats):
         ex.log_scalar('reward', reward, step=idx)
         for agent_idx in stats:
             ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-            #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-            #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+            ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+            ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
             ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-            #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+            ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     print(f"{idx:5d}: running reward = {reward:08.7f}")
 
 def compute_grad_variance(grads):
@@ -348,7 +351,7 @@ def compute_grad_variance(grads):
     return variance
 
 @ex.automain
-def run():
+def run(params):
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners = [A2CAgent(idx, device) for idx in [0, 1]]
@@ -360,6 +363,5 @@ def run():
     for agent in learners:
         agent.save(f'agent{agent.idx}-temp.pkl')
 
-
 if __name__ == "__main__" and not STORE:
-    run()
+    run(params)
