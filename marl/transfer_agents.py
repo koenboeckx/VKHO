@@ -35,7 +35,7 @@ def visualize_game(env,agents):
 def run():
     learners = []
     for agent_idx in [0, 1]:
-        with open(f'agent{agent_idx}-with_penalty.pkl', 'rb') as input_file:
+        with open(f'agent{agent_idx}-with_penalty_test2.pkl', 'rb') as input_file:
             learners.append(pickle.load(input_file))
     opponents = [RandomTank(idx) for idx in [2, 3]]
     agents = learners + opponents

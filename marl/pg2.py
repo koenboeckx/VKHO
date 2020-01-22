@@ -26,7 +26,7 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              1200,
+    'n_steps':              1000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
@@ -168,9 +168,8 @@ class A2CAgent(Tank):
         advantages_v = returns_v - values_v
         
         ## discounting ...
-        #for ii in range(len(values_v)-1, -1, -1):
-        #    values_v[ii] *= params['gamma']**(len(values_v)-ii+1)
-        #    predicted_v[ii] *= params['gamma']**(len(predicted_v)-ii+1)
+        for ii in range(len(advantages_v)-1, -1, -1):
+            advantages_v[ii] *= params['gamma']**(len(advantages_v)-ii+1)
         
         logprobs_v = F.log_softmax(logits_v, dim=-1)
         logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
@@ -251,7 +250,7 @@ class A2CAgent(Tank):
         return stats
 
     def update(self, batch): # TODO: don't forget
-        return self.update_pg(batch)
+        return self.update_a2c(batch)
 
     def _create_stats(self, loss, policy_loss, value_loss, entropy):
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -322,7 +321,7 @@ def train(env, learners, others):
             grads[agent.idx].append(stats[agent.idx]['grads_l2'])
         if STORE:
             process_stats(idx, stats)
-            log_grad_variance(learners, grads)
+            #log_grad_variance(learners, grads)
 
 def log_grad_variance(learners, grads):    
     """Compute and log variance of gradients of all learning agents"""
@@ -337,10 +336,10 @@ def log_grad_variance(learners, grads):
 def process_stats(idx, stats):
     for agent_idx in stats:
         ex.log_scalar(f'loss{agent_idx}', stats[agent_idx]['loss'], step=idx)
-        #ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
-        #ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
+        ex.log_scalar(f'policy_loss{agent_idx}', stats[agent_idx]['policy_loss'], step=idx)
+        ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
         ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
-        #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+        ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
     
 
 def compute_grad_variance(grads):
@@ -354,15 +353,15 @@ def compute_grad_variance(grads):
 def run(params):
     print(params)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners = [A2CAgent(idx, device) for idx in [0, 1]]
-    others   = [RandomTank(idx) for idx in [2, 3]]
+    learners = [A2CAgent(idx, device) for idx in [0]]
+    others   = [RandomTank(idx) for idx in [1, 2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
                         step_penality=params['step_penalty'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-with_penalty_test2.pkl')
+        agent.save(f'agent{agent.idx}-with_penalty.pkl')
 
 if __name__ == "__main__" and not STORE:
     run(params)
