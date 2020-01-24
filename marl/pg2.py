@@ -1,3 +1,5 @@
+
+
 import sys; sys.path.insert(1, '/home/koen/Programming/VKHO/game')
 
 from envs import Environment, all_actions
@@ -26,11 +28,11 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              1000,
+    'n_steps':              200,
     'board_size':           7,
     'gamma':                0.99,
-    'learning_rate':        0.001,
-    'entropy_beta':         0.01,
+    'learning_rate':        0.01,
+    'entropy_beta':         0.1,
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
     'step_penalty':         0.05, # to induce shorter episodes
@@ -117,11 +119,20 @@ class RandomTank(Tank):
     def get_action(self, obs):
         return random.randint(0, 7)
 
+class StaticTank(Tank):
+    """Tank that does nothing (always 'do_nothing')"""
+    def __init__(self, idx):
+        super(StaticTank, self).__init__(idx)
+    
+    def get_action(self, obs):
+        return 0
+
 class A2CAgent(Tank):
     def __init__(self, idx, device):
         super().__init__(idx)
         self.device = device
         input_shape = (1, params['board_size'], params['board_size'])
+        #
         self.model = A2CModel(input_shape, n_actions=8)
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=params['learning_rate'])
@@ -146,7 +157,7 @@ class A2CAgent(Tank):
 
     def _compute_returns(self, next_values, rewards, done_mask):
         pass
-
+    
     def update_a2c(self, batch):
         """Perform true A2C update."""
  
@@ -163,23 +174,19 @@ class A2CAgent(Tank):
         values_v, logits_v = self.model(preprocess(states))
         values_v = values_v.squeeze()
         next_values_v, _ = self.model(preprocess(next_states))
-        next_values_v = next_values_v.squeeze().detach() # no learning for these states
-        returns_v = (rewards_v + params['gamma'] * (1. - dones_v) * next_values_v).detach()
-        advantages_v = returns_v - values_v
-        
-        ## discounting ...
-        for ii in range(len(advantages_v)-1, -1, -1):
-            advantages_v[ii] *= params['gamma']**(len(advantages_v)-ii+1)
+        next_values_v = next_values_v.squeeze() # no learning for these states
+        td_target_v = rewards_v + params['gamma'] * (1. - dones_v) * next_values_v.detach()
+        delta_v = td_target_v - values_v
         
         logprobs_v = F.log_softmax(logits_v, dim=-1)
         logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
-        logprob_act_vals_v = advantages_v.detach() * logprob_actions_v
+        logprob_act_vals_v = delta_v.detach() * logprob_actions_v
         policy_loss = -logprob_act_vals_v.mean()
 
-        value_loss = advantages_v.pow(2).mean()
+        value_loss = F.smooth_l1_loss(values_v, td_target_v.detach())
         
         probs_v = F.softmax(logits_v, dim=1)
-        entropy = -(probs_v * logprobs_v).sum(dim=1)
+        entropy = -(probs_v * logprobs_v).sum(dim=1).mean()
         
         loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
         loss.backward()
@@ -207,12 +214,12 @@ class A2CAgent(Tank):
         logprob_act_vals_v = (returns_v - values_v.detach()) * logprob_actions_v
         policy_loss = -logprob_act_vals_v.mean()
 
-        value_loss = F.mse_loss(returns_v, values_v)
+        value_loss = F.mse_loss(returns_v.detach(), values_v)
         
         probs_v = F.softmax(logits_v, dim=1)
-        entropy = -(probs_v * logprobs_v).sum(dim=1)
+        entropy = -(probs_v * logprobs_v).sum(dim=1).mean()
         
-        loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
+        loss = policy_loss + value_loss # - params['entropy_beta'] * entropy
         loss.backward()
 
         stats = self._create_stats(loss, policy_loss, value_loss, entropy)
@@ -234,7 +241,8 @@ class A2CAgent(Tank):
         _, logits_v = self.model(preprocess(states))
         logprobs_v = F.log_softmax(logits_v, dim=-1)
         logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
-        logprob_act_vals_v = returns_v * logprob_actions_v
+        #logprob_act_vals_v = returns_v * logprob_actions_v
+        logprob_act_vals_v = (returns_v - returns_v.mean())* logprob_actions_v
         loss = -logprob_act_vals_v.mean()
 
         loss.backward()
@@ -245,11 +253,12 @@ class A2CAgent(Tank):
         stats = {
             'loss':         loss.item(),
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
+            'grads_var':    np.var(grads),
         }
         self.optimizer.step()
         return stats
 
-    def update(self, batch): # TODO: don't forget
+    def update(self, batch):
         return self.update_a2c(batch)
 
     def _create_stats(self, loss, policy_loss, value_loss, entropy):
@@ -261,7 +270,8 @@ class A2CAgent(Tank):
             'policy_loss':  policy_loss.item(),
             'value_loss':   value_loss.item(),
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
-            'entropy':      entropy.mean().item(),
+            'grads_var':    np.var(grads),
+            'entropy':      entropy.item(),
         }
         return stats 
 
@@ -290,6 +300,7 @@ def play_episode(env, agents, render=False):
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
         done = True if env.terminal(next_state) != 0 else False
+        done = done or state.ammo[0] == 0 # !! extra termination rule for 1 v 3 static agents
         episode.append(Experience(state, actions, reward, next_state, done))
         if done:
             return episode
@@ -311,25 +322,16 @@ def train(env, learners, others):
             #running_reward = ALPHA * running_reward + (1.-ALPHA) * reward
             total_reward += reward
             batch.extend(episode)
-        if STORE:
-            ex.log_scalar('win_rate', total_reward/ params['n_episodes_per_step'], step=idx)
-            ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
-            #print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
-        
+
         for agent in learners:
             stats[agent.idx] = agent.update(batch)
             grads[agent.idx].append(stats[agent.idx]['grads_l2'])
+
         if STORE:
+            ex.log_scalar('win_rate', total_reward/ params['n_episodes_per_step'], step=idx)
+            ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
+            print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
             process_stats(idx, stats)
-            #log_grad_variance(learners, grads)
-
-def log_grad_variance(learners, grads):    
-    """Compute and log variance of gradients of all learning agents"""
-    for agent in learners:
-        variance = compute_grad_variance(grads[agent.idx])
-        for idx, var in enumerate(variance):
-            ex.log_scalar(f'var_grad{agent.idx}', var, step=idx)
-
 
 # ------- helper functions -----------------
 
@@ -340,6 +342,7 @@ def process_stats(idx, stats):
         ex.log_scalar(f'value_loss{agent_idx}', stats[agent_idx]['value_loss'], step=idx)
         ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
         ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
+        ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
     
 
 def compute_grad_variance(grads):
@@ -352,16 +355,18 @@ def compute_grad_variance(grads):
 @ex.automain
 def run(params):
     print(params)
+    with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb
+        print(f.read()) 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners = [A2CAgent(idx, device) for idx in [0]]
-    others   = [RandomTank(idx) for idx in [1, 2, 3]]
+    others   = [StaticTank(idx) for idx in [1, 2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
                         step_penality=params['step_penalty'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-with_penalty.pkl')
+        agent.save(f'agent{agent.idx}-temp.pkl')
 
 if __name__ == "__main__" and not STORE:
     run(params)
