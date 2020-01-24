@@ -94,5 +94,8 @@
     1. [20Jan20]: write routine to capture statistiscs (e.g. how many times `fire` after `aim`)
     1. [21Jan20]: Can agent choose and execute action when dead, i.e. does it matter if we use `actions = [agent.get_action(state) if agent.alive else 0 for agent in agents]` or is `actions = [agent.get_action(state) for agent in agents]` correct? -> this goes to exploration. Anyhow, the former way doesn't work => not unlogical, since agent has no way to explore other actions than `do_nothing` if `state[agent].alive == False`
         * [21Jan20]: (TODO) Idea: explore how NN works when own agent alive flag is set to 0 (e.g. quid generated logits?)
-    1.         
+    1. [24Jan20]: A2C: if no entropy loss -> collapse of pi(a|s) around a single action !!
+    1. [24Jan20]: tuning A2C training is too difficult - or something is wrong in my code => DECISION: keep working with REINFORCE for now; revisit A2C later. Next step: replace model with GRU and (implicetly) condition on state trajectory \tau.
+        * is there a link with the number of available actions?
+
     

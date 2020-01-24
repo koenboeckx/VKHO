@@ -32,7 +32,7 @@ params = {
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.01,
-    'entropy_beta':         0.1,
+    'entropy_beta':         0.007,
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
     'step_penalty':         0.05, # to induce shorter episodes
@@ -88,6 +88,10 @@ class A2CModel(nn.Module):
         logits = self.policy(common_out)
         value  = self.value(common_out)
         return value, logits
+
+class A2CGRUModel(nn.Module):
+    pass
+
 
 class Tank:
     def __init__(self, idx):
@@ -186,12 +190,12 @@ class A2CAgent(Tank):
         value_loss = F.smooth_l1_loss(values_v, td_target_v.detach())
         
         probs_v = F.softmax(logits_v, dim=1)
-        entropy = -(probs_v * logprobs_v).sum(dim=1).mean()
+        entropy_loss = (probs_v * logprobs_v).sum(dim=1).mean()
         
-        loss = policy_loss + value_loss - params['entropy_beta'] * entropy.mean()
+        loss = policy_loss + value_loss + params['entropy_beta'] * entropy_loss
         loss.backward()
 
-        stats = self._create_stats(loss, policy_loss, value_loss, entropy)
+        stats = self._create_stats(loss, policy_loss, value_loss, entropy_loss)
 
         self.optimizer.step()
         return stats
@@ -330,7 +334,7 @@ def train(env, learners, others):
         if STORE:
             ex.log_scalar('win_rate', total_reward/ params['n_episodes_per_step'], step=idx)
             ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
-            print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
+            #print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
             process_stats(idx, stats)
 
 # ------- helper functions -----------------
@@ -343,14 +347,6 @@ def process_stats(idx, stats):
         ex.log_scalar(f'grad{agent_idx}', stats[agent_idx]['grads_l2'], step=idx)
         ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
-    
-
-def compute_grad_variance(grads):
-    variance = []
-    for idx in range(5, len(grads)-5):
-        grad_var = np.var(grads[idx-5:idx+5])
-        variance.append(grad_var)
-    return variance
 
 @ex.automain
 def run(params):
@@ -359,7 +355,7 @@ def run(params):
         print(f.read()) 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners = [A2CAgent(idx, device) for idx in [0]]
-    others   = [StaticTank(idx) for idx in [1, 2, 3]]
+    others   = [RandomTank(idx) for idx in [1, 2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
