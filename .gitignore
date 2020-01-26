@@ -17,3 +17,4 @@ temp/dqn_extensions/runs/*
 game/powers.gif
 *.pkl
 screenshot0*.png
+temp/gru_testing/data/*
