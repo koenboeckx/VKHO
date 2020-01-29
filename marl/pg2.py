@@ -18,7 +18,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = False # set to true to store results with sacred
+STORE = True # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -38,9 +38,11 @@ params = {
     'step_penalty':         0.05, # to induce shorter episodes
 }
 
-#@ex.config
+@ex.config
 def cfg():
     params = params
+
+# ----------------------- Models -----------------------------------------
 
 class A2CCommonModel(nn.Module):
     def __init__(self, input_shape):
@@ -101,7 +103,30 @@ class A2CModel(nn.Module):
         value  = self.value(common_out)
         return value, logits
 
+class A2CGRUModel(nn.Module):
+    def __init__(self, input_shape, n_actions, hidden_size=512, num_layers=1):
+        super().__init__()
+        self.common = A2CCommonModel(input_shape)
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.gru = nn.GRU(128, hidden_size, num_layers=num_layers)
 
+        self.policy = nn.Linear(hidden_size, n_actions)
+        self.value  = nn.Linear(hidden_size, 1)
+
+    def init_hidden(self, batch_size):
+        return torch.zeros(self.num_layers, batch_size, self.hidden_size)
+    
+    def forward(self, x):
+        batch_size = x.size(0)
+        common_out = self.common(x)
+        hidden_state = self.init_hidden(batch_size)
+        rnn_out, hidden_state = self.gru(common_out.unsqueeze(0), hidden_state)
+        logits = self.policy(hidden_state).squeeze()
+        value  = self.value(hidden_state).squeeze() # TODO: check if this 'squeeze' is necessary !!
+        return value, logits
+
+# ----------------------- Agents -----------------------------------------
 class Tank:
     def __init__(self, idx):
         super(Tank, self).__init__()
@@ -146,7 +171,8 @@ class A2CAgent(Tank):
         self.device = device
         input_shape = (1, params['board_size'], params['board_size'])
         #
-        self.model = A2CModel(input_shape, n_actions=8)
+        #self.model = A2CModel(input_shape, n_actions=8)
+        self.model = A2CGRUModel(input_shape, n_actions=8)
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=params['learning_rate'])
     
@@ -358,7 +384,7 @@ def process_stats(idx, stats):
         ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
 
-#@ex.automain
+@ex.automain
 def run(params):
     print(params)
     with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb
