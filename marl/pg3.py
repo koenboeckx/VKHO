@@ -20,7 +20,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = True # set to true to store results with sacred
+STORE = False # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -30,7 +30,7 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              500,
+    'n_steps':              200,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
@@ -38,17 +38,17 @@ params = {
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
     'step_penalty':         0.05, # to induce shorter episodes
-    'gru':                  True,
+    'gru':                  False,
     'type':                 'a2c', # 'reinforce' or 'a2c' of 'reinforce baseline'
 }
 
-@ex.config
+#@ex.config
 def cfg():
     params = params
 
 # ----------------------- Models -----------------------------------------
 
-class A2CCommonModel(nn.Module):
+class CommonModel(nn.Module):
     def __init__(self, input_shape):
         super().__init__()
         self.conv = nn.Sequential(
@@ -89,57 +89,30 @@ class A2CCommonModel(nn.Module):
         common_out = self.common(common_in)
         return common_out
 
-class A2CModel(nn.Module):
+class Actor(nn.Module):
     def __init__(self, input_shape, n_actions):
         super().__init__()
-        
-        self.common = A2CCommonModel(input_shape)
-
+        self.common = CommonModel(input_shape)
         self.policy = nn.Linear(128, n_actions)
-        self.value  = nn.Linear(128, 1)
-
-    def forward(self, x):
-        """Input x has two parts: a 'board' for the conv layer,
-        and an 'other', containing ammo and alive flags for
-        the fully connecte layer."""
-        common_out = self.common(x)
-        logits = self.policy(common_out)
-        value  = self.value(common_out)
-        return value, logits
-
-class A2CGRUModel(nn.Module):
-    def __init__(self, input_shape, n_actions, hidden_size=256, num_layers=1):
-        super().__init__()
-        self.common = A2CCommonModel(input_shape)
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.gru = nn.GRU(128, hidden_size, num_layers=num_layers)
-
-        self.policy = nn.Linear(hidden_size, n_actions)
-        self.value  = nn.Linear(hidden_size, 1)
-
-    def init_hidden(self, batch_size):
-        return torch.zeros(self.num_layers, batch_size, self.hidden_size)
+        self.optimizer = optim.Adam(self.parameters(), lr=params['learning_rate'])
     
     def forward(self, x):
-        batch_size = x.size(0)
         common_out = self.common(x)
-        hidden_state = self.init_hidden(batch_size)
-        rnn_out, hidden_state = self.gru(common_out.unsqueeze(0), hidden_state)
-        logits = self.policy(hidden_state).squeeze()
-        value  = self.value(hidden_state).squeeze() # TODO: check if this 'squeeze' is necessary !!
-        return value, logits
+        logits = self.policy(common_out)
+        return logits
 
-class COMAActor(nn.Module):
-    def __init__(self):
-        pass
-
-    def forward(self, input):
-        """
-        :param input: tuple (state (observation), action, )
-        """
-
-# ----------------------- Agents -----------------------------------------
+class Critic(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super().__init__()
+        self.common = CommonModel(input_shape)
+        self.values = nn.Linear(128, n_actions)
+        self.optimizer = optim.Adam(self.parameters(), lr=params['learning_rate'])
+    
+    def forward(self, x):
+        common_out = self.common(x)
+        values = self.values(common_out)
+        return values
+##----------------------- Agents -----------------------------------------
 class Tank:
     def __init__(self, idx):
         super(Tank, self).__init__()
@@ -183,17 +156,13 @@ class A2CAgent(Tank):
         super().__init__(idx)
         self.device = device
         input_shape = (1, params['board_size'], params['board_size'])
-        if params['gru']:
-            self.model = A2CGRUModel(input_shape, n_actions=8)
-        else:
-            self.model = A2CModel(input_shape, n_actions=8)
+        self.actor  = Actor(input_shape, n_actions=8)
+        self.critic = Critic(input_shape, n_actions=8)
         
-        self.optimizer = optim.Adam(self.model.parameters(),
-                                    lr=params['learning_rate'])
     
     def get_action(self, state):
         with torch.no_grad():
-            _, logits = self.model(preprocess([state]))
+            logits = self.actor(preprocess([state]))
             probs  = F.softmax(logits, dim=-1)
             action = Categorical(probs).sample()
         return action.item()
@@ -211,78 +180,9 @@ class A2CAgent(Tank):
 
     def _compute_returns(self, next_values, rewards, done_mask):
         pass
-    
-    def update_a2c(self, batch):
-        """Perform true A2C update."""
- 
-        self.optimizer.zero_grad()
-
-        states, actions, rewards, next_states, dones = zip(*batch)
-        
-        own_actions = [action[self.idx] for action in actions]
-        own_rewards = [reward[self.idx] for reward in rewards]
-        actions_v = torch.LongTensor(own_actions)
-        rewards_v = torch.Tensor(own_rewards)
-        dones_v   = torch.FloatTensor(dones)
-
-        values_v, logits_v = self.model(preprocess(states))
-        values_v = values_v.squeeze()
-        next_values_v, _ = self.model(preprocess(next_states))
-        next_values_v = next_values_v.squeeze() # no learning for these states
-        td_target_v = rewards_v + params['gamma'] * (1. - dones_v) * next_values_v.detach()
-        delta_v = td_target_v - values_v
-        
-        logprobs_v = F.log_softmax(logits_v, dim=-1)
-        logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
-        logprob_act_vals_v = delta_v.detach() * logprob_actions_v
-        policy_loss = -logprob_act_vals_v.mean()
-
-        value_loss = F.smooth_l1_loss(values_v, td_target_v.detach())
-        
-        probs_v = F.softmax(logits_v, dim=1)
-        entropy_loss = (probs_v * logprobs_v).sum(dim=1).mean()
-        
-        loss = policy_loss + value_loss + params['entropy_beta'] * entropy_loss
-        loss.backward()
-
-        stats = self._create_stats(loss, policy_loss, value_loss, entropy_loss)
-
-        self.optimizer.step()
-        return stats
-
-    def update_pg_baseline(self, batch):
-        self.optimizer.zero_grad()
-
-        states, actions, _, _, _ = zip(*batch)
-        
-        own_actions = [action[self.idx] for action in actions]
-        actions_v = torch.LongTensor(own_actions)
-
-        discounted = self.discount_rewards(batch)
-        returns_v = torch.tensor(discounted)
-
-        values_v, logits_v = self.model(preprocess(states))
-        values_v = values_v.squeeze()
-        logprobs_v = F.log_softmax(logits_v, dim=-1)
-        logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
-        logprob_act_vals_v = (returns_v - values_v.detach()) * logprob_actions_v
-        policy_loss = -logprob_act_vals_v.mean()
-
-        value_loss = F.mse_loss(returns_v.detach(), values_v)
-        
-        probs_v = F.softmax(logits_v, dim=1)
-        entropy = -(probs_v * logprobs_v).sum(dim=1).mean()
-        
-        loss = policy_loss + value_loss # - params['entropy_beta'] * entropy
-        loss.backward()
-
-        stats = self._create_stats(loss, policy_loss, value_loss, entropy)
-
-        self.optimizer.step()
-        return stats
 
     def update_pg(self, batch):
-        self.optimizer.zero_grad()
+        self.actor.optimizer.zero_grad()
 
         states, actions, _, _, _ = zip(*batch)
         
@@ -292,7 +192,7 @@ class A2CAgent(Tank):
         returns = self.discount_rewards(batch)
         returns_v = torch.tensor(returns)
 
-        _, logits_v = self.model(preprocess(states))
+        logits_v = self.actor(preprocess(states))
         logprobs_v = F.log_softmax(logits_v, dim=-1)
         logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
         #logprob_act_vals_v = returns_v * logprob_actions_v
@@ -302,21 +202,81 @@ class A2CAgent(Tank):
         loss.backward()
         
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
-                                for p in self.model.parameters()
+                                for p in self.actor.parameters()
                                 if p.grad is not None])
         stats = {
             'loss':         loss.item(),
             'grads_l2':     np.sqrt(np.mean(np.square(grads))),
             'grads_var':    np.var(grads),
         }
-        self.optimizer.step()
+        self.actor.optimizer.step()
         return stats
+    
+    def update_critic(self, episode):
+        self.critic.zero_grad()
+        states, actions, rewards, next_states, dones = zip(*episode)
+        own_actions = [action[self.idx] for action in actions]
+        own_rewards = [reward[self.idx] for reward in rewards]
+        next_q = self.critic(preprocess(next_states)).max(1)[0]
+        y = torch.tensor(own_rewards) + params['gamma'] * next_q
+        q = self.critic(preprocess(states))[range(len(episode)), own_actions]
+        loss = F.mse_loss(y, q)
+        loss.backward()
+        self.critic.optimizer.step()
+        return loss
+    
+    def update_actor(self, batch):
+        self.actor.zero_grad()
+
+        states, actions, rewards, next_states, dones = zip(*batch)
+        
+        own_actions = [action[self.idx] for action in actions]
+        own_rewards = [reward[self.idx] for reward in rewards]
+        actions_v = torch.LongTensor(own_actions)
+        rewards_v = torch.Tensor(own_rewards)
+        dones_v   = torch.FloatTensor(dones)
+
+        logits_v = self.actor(preprocess(states))
+        values_v = self.critic(preprocess(states))[range(len(batch)), own_actions]
+        
+        logprobs_v = F.log_softmax(logits_v, dim=-1)
+        logprob_actions_v  = logprobs_v[range(len(batch)), actions_v]
+        logprob_act_vals_v = values_v.detach() * logprob_actions_v
+        loss = -logprob_act_vals_v.mean()
+
+        probs_v = F.softmax(logits_v, dim=1).detach()
+        entropy = -((probs_v * logprobs_v.detach()).sum(dim=1).mean())
+
+        loss.backward()
+        self.actor.optimizer.step()
+        return loss, entropy
+
+    def update_a2c(self, batch):
+        # split batch in episodes and done one critic update per episode
+        episode = []
+        for exp in batch:
+            episode.append(exp)
+            if exp.done: # perform critic update
+                _ = self.update_critic(episode)
+                episode = []
+        
+        loss, entropy = self.update_actor(batch)
+
+        grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                for p in self.actor.parameters()
+                                if p.grad is not None])
+        stats = {
+            'loss':         loss.item(),
+            'grads_l2':     np.sqrt(np.mean(np.square(grads))),
+            'grads_var':    np.var(grads),
+            'entropy':      entropy.item()
+        }
+        return stats
+
 
     def update(self, batch):
         if params['type'] == 'reinforce': # or 'a2c' of 'reinforce baseline'
             return self.update_pg(batch)
-        elif params['type'] == 'reinforce baseline':
-            return self.update_pg_baseline(batch)
         elif params['type'] == 'a2c':
             return self.update_a2c(batch)
 
@@ -392,11 +352,8 @@ def train(env, learners, others):
             ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
             process_stats(idx, stats)
         else:
-            print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f} - mean length = {len(batch) / params['n_episodes_per_step']:6.2f}")
+            print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f} - mean length = {len(batch) / params['n_episodes_per_step']:6.2f} - entropy = {stats[0]['entropy']}")
 
-
-def train_coma():
-    pass
 
 # ------- helper functions -----------------
 
@@ -409,7 +366,7 @@ def process_stats(idx, stats):
         #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
 
-@ex.automain
+#@ex.automain
 def run(params):
     print(params)
     with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb

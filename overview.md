@@ -97,5 +97,14 @@
     1. [24Jan20]: A2C: if no entropy loss -> collapse of pi(a|s) around a single action !!
     1. [24Jan20]: tuning A2C training is too difficult - or something is wrong in my code => DECISION: keep working with REINFORCE for now; revisit A2C later. Next step: replace model with GRU and (implicetly) condition on state trajectory \tau.
         * is there a link with the number of available actions?
-
-    
+    1. [29Jan20]: GRU (re)implemented:
+        * comparable (certainly not better) results vs reference REINFORCE
+        * no improvement for A2C -> still doesn't work
+        * Next: implement COMA
+    1. [29Jan20]: Before COMA: reinmplement IAC where update of pi(a|s) if sufficiently slower than the update of Q(.,.):
+        * seperate actor and critic
+        * update critic every episode; update actor every N episodes
+        * From Konda & Tsitsiklis (2000): "Note that the last assumption requires that the actor parameters be updated at a time scale slower than that of critic." 
+        * UPDATE: no improvement [29Jan20]
+    1. IDEA (based on pymarl): mask out unavailable actions (e.g. no fire when not aiming)
+        * requires change to environment to return unavailable actions
