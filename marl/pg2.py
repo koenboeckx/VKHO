@@ -18,7 +18,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = True # set to true to store results with sacred
+STORE = False # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -31,19 +31,19 @@ params = {
     'n_steps':              200,
     'board_size':           7,
     'gamma':                0.99,
-    'learning_rate':        0.01,
-    'entropy_beta':         0.007,
+    'learning_rate':        0.001,
+    'entropy_beta':         0.01,
     'n_episodes_per_step':  40, # 20
     'init_ammo':            5,
     'step_penalty':         0.05, # to induce shorter episodes
 }
 
-@ex.config
+#@ex.config
 def cfg():
     params = params
 
-class A2CModel(nn.Module):
-    def __init__(self, input_shape, n_actions):
+class A2CCommonModel(nn.Module):
+    def __init__(self, input_shape):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
@@ -51,7 +51,6 @@ class A2CModel(nn.Module):
         )
 
         self.conv_out_size = self._get_conv_out(input_shape)
-
         self.full_in = nn.Sequential(
             nn.Linear(8, 64),
             nn.ReLU(),
@@ -63,9 +62,6 @@ class A2CModel(nn.Module):
             nn.Linear(self.conv_out_size + 64, 128),
             nn.ReLU(),
         )
-
-        self.policy = nn.Linear(128, n_actions)
-        self.value  = nn.Linear(128, 1)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -85,12 +81,25 @@ class A2CModel(nn.Module):
         full_out = self.full_in(other)
         common_in  = torch.cat((conv_out, full_out), 1)
         common_out = self.common(common_in)
+        return common_out
+
+class A2CModel(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super().__init__()
+        
+        self.common = A2CCommonModel(input_shape)
+
+        self.policy = nn.Linear(128, n_actions)
+        self.value  = nn.Linear(128, 1)
+
+    def forward(self, x):
+        """Input x has two parts: a 'board' for the conv layer,
+        and an 'other', containing ammo and alive flags for
+        the fully connecte layer."""
+        common_out = self.common(x)
         logits = self.policy(common_out)
         value  = self.value(common_out)
         return value, logits
-
-class A2CGRUModel(nn.Module):
-    pass
 
 
 class Tank:
@@ -263,7 +272,7 @@ class A2CAgent(Tank):
         return stats
 
     def update(self, batch):
-        return self.update_a2c(batch)
+        return self.update_pg(batch)
 
     def _create_stats(self, loss, policy_loss, value_loss, entropy):
         grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
@@ -334,8 +343,9 @@ def train(env, learners, others):
         if STORE:
             ex.log_scalar('win_rate', total_reward/ params['n_episodes_per_step'], step=idx)
             ex.log_scalar('mean_length', len(batch) / params['n_episodes_per_step'], step=idx)
-            #print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f}")
             process_stats(idx, stats)
+        else:
+            print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f} - mean length = {len(batch) / params['n_episodes_per_step']:6.2f}")
 
 # ------- helper functions -----------------
 
@@ -348,14 +358,14 @@ def process_stats(idx, stats):
         ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
 
-@ex.automain
+#@ex.automain
 def run(params):
     print(params)
     with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb
         print(f.read()) 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners = [A2CAgent(idx, device) for idx in [0]]
-    others   = [RandomTank(idx) for idx in [1, 2, 3]]
+    learners = [A2CAgent(idx, device) for idx in [0, 1]]
+    others   = [RandomTank(idx) for idx in [2, 3]]
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
