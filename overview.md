@@ -108,3 +108,4 @@
         * UPDATE: no improvement [29Jan20]
     1. IDEA (based on pymarl): mask out unavailable actions (e.g. no fire when not aiming)
         * requires change to environment to return unavailable actions
+        * UPDATE: this won't work with PG, because if actions are never taken, their value is never adjusted in the conditional policy. But can work in Q-learning (?).

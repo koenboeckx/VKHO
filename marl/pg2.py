@@ -20,7 +20,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = True # set to true to store results with sacred
+STORE = False # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -42,7 +42,7 @@ params = {
     'type':                 'a2c', # 'reinforce' or 'a2c' of 'reinforce baseline'
 }
 
-@ex.config
+#@ex.config
 def cfg():
     params = params
 
@@ -129,15 +129,6 @@ class A2CGRUModel(nn.Module):
         logits = self.policy(hidden_state).squeeze()
         value  = self.value(hidden_state).squeeze() # TODO: check if this 'squeeze' is necessary !!
         return value, logits
-
-class COMAActor(nn.Module):
-    def __init__(self):
-        pass
-
-    def forward(self, input):
-        """
-        :param input: tuple (state (observation), action, )
-        """
 
 # ----------------------- Agents -----------------------------------------
 class Tank:
@@ -394,10 +385,6 @@ def train(env, learners, others):
         else:
             print(f"{idx:5d}: win_rate = {total_reward/ params['n_episodes_per_step']:08.7f} - mean length = {len(batch) / params['n_episodes_per_step']:6.2f}")
 
-
-def train_coma():
-    pass
-
 # ------- helper functions -----------------
 
 def process_stats(idx, stats):
@@ -409,7 +396,7 @@ def process_stats(idx, stats):
         #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
 
-@ex.automain
+#@ex.automain
 def run(params):
     print(params)
     with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb

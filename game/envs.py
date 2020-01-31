@@ -234,6 +234,15 @@ class Environment:
                 board_repr += '\n'    
         board_repr += f"alive = {state.alive} - ammo = {state.ammo}"
         print(board_repr)
+    
+    def get_unavailable_actions(self, state, agent):
+        if isinstance(agent, int):
+            unavailable = [action for action in all_actions.keys() 
+                        if self.check_conditions(state, agent, action) is False]
+        else:
+            unavailable = [action for action in all_actions.keys() 
+                        if self.check_conditions(state, agent.idx, action) is False]
+        return unavailable
 
     def check_conditions(self, state, agent, action):
         """
@@ -268,8 +277,6 @@ class Environment:
             if self.check_window(state, los): # check if LOS is clear
                 return True
             return False # default response for fire unless conditions above are met
-        # TODO: avoid that agents come too close, because this would mean that on next step they could end up in same spot
-        # TODO: improve window behavior (you know what i mean)
         elif action == 4 or action == all_actions[4]: # move_up
             if state.alive[agent] == 1 and state.positions[agent][0] > 0: # stay on the board
                 agent_pos = state.positions[agent]
