@@ -18,3 +18,4 @@ game/powers.gif
 *.pkl
 screenshot0*.png
 temp/gru_testing/data/*
+pandas/_libs/parsers.pyx

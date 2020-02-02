@@ -173,6 +173,9 @@ class Environment:
         self.board_size = self.args.get('size', 11) # board size fixed on 11x11
         self.los = get_line_of_sight_dict(self.board_size)
         self.step_penality = kwargs.get('step_penality', 0.0) # to induce shorter episodes
+
+        for agent in agents:
+            agent.env = self # ad reference to environment in each agent
     
     def get_init_game_state(self):
         """Get the initial game state.
@@ -232,7 +235,7 @@ class Environment:
                     else:
                         board_repr += [board_size*i+j]
                 board_repr += '\n'    
-        board_repr += f"alive = {state.alive} - ammo = {state.ammo}"
+        board_repr += f"alive = {state.alive} - ammo = {state.ammo} - aims = {state.aim}"
         print(board_repr)
     
     def get_unavailable_actions(self, state, agent):

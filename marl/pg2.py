@@ -351,7 +351,7 @@ def play_episode(env, agents, render=False):
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
         done = True if env.terminal(next_state) != 0 else False
-        done = done or state.ammo[0] == 0 # !! extra termination rule for 1 v 3 static agents
+        #done = done or state.ammo[0] == 0 # !! extra termination rule for 1 v 3 static agents
         episode.append(Experience(state, actions, reward, next_state, done))
         if done:
             return episode
@@ -403,14 +403,14 @@ def run(params):
         print(f.read()) 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners = [A2CAgent(idx, device) for idx in [0, 1]]
-    others   = [RandomTank(idx) for idx in [2, 3]]
+    others   = [RandomTank(idx) for idx in [2, 3]] # turn off extra stop criterion if not StaticTank
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
                         step_penality=params['step_penalty'])
     train(env, learners, others)
     for agent in learners:
-        agent.save(f'agent{agent.idx}-temp.pkl')
+        agent.save(f'agent{agent.idx}-iql.pkl')
 
 if __name__ == "__main__" and not STORE:
     run(params)

@@ -109,3 +109,4 @@
     1. IDEA (based on pymarl): mask out unavailable actions (e.g. no fire when not aiming)
         * requires change to environment to return unavailable actions
         * UPDATE: this won't work with PG, because if actions are never taken, their value is never adjusted in the conditional policy. But can work in Q-learning (?).
+    1. Remark on negative reward for step -> if the agent can't lose (e.g. only static agents), this will induce the agent to shorten episodes (through emptying ammo), without winning himself. This can also be the case if he can lose (e.g. if step_reward = -.2, it is better to play 5 steps and then lose (total reward 5*-2 - 1 = -2), in stead of playing 20 steps and then win (total reward = 20*-.2 + 1 = -3). (This (agent choosing to end episode) is no longer possible if ammo is infinite.)
