@@ -162,13 +162,13 @@ class IQLAgent(Tank):
         if random.random() < epsilon:
             return np.random.choice(range(self.n_actions))
         else:
-            #with torch.no_grad(): # TODO: check if needed
-            q_vals = self.model(preprocess([state])).squeeze()
-            # remove actions that are not allowed
-            unavailable_actions = self.get_unavailable_actions(state)
-            q_vals[unavailable_actions] = -np.infty
-            action = q_vals.max(0)[1].item()
-            return action
+            with torch.no_grad(): # TODO: check if needed => [02Feb20] no improvement
+                q_vals = self.model(preprocess([state])).squeeze()
+                # remove actions that are not allowed
+                unavailable_actions = self.get_unavailable_actions(state)
+                q_vals[unavailable_actions] = -np.infty
+                action = q_vals.max(0)[1].item()
+                return action
     
     def get_unavailable_actions(self, state):
         return self.env.get_unavailable_actions(state, self)
