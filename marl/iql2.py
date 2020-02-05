@@ -19,7 +19,7 @@ RENDER = False
 if STORE:
     from sacred import Experiment
     from sacred.observers import MongoObserver
-    ex = Experiment('new_pg')
+    ex = Experiment('IQL2')
     ex.observers.append(MongoObserver(url='localhost',
                                     db_name='my_database'))
 
@@ -27,15 +27,16 @@ params = {
     'n_steps':              5000,
     'board_size':           7,
     'gamma':                0.99,
-    'learning_rate':        0.01,
-    'init_ammo':            5000,
+    'learning_rate':        0.0005, # from pymarl
+    'init_ammo':            5,
     'step_penalty':         0.01,
     'buffer_size':          1024,
     'batch_size':           16,
-    'max_grad':             100, # maximum gradient, enforced by grad clipping
-    'sync_interval':        5000, # !!
+    'max_grad':             10, # Reduce magnitude of gradients above this L2 norm
+    'sync_interval':        100, # !!
     'max_episode_length':   200, # limits the play_out of an episode
     'final_epsilon':        0.1,
+    'print_interval':       20,
 }    
 
 if STORE:
@@ -197,8 +198,8 @@ class IQLAgent(Tank):
         loss = (td_error**2).mean()
         self.model.optimizer.zero_grad()
         loss.backward()
-        #grad_norm = torch.nn.utils.clip_grad_norm(self.model.parameters(), 
-        #                                            params['max_grad'])
+        grad_norm = torch.nn.utils.clip_grad_norm(self.model.parameters(), 
+                                                    params['max_grad'])
         self.model.optimizer.step()
 
         stats = {
@@ -279,7 +280,7 @@ def play_episode(env, render=False):
         next_state = env.step(state, actions)
         reward = env.get_reward(next_state)
         done = True if env.terminal(next_state) != 0 else False
-        done = done or state.ammo[0] == 0 # !! extra termination rule for 1 v 3 static agents
+        #done = done or state.ammo[0] == 0 # !! extra termination rule for 1 v 3 static agents
         episode.append(Experience(state, actions, reward, next_state, done))
         if done:
             if render: print(f'Episode terminated after {step} steps with reward = {reward[0]}')
@@ -297,10 +298,14 @@ def train(env, learners, others):
     for idx in range(params['n_steps']):
         episode = play_episode(env)
         cum_reward = sum([exp.reward[0] for exp in episode])
-        n_wins += episode[-1].reward[0] == 1
+        if episode[-1].reward[0] == 1:
+            win = 1 
+        elif episode[-1].reward[0] == -1:
+            win = -1
+        n_wins += win
         if STORE:
             ex.log_scalar(f'episode length', len(episode), step=idx)
-            ex.log_scalar(f'win', int(episode[-1].reward[0] == 1), step=idx)
+            ex.log_scalar(f'win', win, step=idx)
             ex.log_scalar(f'episode_reward', cum_reward, step=idx)
         replay_buffer.insert_batch(episode)
         if len(replay_buffer) < params['batch_size']:
@@ -314,8 +319,8 @@ def train(env, learners, others):
                 ex.log_scalar(f'epsilon{agent}', agent.epsilon_scheduler(), step=idx)
             if idx > 0 and idx % params['sync_interval'] == 0:
                 agent.sync_models()
-        if idx % 100 == 0:
-            print(f'Step {idx}: Average win rate: {n_wins/100}')
+        if idx % params['print_interval'] == 0:
+            print(f"Step {idx}: Average win rate: {n_wins/params['print_interval']}")
             n_wins = 0
             if RENDER: _ = play_episode(env, render=True)
             #print('wait')
@@ -330,7 +335,7 @@ def run(params):
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     learners = [IQLAgent(idx, device) for idx in [0]]
-    others   = [StaticTank(idx) for idx in [1, 2, 3]] # turn off extra stop criterion if not StaticTank
+    others   = [RandomTank(idx) for idx in [1, 2, 3]] # turn off extra stop criterion if not StaticTank
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
