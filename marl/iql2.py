@@ -28,7 +28,6 @@ params = {
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.0005, # from pymarl
-    'init_ammo':            5,
     'step_penalty':         0.01,
     'buffer_size':          1024,
     'batch_size':           16,
@@ -37,12 +36,19 @@ params = {
     'max_episode_length':   200, # limits the play_out of an episode
     'final_epsilon':        0.1,
     'print_interval':       20,
-}    
+}
+
+agent_params = {
+    'init_ammo':            5,
+    'view_size':            5,
+    'max_range':            5,
+}
 
 if STORE:
     @ex.config
     def cfg():
         params = params
+        agent_params = agent_params
 
 class CommonModel(nn.Module):
     def __init__(self, input_shape):
@@ -102,9 +108,11 @@ class IQLModel(nn.Module):
 
 #----------------------- Agents -----------------------------------------
 class Tank:
-    def __init__(self, idx):
+    def __init__(self, idx, team="friend"):
         super(Tank, self).__init__()
         self.init_agent(idx)
+        self.team = team
+        
     
     def init_agent(self, idx):
         self.type = 'T'
@@ -112,10 +120,12 @@ class Tank:
 
         # specific parameters
         self.alive = 1
-        self.ammo = params['init_ammo']
-        self.max_range = 5
+        self.ammo = agent_params['init_ammo']
+        self.max_range = agent_params['max_range']
+        self.obs_space = agent_params['view_size']
         self.pos = None     # initialized by environment
-        self.aim = None     # set by aim action 
+        self.aim = None     # set by aim action
+        
     
     def __repr__(self):
         return self.type + str(self.idx)
@@ -125,23 +135,23 @@ class Tank:
             pickle.dump(self, output_file)
 
 class RandomTank(Tank):
-    def __init__(self, idx):
-        super(RandomTank, self).__init__(idx)
+    def __init__(self, idx, team="friend"):
+        super(RandomTank, self).__init__(idx, team)
     
     def get_action(self, obs):
         return random.randint(0, 7)
 
 class StaticTank(Tank):
     """Tank that does nothing (always 'do_nothing')"""
-    def __init__(self, idx):
-        super(StaticTank, self).__init__(idx)
+    def __init__(self, idx, team="friend"):
+        super(StaticTank, self).__init__(idx, team)
     
     def get_action(self, obs):
         return 0
 
 class IQLAgent(Tank):
-    def __init__(self, idx, device):
-        super(IQLAgent, self).__init__(idx)
+    def __init__(self, idx, device, team="friend"):
+        super(IQLAgent, self).__init__(idx, team)
         self.device = device
         self.n_actions = len(all_actions)
         self._instantiate_models()
@@ -259,7 +269,7 @@ def preprocess(states):
         board = np.array([int(b) for b in state.board])
         board = np.reshape(board, (1, bs, bs))
         boards[idx] = board
-        other[idx, 0, 0] = state.alive + tuple(ammo/params['init_ammo'] for ammo in state.ammo)
+        other[idx, 0, 0] = state.alive + tuple(ammo/agent_params['init_ammo'] for ammo in state.ammo)
     return torch.tensor(np.concatenate((boards, other), axis=-1))
 
 Experience = namedtuple('Experience', [
@@ -327,15 +337,14 @@ def train(env, learners, others):
 
 
 @ex.automain
-def run(params):
-    if DEBUG:
-        print(params)
-        with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb
-            print(f.read()) 
+def run(params, agent_params):
+    print(params)
+    with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb
+        print(f.read()) 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners = [IQLAgent(idx, device) for idx in [0]]
-    others   = [RandomTank(idx) for idx in [1, 2, 3]] # turn off extra stop criterion if not StaticTank
+    learners = [IQLAgent(idx, device, type="friend") for idx in [0]]
+    others   = [RandomTank(1, type="friend"),] + [RandomTank(idx, type="enemy") for idx in [2, 3]] # turn off extra stop criterion if not StaticTank
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],

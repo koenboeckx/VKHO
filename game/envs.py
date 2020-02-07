@@ -16,10 +16,10 @@ all_actions = { 0: 'do_nothing',
                 1: 'aim0',  # prepare to fire on first  enemy (0 or 2)
                 2: 'aim1',  # prepare to fire on second enemy (1 or 3)',
                 3: 'fire',
-                4: 'move_up',
-                5: 'move_down',
-                6: 'move_left',
-                7: 'move_right'
+                4: 'move_north',
+                5: 'move_south',
+                6: 'move_west',
+                7: 'move_east'
 }
 
 import random   # random assignement of agent's initial positions
@@ -27,6 +27,7 @@ import copy     # make deepcopy of board
 import math     # compute distance between agents
 import numpy as np  # used in computing LOS
 from collections import namedtuple
+import pickle
 
 """
 try:
@@ -127,37 +128,41 @@ def get_line_of_sight_dict(size, remove_endpoints=True):
              and values = [..., (xk, yk), ...] element along
              line between (xi, yi) and (xj, yj).
     """
-    N = 20 # number of points considered, 100 = randomly chosen value
-    los = {}
-    all_squares = [(x, y) for x in range(size) for y in range(size)]
-    for (xi, yi) in all_squares:
-        for (xj, yj) in all_squares:
-            los[((xi, yi), (xj, yj))] = []
-            dx = (xj - xi)/N
-            dy = (yj - yi)/N
-            xs = [xi+k*dx for k in range(N)]
-            ys = []
-            for k, x in zip(range(N), xs): # create list of consecutive, non-integer x values
-                if x == xi: # move in horizontal line
-                    ys.append(yi + k*dy)
-                else:
-                    ys.append(yi + (yj - yi) * (x - xi) /(xj - xi))
-            for x, y in zip(xs, ys):
-                los[((xi, yi), (xj, yj))].append((int(round(x)), int(round(y))))
-            """
-            for x_test, y_test in all_squares:
+    try: # if pickle file already present, open this => speed up
+        los = pickle.load(open(f"game/los/los_{size}.p", "rb" ) )
+    except:
+        N = 20 # number of points considered, 100 = randomly chosen value
+        los = {}
+        all_squares = [(x, y) for x in range(size) for y in range(size)]
+        for (xi, yi) in all_squares:
+            for (xj, yj) in all_squares:
+                los[((xi, yi), (xj, yj))] = []
+                dx = (xj - xi)/N
+                dy = (yj - yi)/N
+                xs = [xi+k*dx for k in range(N)]
+                ys = []
+                for k, x in zip(range(N), xs): # create list of consecutive, non-integer x values
+                    if x == xi: # move in horizontal line
+                        ys.append(yi + k*dy)
+                    else:
+                        ys.append(yi + (yj - yi) * (x - xi) /(xj - xi))
                 for x, y in zip(xs, ys):
-                    if  x_test-.5 <= x <= x_test+.5 and y_test-.5 <= y <=  y_test+.5:
-                        los[((xi, yi), (xj, yj))].append((x_test, y_test))
-            """
-            los[((xi, yi), (xj, yj))] = list(set(los[((xi, yi), (xj, yj))])) # remove doubles
-            # remove endpoints:
-            if remove_endpoints:
-                if (xi, yi) in los[((xi, yi), (xj, yj))]:
-                    los[((xi, yi), (xj, yj))].remove((xi, yi))
-                if (xj, yj) in los[((xi, yi), (xj, yj))]:
-                    los[((xi, yi), (xj, yj))].remove((xj, yj))
+                    los[((xi, yi), (xj, yj))].append((int(round(x)), int(round(y))))
+                """
+                for x_test, y_test in all_squares:
+                    for x, y in zip(xs, ys):
+                        if  x_test-.5 <= x <= x_test+.5 and y_test-.5 <= y <=  y_test+.5:
+                            los[((xi, yi), (xj, yj))].append((x_test, y_test))
+                """
+                los[((xi, yi), (xj, yj))] = list(set(los[((xi, yi), (xj, yj))])) # remove doubles
+                # remove endpoints:
+                if remove_endpoints:
+                    if (xi, yi) in los[((xi, yi), (xj, yj))]:
+                        los[((xi, yi), (xj, yj))].remove((xi, yi))
+                    if (xj, yj) in los[((xi, yi), (xj, yj))]:
+                        los[((xi, yi), (xj, yj))].remove((xj, yj))
 
+        pickle.dump( los, open( f"game/los/los_{size}.p", "wb+" ) )
     return los
 
 
@@ -341,6 +346,43 @@ class Environment:
         # return [agent.get_action(state) for agent in self.agents  ] # next line takes alive into account
         return [agent.get_action(state) if state.alive[agent.idx] else 0 for agent in self.agents]
 
+    def get_observation(self, state, agent):
+        """
+        Returns observation of state for agent.
+        :param state:   instance of State
+        :param agent:   instance of Agent
+        :returns:       nd.array of size (4, 2*agent.obs_space+1, 2*agent.obs_space+1)
+                        containing:
+                        * plane 0: self + agents of own team (0/1 indicator)
+                        * plane 1: (normalized) ammo of own team
+                        * plane 2: agents of other team (0/1 indicator)
+                        * plane 3: (normalized) ammo of other team
+        """
+        obs = np.zeros((4, 2*agent.obs_space+1, 2*agent.obs_space+1))
+        agent_pos = state.positions[agent.idx]
+        view = (agent_pos[0] - agent.obs_space,
+                agent_pos[0] + agent.obs_space,
+                agent_pos[1] - agent.obs_space,
+                agent_pos[1] + agent.obs_space)
+        for other in self.agents:
+            if state.alive[agent.idx] == 0: # skip dead agents
+                continue
+            other_pos = state.positions[other.idx]
+            if view[0] <=  other_pos[0] <= view[1]:
+                if view[2] <=  other_pos[1] <= view[3]: # check if other agent is in view
+                    x_rel = other_pos[0] - agent_pos[0]
+                    y_rel = other_pos[1] - agent_pos[1]
+                    if other.team == agent.team:
+                        obs[0, agent.obs_space+x_rel, agent.obs_space+y_rel] = 1.
+                        obs[1, agent.obs_space+x_rel, agent.obs_space+y_rel] = state.ammo[other.idx]/other.init_ammo
+                    else:
+                        obs[2, agent.obs_space+x_rel, agent.obs_space+y_rel] = 1.
+                        obs[3, agent.obs_space+x_rel, agent.obs_space+y_rel] = state.ammo[other.idx]/other.init_ammo
+        return obs                    
+
+    def get_all_obs(self, state):
+        return [self.get_observation(state, agent) for agent in self.agents]
+
     def step(self, state, actions):
         """Perform actions, part of joint action space.
         :param state: the game state in which the action is to be executed
@@ -443,6 +485,58 @@ class Environment:
             return (reward, reward, -reward, -reward)
 
 if __name__ == '__main__':
-    los = get_line_of_sight_dict(11)
-    print(los[((0, 1), (10, 10))])
-    print(len(los[((0, 1), (10, 10))]))
+    agent_params = {
+        'init_ammo':            5,
+        'view_size':            7,
+        'max_range':            5,
+    }
+    params = {
+        'board_size':           7,
+        'step_penalty':         0.01,
+    }
+    class Tank:
+        def __init__(self, idx, team="friend"):
+            super(Tank, self).__init__()
+            self.init_agent(idx)
+            self.team = team
+            
+        
+        def init_agent(self, idx):
+            self.type = 'T'
+            self.idx  = idx
+
+            # specific parameters
+            self.alive = 1
+            self.ammo = agent_params['init_ammo']
+            self.max_range = agent_params['max_range']
+            self.obs_space = agent_params['view_size']
+            self.pos = None     # initialized by environment
+            self.aim = None     # set by aim action
+            
+        
+        def __repr__(self):
+            return self.type + str(self.idx)
+        
+        def save(self, filename):
+            with open(filename, 'wb') as output_file:
+                pickle.dump(self, output_file)
+
+    class RandomTank(Tank):
+        def __init__(self, idx, team="friend"):
+            super(RandomTank, self).__init__(idx, team)
+        
+        def get_action(self, obs):
+            return random.randint(0, 7)
+    
+    agents = [RandomTank(0, team="friend"), RandomTank(1, team="friend"),
+              RandomTank(2, team="enemy"), RandomTank(3, team="enemy")]
+    env = Environment(agents, size=params['board_size'],
+                        step_penality=params['step_penalty'])
+    state = env.get_init_game_state()
+    for idx in range(10):
+        actions = [agent.get_action(state) for agent in env.agents]
+        next_state = env.step(state, actions)
+        all_obs = env.get_all_obs(next_state)
+        reward = env.get_reward(next_state)
+        done = True if env.terminal(next_state) != 0 else False
+        state = next_state

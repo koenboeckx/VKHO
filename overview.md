@@ -110,6 +110,8 @@
         * requires change to environment to return unavailable actions
         * UPDATE: this won't work with PG, because if actions are never taken, their value is never adjusted in the conditional policy. But can work in Q-learning (?). => []
     1. Remark on negative reward for step -> if the agent can't lose (e.g. only static agents), this will induce the agent to shorten episodes (through emptying ammo), without winning himself. This can also be the case if he can lose (e.g. if step_reward = -.2, it is better to play 5 steps and then lose (total reward 5*-2 - 1 = -2), in stead of playing 20 steps and then win (total reward = 20*-.2 + 1 = -3). (This (agent choosing to end episode) is no longer possible if ammo is infinite.)
-    1. TODO: re-implemented so that observation is window centered on agent
+    1. [05Feb20] TODO: re-implemented so that observation is window centered on agent
         * allows weight sharing across agents (only observation will be different)
         * enables "easy" integration of QMix (use Qtot in stead of Qa)
+        * branch `observation`
+    1. [05Feb20] move_east / move_west
