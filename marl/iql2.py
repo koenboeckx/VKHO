@@ -282,27 +282,27 @@ def train(env, learners, others):
         elif episode[-1].reward[0] == -1:
             win = -1
         n_wins += win
-        if STORE:
-            ex.log_scalar(f'episode length', len(episode), step=idx)
-            ex.log_scalar(f'win', win, step=idx)
-            ex.log_scalar(f'episode_reward', cum_reward, step=idx)
         replay_buffer.insert_batch(episode)
         if len(replay_buffer) < params['batch_size']:
             continue
         batch = replay_buffer.sample(params['batch_size'])
         for agent in learners:
             stats = agent.update(batch)
-            if DEBUG: print(stats['loss'])
+            if idx > 0 and idx % params['sync_interval'] == 0:
+                agent.sync_models()
+                
             if STORE:
                 ex.log_scalar(f'loss{agent}', stats['loss'], step=idx)
                 ex.log_scalar(f'epsilon{agent}', agent.epsilon_scheduler(), step=idx)
-            if idx > 0 and idx % params['sync_interval'] == 0:
-                agent.sync_models()
+            
         if idx % params['print_interval'] == 0:
             print(f"Step {idx}: Average win rate: {n_wins/params['print_interval']}")
             n_wins = 0
             if RENDER: _ = play_episode(env, render=True)
-            #print('wait')
+        if STORE:
+            ex.log_scalar(f'episode length', len(episode), step=idx)
+            ex.log_scalar(f'win', win, step=idx)
+            ex.log_scalar(f'episode_reward', cum_reward, step=idx)
 
 def create_model(n_actions=8):
     view_size = agent_params['view_size']

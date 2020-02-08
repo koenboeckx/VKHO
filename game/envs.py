@@ -342,7 +342,7 @@ class Environment:
         window.remove((x, y)) # remove own position
         return window
     
-    def get_actions(self, state):
+    def get_actions(self, state): # TODO: change this to work with observations
         # return [agent.get_action(state) for agent in self.agents  ] # next line takes alive into account
         return [agent.get_action(state) if state.alive[agent.idx] else 0 for agent in self.agents]
 
@@ -353,9 +353,9 @@ class Environment:
         :param agent:   instance of Agent
         :returns:       nd.array of size (4, 2*agent.obs_space+1, 2*agent.obs_space+1)
                         containing:
-                        * plane 0: self + agents of own team (0/1 indicator)
+                        * plane 0: self + agents of own team (0/1 indicator; -1 if not accesible)
                         * plane 1: (normalized) ammo of own team
-                        * plane 2: agents of other team (0/1 indicator)
+                        * plane 2: agents of other team (0/1 indicator; -1 if not accesible)
                         * plane 3: (normalized) ammo of other team
         """
         obs = np.zeros((4, 2*agent.obs_space+1, 2*agent.obs_space+1))
@@ -378,6 +378,13 @@ class Environment:
                     else:
                         obs[2, agent.obs_space+x_rel, agent.obs_space+y_rel] = 1.
                         obs[3, agent.obs_space+x_rel, agent.obs_space+y_rel] = state.ammo[other.idx]/other.init_ammo
+        # for all positions not accesible (off-board), set value to -1
+        for x in range(-agent.obs_space, agent.obs_space+1):
+            for y in range(-agent.obs_space, agent.obs_space+1):
+                if x + agent_pos[0] < 0 or x + agent_pos[0] >= self.board_size:
+                    obs[:, x+agent.obs_space, y+agent.obs_space] = -1.
+                if y + agent_pos[1] < 0 or y + agent_pos[1] >= self.board_size:
+                    obs[:, x+agent.obs_space, y+agent.obs_space] = -1.
         return obs                    
 
     def get_all_obs(self, state):
@@ -507,6 +514,7 @@ if __name__ == '__main__':
 
             # specific parameters
             self.alive = 1
+            self.init_ammo = agent_params['init_ammo']
             self.ammo = agent_params['init_ammo']
             self.max_range = agent_params['max_range']
             self.obs_space = agent_params['view_size']

@@ -114,6 +114,6 @@
         * allows weight sharing across agents (only observation will be different)
         * enables "easy" integration of QMix (use Qtot in stead of Qa)
         * branch `observation`
-       => DONE
+       => DONE [07Feb20]
     1. [05Feb20] move_east / move_west
-    1. [08Feb20] use -1 in observation plane when case is not accesible
+    1. [08Feb20] use -1 in observation plane when square is not accesible => DONE [08Feb20]
