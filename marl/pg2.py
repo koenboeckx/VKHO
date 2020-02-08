@@ -39,7 +39,7 @@ params = {
     'init_ammo':            5,
     'step_penalty':         0.05, # to induce shorter episodes
     'gru':                  True,
-    'type':                 'a2c', # 'reinforce' or 'a2c' of 'reinforce baseline'
+    'type':                 'reinforce', # 'reinforce' or 'a2c' of 'reinforce baseline'
 }
 
 @ex.config
