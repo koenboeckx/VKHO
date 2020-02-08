@@ -365,7 +365,7 @@ class Environment:
                 agent_pos[1] - agent.obs_space,
                 agent_pos[1] + agent.obs_space)
         for other in self.agents:
-            if state.alive[agent.idx] == 0: # skip dead agents
+            if state.alive[other.idx] == 0: # skip dead agents
                 continue
             other_pos = state.positions[other.idx]
             if view[0] <=  other_pos[0] <= view[1]:

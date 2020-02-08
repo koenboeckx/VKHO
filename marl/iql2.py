@@ -25,7 +25,7 @@ if STORE:
 
 params = {
     'n_steps':              5000,
-    'board_size':           7,
+    'board_size':           5,
     'gamma':                0.99,
     'learning_rate':        0.05, # from pymarl: 0.0005
     'step_penalty':         0.01,
@@ -39,9 +39,9 @@ params = {
 }
 
 agent_params = {
-    'init_ammo':            5,
-    'view_size':            5,
-    'max_range':            5,
+    'init_ammo':            5000,
+    'view_size':            7,
+    'max_range':            7,
 }
 
 if STORE:
@@ -50,8 +50,12 @@ if STORE:
         params = params
         agent_params = agent_params
 
+Experience = namedtuple('Experience', [
+    'state', 'actions', 'reward', 'next_state', 'done'
+])
+
 class IQLModel(nn.Module):
-    def __init__(self, input_shape, n_actions):
+    def __init__(self, input_shape, n_actions, n_hidden=512):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
@@ -59,9 +63,9 @@ class IQLModel(nn.Module):
         )
 
         self.conv_out_size = self._get_conv_out(input_shape)
-        self.fc = nn.Linear(self.conv_out_size, 128)
+        self.fc = nn.Linear(self.conv_out_size, n_hidden)
 
-        self.value  = nn.Linear(128, n_actions)
+        self.value  = nn.Linear(n_hidden, n_actions)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -227,23 +231,6 @@ class ReplayBuffer:
         assert self.can_sample(batch_size)
         return random.sample(self.buffer, batch_size)
 
-
-def preprocess(states):
-    """Process state to serve as input to convolutionel net."""
-    bs = params['board_size']
-    boards = np.zeros((len(states), 1, bs, bs))
-    other  = np.zeros((len(states), 1, bs, 8))
-    for idx, state in enumerate(states):
-        board = np.array([int(b) for b in state.board])
-        board = np.reshape(board, (1, bs, bs))
-        boards[idx] = board
-        other[idx, 0, 0] = state.alive + tuple(ammo/agent_params['init_ammo'] for ammo in state.ammo)
-    return torch.tensor(np.concatenate((boards, other), axis=-1))
-
-Experience = namedtuple('Experience', [
-    'state', 'actions', 'reward', 'next_state', 'done'
-])
-
 def play_episode(env, render=False):
     episode = []
     state = env.get_init_game_state()
@@ -290,7 +277,7 @@ def train(env, learners, others):
             stats = agent.update(batch)
             if idx > 0 and idx % params['sync_interval'] == 0:
                 agent.sync_models()
-                
+
             if STORE:
                 ex.log_scalar(f'loss{agent}', stats['loss'], step=idx)
                 ex.log_scalar(f'epsilon{agent}', agent.epsilon_scheduler(), step=idx)
