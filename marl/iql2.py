@@ -19,7 +19,7 @@ RENDER = False
 if STORE:
     from sacred import Experiment
     from sacred.observers import MongoObserver
-    ex = Experiment('IQL2')
+    ex = Experiment('IQL_OBS')
     ex.observers.append(MongoObserver(url='localhost',
                                     db_name='my_database'))
 
@@ -27,7 +27,7 @@ params = {
     'n_steps':              5000,
     'board_size':           7,
     'gamma':                0.99,
-    'learning_rate':        0.0005, # from pymarl
+    'learning_rate':        0.05, # from pymarl: 0.0005
     'step_penalty':         0.01,
     'buffer_size':          1024,
     'batch_size':           16,
@@ -50,8 +50,8 @@ if STORE:
         params = params
         agent_params = agent_params
 
-class CommonModel(nn.Module):
-    def __init__(self, input_shape):
+class IQLModel(nn.Module):
+    def __init__(self, input_shape, n_actions):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
@@ -59,17 +59,9 @@ class CommonModel(nn.Module):
         )
 
         self.conv_out_size = self._get_conv_out(input_shape)
-        self.full_in = nn.Sequential(
-            nn.Linear(8, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-        )
+        self.fc = nn.Linear(self.conv_out_size, 128)
 
-        self.common = nn.Sequential(
-            nn.Linear(self.conv_out_size + 64, 128),
-            nn.ReLU(),
-        )
+        self.value  = nn.Linear(128, n_actions)
     
     def _get_conv_out(self, shape):
         """returns the size for fully-connected layer, 
@@ -78,33 +70,11 @@ class CommonModel(nn.Module):
         return int(np.prod(o.size()))
 
     def forward(self, x):
-        """Input x has two parts: a 'board' for the conv layer,
-        and an 'other', containing ammo and alive flags for
-        the fully connecte layer."""
-        bs = params['board_size']
         x = x.float()
-        board = x[:, :, :, :bs]
-        other = x[:, :, 0, bs:bs + 8].view(x.size()[0], -1)
-        conv_out = self.conv(board).view(x.size()[0], -1)
-        full_out = self.full_in(other)
-        common_in  = torch.cat((conv_out, full_out), 1)
-        common_out = self.common(common_in)
-        return common_out
-
-class IQLModel(nn.Module):
-    def __init__(self, input_shape, n_actions):
-        super(IQLModel, self).__init__()
-        
-        self.common = CommonModel(input_shape)
-        self.q_value = nn.Linear(128, n_actions)
-
-        self.optimizer = optim.Adam(self.parameters(), 
-                                    lr=params['learning_rate'])
-
-    def forward(self, x):
-        common_out = self.common(x)
-        q_values   = self.q_value(common_out)
-        return q_values
+        x = self.conv(x).view(x.size(0), -1)
+        x = F.relu(self.fc(x))
+        value  = self.value(x)
+        return value
 
 #----------------------- Agents -----------------------------------------
 class Tank:
@@ -120,6 +90,7 @@ class Tank:
 
         # specific parameters
         self.alive = 1
+        self.init_ammo = agent_params['init_ammo']
         self.ammo = agent_params['init_ammo']
         self.max_range = agent_params['max_range']
         self.obs_space = agent_params['view_size']
@@ -138,7 +109,7 @@ class RandomTank(Tank):
     def __init__(self, idx, team="friend"):
         super(RandomTank, self).__init__(idx, team)
     
-    def get_action(self, obs):
+    def get_action(self, obs, state):
         return random.randint(0, 7)
 
 class StaticTank(Tank):
@@ -150,33 +121,28 @@ class StaticTank(Tank):
         return 0
 
 class IQLAgent(Tank):
-    def __init__(self, idx, device, team="friend"):
+    def __init__(self, idx, models, device, team="friend"):
         super(IQLAgent, self).__init__(idx, team)
         self.device = device
         self.n_actions = len(all_actions)
-        self._instantiate_models()
+        self.model = models["model"]
+        self.target_model = models["target"]
         self.epsilon_scheduler = LinearScheduler(start=1.0, 
                                                  finish=params['final_epsilon'],
                                                  length=int(1e5))
     
-    def _instantiate_models(self):
-        input_shape = (1, params['board_size'], params['board_size'])
-        self.model = IQLModel(input_shape, self.n_actions)
-        self.target_model = IQLModel(input_shape, self.n_actions)
-        self.sync_models()
-
     def sync_models(self):
         self.target_model.load_state_dict(self.model.state_dict())
 
-    def get_action(self, state):
+    def get_action(self, observation, state):
         epsilon = self.epsilon_scheduler()
         if random.random() < epsilon:
             return np.random.choice(range(self.n_actions))
         else:
             with torch.no_grad(): # TODO: check if needed => [02Feb20] no improvement
-                q_vals = self.model(preprocess([state])).squeeze()
+                q_vals = self.model(torch.tensor([observation])).squeeze()
                 # remove actions that are not allowed
-                unavailable_actions = self.get_unavailable_actions(state)
+                unavailable_actions = self.get_unavailable_actions(state) # TODO: avoid using state; use observation
                 q_vals[unavailable_actions] = -np.infty
                 action = q_vals.max(0)[1].item()
                 return action
@@ -190,14 +156,16 @@ class IQLAgent(Tank):
         rewards = [reward[self.idx] for reward in rewards] # only keep own reward
         rewards_v = torch.tensor(rewards)
         dones_v   = torch.tensor(dones, dtype=torch.float)
+        observations_v = torch.tensor([self.env.get_observation(state, self) for state in states])
+        observations_next_v = torch.tensor([self.env.get_observation(state, self) for state in next_states])
         
-        qvals = self.model(preprocess(states))
+        qvals = self.model(observations_v)
         qvals_chosen_actions = qvals[range(len(batch)), actions]
 
-        target_qvals = self.target_model((preprocess(next_states)))
+        target_qvals = self.target_model(observations_next_v)
         unavailable_actions = [self.get_unavailable_actions(state)
                                 for state in next_states]
-        for idx, unavail in enumerate(unavailable_actions):
+        for idx, unavail in enumerate(unavailable_actions): # eliminate actions that are not allowed
             target_qvals[idx, unavail] = -np.infty
         target_max_qvals = target_qvals.max(1)[0]
 
@@ -282,7 +250,8 @@ def play_episode(env, render=False):
     step = 0
     #while True:
     for _ in range(params['max_episode_length']):
-        actions = [agent.get_action(state) for agent in env.agents]
+        observations = env.get_all_obs(state)
+        actions = [agent.get_action(obs, state) for agent, obs in zip(env.agents, observations)]
         if render:
             print(f'Step {step}')
             env.render(state)
@@ -335,6 +304,16 @@ def train(env, learners, others):
             if RENDER: _ = play_episode(env, render=True)
             #print('wait')
 
+def create_model(n_actions=8):
+    view_size = agent_params['view_size']
+    input_shape = (4, 2*view_size+1, 2*view_size+1)
+    model = IQLModel(input_shape, n_actions)
+    model.optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'])
+    target = IQLModel(input_shape, n_actions)
+    target.load_state_dict(model.state_dict())
+    return {'model': model,
+            'target': target}
+
 
 @ex.automain
 def run(params, agent_params):
@@ -343,8 +322,9 @@ def run(params, agent_params):
         print(f.read()) 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    learners = [IQLAgent(idx, device, type="friend") for idx in [0]]
-    others   = [RandomTank(1, type="friend"),] + [RandomTank(idx, type="enemy") for idx in [2, 3]] # turn off extra stop criterion if not StaticTank
+    models = create_model()
+    learners = [IQLAgent(idx, models, device, team="friend") for idx in [0, 1]]
+    others   = [RandomTank(idx, team="enemy") for idx in [2, 3]] # turn off extra stop criterion if not StaticTank
     agents = sorted(learners + others, key=lambda x: x.idx)
 
     env = Environment(agents, size=params['board_size'],
