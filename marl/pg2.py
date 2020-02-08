@@ -20,7 +20,7 @@ Experience = namedtuple('Experience', [
 ])
 ALPHA = 0.99 # used to compute running reward
 DEBUG = False
-STORE = False # set to true to store results with sacred
+STORE = True # set to true to store results with sacred
 
 if STORE:
     from sacred import Experiment
@@ -30,7 +30,7 @@ if STORE:
                                     db_name='my_database'))
 
 params = {
-    'n_steps':              500,
+    'n_steps':              5000,
     'board_size':           7,
     'gamma':                0.99,
     'learning_rate':        0.001,
@@ -42,93 +42,32 @@ params = {
     'type':                 'a2c', # 'reinforce' or 'a2c' of 'reinforce baseline'
 }
 
-#@ex.config
+@ex.config
 def cfg():
     params = params
 
 # ----------------------- Models -----------------------------------------
 
-class A2CCommonModel(nn.Module):
-    def __init__(self, input_shape):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
-            nn.ReLU(),
-        )
-
-        self.conv_out_size = self._get_conv_out(input_shape)
-        self.full_in = nn.Sequential(
-            nn.Linear(8, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-        )
-
-        self.common = nn.Sequential(
-            nn.Linear(self.conv_out_size + 64, 128),
-            nn.ReLU(),
-        )
-    
-    def _get_conv_out(self, shape):
-        """returns the size for fully-connected layer, 
-        after passage through convolutional layer"""
-        o = self.conv(torch.zeros(1, *shape))
-        return int(np.prod(o.size()))
-
-    def forward(self, x):
-        """Input x has two parts: a 'board' for the conv layer,
-        and an 'other', containing ammo and alive flags for
-        the fully connecte layer."""
-        bs = params['board_size']
-        x = x.float()
-        board = x[:, :, :, :bs]
-        other = x[:, :, 0, bs:bs + 8].view(x.size()[0], -1)
-        conv_out = self.conv(board).view(x.size()[0], -1)
-        full_out = self.full_in(other)
-        common_in  = torch.cat((conv_out, full_out), 1)
-        common_out = self.common(common_in)
-        return common_out
-
 class A2CModel(nn.Module):
-    def __init__(self, input_shape, n_actions):
-        super().__init__()
+    def __init__(self, input_shape, n_actions, n_hidden=128):
+        super(A2CModel, self).__init__()
         
-        self.common = A2CCommonModel(input_shape)
-
-        self.policy = nn.Linear(128, n_actions)
-        self.value  = nn.Linear(128, 1)
+        self.net = nn.Sequential(
+            nn.Linear(input_shape, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU()
+        )
+        self.policy = nn.Linear(n_hidden, n_actions)
+        self.values = nn.Linear(n_hidden, 1)
+        self.optimizer = optim.Adam(self.parameters(), 
+                                    lr=params['learning_rate'])
 
     def forward(self, x):
-        """Input x has two parts: a 'board' for the conv layer,
-        and an 'other', containing ammo and alive flags for
-        the fully connecte layer."""
-        common_out = self.common(x)
-        logits = self.policy(common_out)
-        value  = self.value(common_out)
-        return value, logits
-
-class A2CGRUModel(nn.Module):
-    def __init__(self, input_shape, n_actions, hidden_size=256, num_layers=1):
-        super().__init__()
-        self.common = A2CCommonModel(input_shape)
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.gru = nn.GRU(128, hidden_size, num_layers=num_layers)
-
-        self.policy = nn.Linear(hidden_size, n_actions)
-        self.value  = nn.Linear(hidden_size, 1)
-
-    def init_hidden(self, batch_size):
-        return torch.zeros(self.num_layers, batch_size, self.hidden_size)
-    
-    def forward(self, x):
-        batch_size = x.size(0)
-        common_out = self.common(x)
-        hidden_state = self.init_hidden(batch_size)
-        rnn_out, hidden_state = self.gru(common_out.unsqueeze(0), hidden_state)
-        logits = self.policy(hidden_state).squeeze()
-        value  = self.value(hidden_state).squeeze() # TODO: check if this 'squeeze' is necessary !!
-        return value, logits
+        x = self.net(x.float())
+        logits = self.policy(x)
+        values = self.values(x)
+        return values, logits
 
 # ----------------------- Agents -----------------------------------------
 class Tank:
@@ -173,11 +112,7 @@ class A2CAgent(Tank):
     def __init__(self, idx, device):
         super().__init__(idx)
         self.device = device
-        input_shape = (1, params['board_size'], params['board_size'])
-        if params['gru']:
-            self.model = A2CGRUModel(input_shape, n_actions=8)
-        else:
-            self.model = A2CModel(input_shape, n_actions=8)
+        self.model = A2CModel(20, n_actions=8)
         
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=params['learning_rate'])
@@ -327,16 +262,18 @@ class A2CAgent(Tank):
         return stats 
 
 def preprocess(states):
-    """Process state to serve as input to convolutionel net."""
-    bs = params['board_size']
-    boards = np.zeros((len(states), 1, bs, bs))
-    other  = np.zeros((len(states), 1, bs, 8))
+    """Process state to serve as input to FC layer"""
+    inputs  = np.zeros((len(states), 20))
     for idx, state in enumerate(states):
-        board = np.array([int(b) for b in state.board])
-        board = np.reshape(board, (1, bs, bs))
-        boards[idx] = board
-        other[idx, 0, 0] = state.alive + tuple(ammo/params['init_ammo'] for ammo in state.ammo)
-    return torch.tensor(np.concatenate((boards, other), axis=-1))
+        pos_idx = 0
+        for x, y in state.positions:
+            inputs[idx, pos_idx] = x
+            inputs[idx, pos_idx+1] = x
+            pos_idx += 1
+        inputs[idx, 8:12]  = state.alive
+        inputs[idx, 12:16] = [ammo/params['init_ammo'] for ammo in state.ammo]
+        inputs[idx, 16:20] = [aim if aim is not None else -1 for aim  in state.aim]
+    return torch.tensor(inputs)
 
 def play_episode(env, agents, render=False):
     episode = []
@@ -396,7 +333,7 @@ def process_stats(idx, stats):
         #ex.log_scalar(f'entropy{agent_idx}', stats[agent_idx]['entropy'], step=idx)
         ex.log_scalar(f'grad_var{agent_idx}', stats[agent_idx]['grads_var'], step=idx)
 
-#@ex.automain
+@ex.automain
 def run(params):
     print(params)
     with open(__file__) as f: # print own source code -> easier follow-up in sacred / mongodb

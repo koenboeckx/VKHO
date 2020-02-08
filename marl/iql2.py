@@ -44,61 +44,22 @@ if STORE:
     def cfg():
         params = params
 
-class CommonModel(nn.Module):
-    def __init__(self, input_shape):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
-            nn.ReLU(),
-        )
-
-        self.conv_out_size = self._get_conv_out(input_shape)
-        self.full_in = nn.Sequential(
-            nn.Linear(8, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-        )
-
-        self.common = nn.Sequential(
-            nn.Linear(self.conv_out_size + 64, 128),
-            nn.ReLU(),
-        )
-    
-    def _get_conv_out(self, shape):
-        """returns the size for fully-connected layer, 
-        after passage through convolutional layer"""
-        o = self.conv(torch.zeros(1, *shape))
-        return int(np.prod(o.size()))
-
-    def forward(self, x):
-        """Input x has two parts: a 'board' for the conv layer,
-        and an 'other', containing ammo and alive flags for
-        the fully connecte layer."""
-        bs = params['board_size']
-        x = x.float()
-        board = x[:, :, :, :bs]
-        other = x[:, :, 0, bs:bs + 8].view(x.size()[0], -1)
-        conv_out = self.conv(board).view(x.size()[0], -1)
-        full_out = self.full_in(other)
-        common_in  = torch.cat((conv_out, full_out), 1)
-        common_out = self.common(common_in)
-        return common_out
-
 class IQLModel(nn.Module):
-    def __init__(self, input_shape, n_actions):
+    def __init__(self, input_shape, n_actions, n_hidden=128):
         super(IQLModel, self).__init__()
         
-        self.common = CommonModel(input_shape)
-        self.q_value = nn.Linear(128, n_actions)
-
+        self.net = nn.Sequential(
+            nn.Linear(input_shape, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_actions)
+        )
         self.optimizer = optim.Adam(self.parameters(), 
                                     lr=params['learning_rate'])
 
     def forward(self, x):
-        common_out = self.common(x)
-        q_values   = self.q_value(common_out)
-        return q_values
+        return self.net(x.float())
 
 #----------------------- Agents -----------------------------------------
 class Tank:
@@ -150,7 +111,7 @@ class IQLAgent(Tank):
                                                  length=int(1e5))
     
     def _instantiate_models(self):
-        input_shape = (1, params['board_size'], params['board_size'])
+        input_shape = 20
         self.model = IQLModel(input_shape, self.n_actions)
         self.target_model = IQLModel(input_shape, self.n_actions)
         self.sync_models()
@@ -251,16 +212,18 @@ class ReplayBuffer:
 
 
 def preprocess(states):
-    """Process state to serve as input to convolutionel net."""
-    bs = params['board_size']
-    boards = np.zeros((len(states), 1, bs, bs))
-    other  = np.zeros((len(states), 1, bs, 8))
+    """Process state to serve as input to FC layer"""
+    inputs  = np.zeros((len(states), 20))
     for idx, state in enumerate(states):
-        board = np.array([int(b) for b in state.board])
-        board = np.reshape(board, (1, bs, bs))
-        boards[idx] = board
-        other[idx, 0, 0] = state.alive + tuple(ammo/params['init_ammo'] for ammo in state.ammo)
-    return torch.tensor(np.concatenate((boards, other), axis=-1))
+        pos_idx = 0
+        for x, y in state.positions:
+            inputs[idx, pos_idx] = x
+            inputs[idx, pos_idx+1] = x
+            pos_idx += 1
+        inputs[idx, 8:12]  = state.alive
+        inputs[idx, 12:16] = [ammo/params['init_ammo'] for ammo in state.ammo]
+        inputs[idx, 16:20] = [aim if aim is not None else -1 for aim  in state.aim]
+    return torch.tensor(inputs)
 
 Experience = namedtuple('Experience', [
     'state', 'actions', 'reward', 'next_state', 'done'
