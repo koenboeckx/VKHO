@@ -27,7 +27,7 @@ params = {
     'n_steps':              5000,
     'board_size':           5,
     'gamma':                0.99,
-    'learning_rate':        0.05, # from pymarl: 0.0005
+    'learning_rate':        0.0005, # from pymarl: 0.0005
     'step_penalty':         0.01,
     'buffer_size':          1024,
     'batch_size':           16,
@@ -230,6 +230,10 @@ class ReplayBuffer:
     def sample(self, batch_size):
         assert self.can_sample(batch_size)
         return random.sample(self.buffer, batch_size)
+
+Experience = namedtuple('Experience', [
+    'state', 'actions', 'reward', 'next_state', 'done'
+])
 
 def play_episode(env, render=False):
     episode = []
