@@ -214,10 +214,15 @@ class SimpleEnvironment:
         for agent in state.alive:
             if not state.alive[agent]:
                 return 'blue' if agent.team == 'red' else 'red'
+        if all([state.ammo[agent] == 0 for agent in self.agents]):
+            return 'out-of-ammo'
         return False
     
     def get_rewards(self, state):
         terminal = self.terminal(state)
+        if terminal == 'out-of-ammo': # because all out of ammo
+            return {self.agents[0]: -1.,
+                    self.agents[1]: -1.}
         if not terminal: # game not done => reward is penalty for making move
             return {self.agents[0]: params['step_penalty'],
                     self.agents[1]: params['step_penalty']}

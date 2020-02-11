@@ -159,10 +159,10 @@ params = {
     'max_range':    3,
     'step_penalty': 0.001,
     'n_hidden':     128,
-    'lr':           0.001,
+    'lr':           0.01,
     'scheduler':    LinearScheduler,
     'buffer_size':  500,
-    'batch_size':   16,
+    'batch_size':   128,
     'n_steps':      1000,
     'gamma':        0.99,
     'sync_interval':    10,
@@ -180,8 +180,10 @@ def test_take_action():
     training_agents = [agents[0]]
     env = SimpleEnvironment(agents)
     buffer = ReplayBuffer(size=params['buffer_size'])
+    epi_len = 0
     for step_idx in range(params['n_steps']):
         episode = generate_episode(env)
+        epi_len += len(episode)
         buffer.insert_list(episode)
         if not buffer.can_sample(params['batch_size']):
             continue
@@ -191,6 +193,8 @@ def test_take_action():
             if step_idx > 0 and step_idx % params['sync_interval'] == 0:
                 agent.sync_models()
                 print(f"Step {step_idx}: loss for agent {agent}: {loss}")
+                print(f"Average length: {epi_len/params['sync_interval']}")
+                epi_len = 0
         
 
 if __name__ == '__main__':
