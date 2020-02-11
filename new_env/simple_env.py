@@ -219,7 +219,8 @@ class SimpleEnvironment:
     def get_rewards(self, state):
         terminal = self.terminal(state)
         if not terminal: # game not done => reward is penalty for making move
-            return [params['step_penalty'],]*len(self.agents)
+            return {self.agents[0]: params['step_penalty'],
+                    self.agents[1]: params['step_penalty']}
         elif terminal == 'blue':
             return {self.agents[0]:  1.,
                     self.agents[1]: -1.}
@@ -229,7 +230,7 @@ class SimpleEnvironment:
         else:
             raise ValueError(f'Unknown team {terminal}')
 
-    def get_available_actions(self, state):
+    def get_available_actions(self, state): # TODO: base this on obs, not state
         available_actions = {}
         for agent in self.agents:
             available_actions[agent] = []
