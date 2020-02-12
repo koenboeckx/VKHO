@@ -113,3 +113,4 @@
     1. TODO: re-implemented so that observation is window centered on agent
         * allows weight sharing across agents (only observation will be different)
         * enables "easy" integration of QMix (use Qtot in stead of Qa)
+    1. [12Feb20]: [After complete rewrite of both Environment (-> SimpleEnvironment) and the QL algortihm] (I)QL: removing unavailable actions during both (1) action selection as (2) updating the network weights seems to remove all problems with convergence !!

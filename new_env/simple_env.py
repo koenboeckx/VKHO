@@ -2,7 +2,7 @@
 Simple Environment: one-vs-one
 """
 
-import random
+import random, copy
 import numpy as np
 
 all_actions = { 0: 'do_nothing',
@@ -14,15 +14,8 @@ all_actions = { 0: 'do_nothing',
                 6: 'move_east'
 }
 
-params = {
-    'board_size':   5,
-    'init_ammo':    5,
-    'max_range':    3,
-    'step_penalty': 0.001,
-}
-
 class State:
-    def __init__(self, agents):
+    def __init__(self, agents, params):
         self.agents = agents
         self.position = {}
         self.alive = {}
@@ -30,25 +23,33 @@ class State:
         self.aim   = {}
         taken = [] # avoids placing both players in same position
         for agent in self.agents:
-            position = self.generate_position()
+            position = self.generate_position(params['board_size'])
             while position in taken:
-                position = self.generate_position()
+                position = self.generate_position(params['board_size'])
             taken.append(position)
             self.position[agent] = position
             self.alive[agent] = True
             self.ammo[agent]  = params['init_ammo']  
             self.aim[agent]   = None
+        # fixed initial positions
+        self.position[agents[0]] = (0, params['board_size']//2)
+        self.position[agents[1]] = (params['board_size']-1, params['board_size']//2)
 
     def __str__(self):
         s = f""
         for agent in self.agents:
-            s += f"Agent {agent}: alive = {self.alive[agent]}, ammo = {self.ammo[agent]}, aim = {self.aim[agent]}\n"                            
+            s += f"Agent {agent}: alive = {self.alive[agent]}, ammo = {self.ammo[agent]},"
+            s += f" aim = {self.aim[agent]}"
+            s += f" Position: {self.position[agent]}\n"
         return s
+    __repr__ = __str__
 
+    def copy(self):
+        return copy.deepcopy(self)
 
-    def generate_position(self):
-        position = (random.randint(0, params['board_size']-1),
-                    random.randint(0, params['board_size']-1))
+    def generate_position(self, board_size):
+        position = (random.randint(0, board_size-1),
+                    random.randint(0, board_size-1))
         return position
 
 class Observation:
@@ -66,12 +67,13 @@ class Observation:
     
     def __str__(self):
         s  = f"Observation for agent {self.agent}: "
-        s += f"{'alive' if self.alive else 'dead'}, ammo = {self.ammo}, aim = {self.aim};"
-        s += f" opponent is {'alive' if self.other_alive else 'dead'}"
+        s += f"{'alive' if self.alive else 'dead'}, ammo = {self.ammo}, aim = {self.aim} @ postion {self.own_position};"
+        s += f" opponent is {'alive' if self.other_alive else 'dead'} at position {self.other_position}"
         return s
+    __repr__ = __str__
 
 class Agent:
-    def __init__(self, id):
+    def __init__(self, id, params):
         self.id = id
         self.team = 'blue' if id == 0 else 'red' # assign agents to team => adapt when more agents
         self.max_range = params['max_range']
@@ -83,15 +85,20 @@ class Agent:
         self.env = env
     
     def act(self, obs):
-        return random.randint(0, self.env.n_actions-1)
+        unavail_actions = self.env.get_unavailable_actions()[self]
+        avail_actions = [action for action in range(self.env.n_actions)
+                        if action not in unavail_actions]
+        return random.choice(avail_actions)
+        #return 0
 
 class SimpleEnvironment:
-    def __init__(self, agents):
+    def __init__(self, agents, params):
         self.register_agents(agents)
         self.actions = all_actions.copy()
         self.n_actions = len(self.actions)
-        self.state = State(self.agents)
-        self.board_size = params['board_size']
+        self.state = State(self.agents, params)
+        self.board_size = params["board_size"]
+        self.params = params
     
     def register_agents(self, agents):
         self.agents = agents
@@ -99,9 +106,9 @@ class SimpleEnvironment:
             agent.set_env(self)
     
     def reset(self):
-        self.state = State(self.agents)
-        self.available_actions = self.get_available_actions(self.state)
-        return self.state
+        self.state = State(self.agents, self.params)
+        self.unavailable_actions = self.get_unavailable_actions()
+        return self.state.copy()
     
     def get_state(self):
         return self.state
@@ -204,14 +211,14 @@ class SimpleEnvironment:
                 new_position = self.get_new_position(self.state.position[agent],
                                                      directions[action])
                 self.state.position[agent] = new_position
-        self.available_actions = self.get_available_actions(self.state)
+        self.available_actions = self.get_unavailable_actions()
 
         rewards, done, info = self.get_rewards(self.state), self.terminal(self.state) is not False, {}
         return self.get_state(), rewards, done, info
 
     def terminal(self, state):
         "returns winning team ('red' or 'blue')"
-        for agent in state.alive:
+        for agent in self.agents:
             if not state.alive[agent]:
                 return 'blue' if agent.team == 'red' else 'red'
         if all([state.ammo[agent] == 0 for agent in self.agents]):
@@ -224,8 +231,8 @@ class SimpleEnvironment:
             return {self.agents[0]: -1.,
                     self.agents[1]: -1.}
         if not terminal: # game not done => reward is penalty for making move
-            return {self.agents[0]: params['step_penalty'],
-                    self.agents[1]: params['step_penalty']}
+            return {self.agents[0]: -self.params['step_penalty'],
+                    self.agents[1]: -self.params['step_penalty']}
         elif terminal == 'blue':
             return {self.agents[0]:  1.,
                     self.agents[1]: -1.}
@@ -235,7 +242,7 @@ class SimpleEnvironment:
         else:
             raise ValueError(f'Unknown team {terminal}')
 
-    def get_available_actions(self, state): # TODO: base this on obs, not state
+    def _get_available_actions(self, state): # no longer used
         available_actions = {}
         for agent in self.agents:
             available_actions[agent] = []
@@ -243,14 +250,25 @@ class SimpleEnvironment:
                 if self.check_conditions(state, agent, action):
                     available_actions[agent].append(action)
         return available_actions
+    
+    def get_unavailable_actions(self):
+        unavailable_actions = {}
+        for agent in self.agents:
+            unavailable_actions[agent] = []
+            for action in range(self.n_actions):
+                if not self.check_conditions(self.state, agent, action):
+                    unavailable_actions[agent].append(action)
+        return unavailable_actions
 
-    def render(self):
+    def render(self, state=None):
+        if state is None:
+            state = self.state
         arr = np.zeros((self.board_size, self.board_size))
         for agent in self.agents:
-            pos = self.state.position[agent]
+            pos = state.position[agent]
             arr[pos[0], pos[1]] = agent.id + 1
         print(arr)
-        print(self.state)
+        print(state)
     
     def get_observation(self, agent):
         return Observation(self.state, agent)
