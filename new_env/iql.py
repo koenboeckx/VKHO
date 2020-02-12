@@ -193,17 +193,17 @@ params = {
     'buffer_size':          5000,
     'batch_size':           512,
     'n_steps':              50000,
-    'sync_interval':        20,
-    'lr':                   0.1,
+    'sync_interval':        90,
+    'lr':                   0.0001,
     'clip':                 10,
-    'scheduler_steps':      100000,
+    'scheduler_steps':      10000,
 }
 PRINT_INTERVAL = 100
 RENDER = False
 
 def test_generate_episode():
     agents = [Agent(0, params), Agent(1, params)]
-    env = SimpleEnvironment(agents)
+    env = SimpleEnvironment(agents, params)
     episode = generate_episode(env)
     print(len(episode))
 
@@ -229,7 +229,7 @@ def test_take_action():
                 agent.sync_models()
     
             if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
-                s  = f"Step {step_idx}: loss for agent {agent}: {loss:5.4f} - "
+                s  = f"Step {step_idx}: loss for agent {agent}: {loss:8.4f} - "
                 s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
                 s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
                 s += f"epsilon: {agent.scheduler():4.3f} - "
