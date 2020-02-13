@@ -5,6 +5,12 @@ from torch.nn import functional as F
 
 from simple_env import *
 
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment('QL-1v1')
+ex.observers.append(MongoObserver(url='localhost',
+                                db_name='my_database'))
+
 class QLModel(nn.Module):   # Q-Learning Model
     def __init__(self, input_shape, n_hidden, n_actions, lr):
         super().__init__()
@@ -182,7 +188,7 @@ def generate_models():
 
 #---------------------------------- test -------------------------------------
 params = {
-    'board_size':           5,
+    'board_size':           9,
     'init_ammo':            5,
     'max_range':            5,
     'step_penalty':         0.01,
@@ -196,18 +202,17 @@ params = {
     'sync_interval':        90,
     'lr':                   0.0001,
     'clip':                 10,
-    'scheduler_steps':      10000,
+    'scheduler_steps':      100000,
 }
 PRINT_INTERVAL = 100
 RENDER = False
 
-def test_generate_episode():
-    agents = [Agent(0, params), Agent(1, params)]
-    env = SimpleEnvironment(agents, params)
-    episode = generate_episode(env)
-    print(len(episode))
+@ex.config
+def cfg():
+    params=params
 
-def test_take_action():
+@ex.automain
+def run(params):
     models = generate_models()
     agents = [QLAgent(0, models, params), Agent(1, params)]
     training_agents = [agents[0]]
@@ -227,7 +232,10 @@ def test_take_action():
             loss = agent.update(batch)
             if step_idx > 0 and step_idx % params['sync_interval'] == 0:
                 agent.sync_models()
-    
+
+            ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
+            ex.log_scalar(f'epsilon', agent.scheduler(), step=step_idx)
+
             if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
                 s  = f"Step {step_idx}: loss for agent {agent}: {loss:8.4f} - "
                 s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
@@ -236,7 +244,10 @@ def test_take_action():
                 print(s)
                 epi_len, nwins = 0, 0
                 #_ = generate_episode(env, render=True)
+        ex.log_scalar(f'length', len(episode), step=step_idx)
+        ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+        
         
 
-if __name__ == '__main__':
-    test_take_action()
+#if __name__ == '__main__':
+#    test_take_action()
