@@ -1,9 +1,9 @@
-from collections import namedtuple
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from env import *
+from utilities import LinearScheduler, ReplayBuffer, Experience
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -54,53 +54,6 @@ class IQLModel(nn.Module):   # Q-Learning Model
         else:
             raise ValueError((f"x should be (list of) Observation(s)"))
         return x
-
-
-class ExponentialScheduler:
-    def __init__(self, start, stop, decay=0.99):
-        self.stop  = stop
-        self.decay = decay
-        self.value = start
-    
-    def __call__(self):
-        self.value *= self.value * self.decay
-        return max(self.value, self.stop)
-
-class LinearScheduler:
-    def __init__(self, start, stop, steps=10000):
-        self.start = start
-        self.stop  = stop
-        self.delta = (start - stop) / steps
-        self.t = 0
-    
-    def __call__(self):
-        epsilon =  max(self.start - self.t * self.delta, self.stop)
-        self.t += 1
-        return epsilon
-
-class ReplayBuffer:
-    def __init__(self, size):
-        self.size = size
-        self.content = []
-    
-    def __len__(self):
-        return len(self.content)
-    
-    def insert(self, item):
-        self.content.append(item)
-        if len(self) > self.size:
-            self.content.pop(0)
-    
-    def insert_list(self, items):
-        for item in items:
-            self.insert(item)
-    
-    def can_sample(self, N):
-        return len(self) >= N
-    
-    def sample(self, N):
-        assert self.can_sample(N)
-        return random.sample(self.content, N)
 
 class IQLAgent(Agent):
     def __init__(self, id, team, models, params):
@@ -159,12 +112,6 @@ class IQLAgent(Agent):
         self.model.optimizer.step()
         return loss.item()
 
-
-Experience = namedtuple('Experience', field_names = [
-    'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'next_obs', 'unavailable_actions'
-])
-
-
 def generate_episode(env, render=False):
     episode = []
     state, done = env.reset(), False
@@ -203,17 +150,17 @@ def generate_models():
 
 #---------------------------------- test -------------------------------------
 params = {
-    'board_size':           9,
+    'board_size':           7,
     'init_ammo':            5,
-    'max_range':            5,
+    'max_range':            3,
     'step_penalty':         0.01,
     'max_episode_length':   100,
     'gamma':                0.9,
-    'n_hidden':             128,
+    'n_hidden':             256,
     'scheduler':            LinearScheduler,
     'buffer_size':          5000,
     'batch_size':           512,
-    'n_steps':              50000,
+    'n_steps':              20000,
     'sync_interval':        90,
     'lr':                   0.0001,
     'clip':                 10,
@@ -255,17 +202,20 @@ def run(params):
             ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
             ex.log_scalar(f'epsilon', agent.scheduler(), step=step_idx)
 
-            if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
-                s  = f"Step {step_idx}: loss for agent {agent}: {loss:8.4f} - "
-                s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
-                s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
-                s += f"epsilon: {agent.scheduler():4.3f} - "
-                print(s)
-                epi_len, nwins = 0, 0
-                #_ = generate_episode(env, render=True)
+        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
+            s  = f"Step {step_idx}: loss: {loss:8.4f} - "
+            s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
+            s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
+            s += f"epsilon: {agent.scheduler():4.3f} - "
+            print(s)
+            epi_len, nwins = 0, 0
+            #_ = generate_episode(env, render=True)
 
         ex.log_scalar(f'length', len(episode), step=step_idx)
         ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+    
+    for agent in training_agents:
+        agent.save(f'IQL-2v2_agent{agent.id}.p')
         
         
 

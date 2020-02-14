@@ -2,7 +2,7 @@
 [13Feb20] More complex Environment: two-vs-two
 """
 
-import random, copy
+import random, copy, pickle
 import numpy as np
 
 all_actions = { 0: 'do_nothing',
@@ -109,6 +109,10 @@ class Agent:
                         if action not in unavail_actions]
         return random.choice(avail_actions)
         #return 0
+    
+    def save(self, filename):
+        with open(filename, 'wb') as file:
+            pickle.dump(self, file)
 
 class Environment:
     def __init__(self, agents, params):

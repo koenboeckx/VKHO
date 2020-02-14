@@ -20,3 +20,4 @@ screenshot0*.png
 temp/gru_testing/data/*
 pandas/_libs/parsers.pyx
 game/los/*.p
+new_env/*.p
