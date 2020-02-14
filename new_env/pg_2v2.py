@@ -73,11 +73,14 @@ class PGAgent(Agent):
             action = Categorical(logits=logits).sample().item()
         return action
     
-    def compute_returns(self, rewards):
-        R = 0
-        returns = []
-        for r in reversed(rewards):
-            R = r + params['gamma'] * R
+    def compute_returns(self, batch):
+        _, _, rewards, _, dones, _, _, _ = zip(*batch)
+        rewards = [reward[self] for reward in rewards]
+        returns, R = [], 0.0
+        for reward, done in reversed(list(zip(rewards, dones))):
+            if done:
+                R = 0.0
+            R = reward + params['gamma'] * R
             returns.insert(0, R)
         return returns
 
@@ -86,11 +89,11 @@ class PGAgent(Agent):
         
         # only perform updates on actions performed while alive
         self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
-        observations = [observations[idx][self] for idx in self_alive_idx]
-        actions = torch.tensor([action[self] for action in actions])[self_alive_idx]
+        observations = [obs[self] for obs in observations]
 
         rewards = [reward[self] for reward in rewards]
-        expected_returns = torch.tensor(self.compute_returns(rewards))[self_alive_idx]
+        expected_returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
+        actions = torch.tensor([action[self] for action in actions])[self_alive_idx]
 
         logits = self.model(observations)
         for idx in self_alive_idx:
@@ -120,6 +123,8 @@ params = {
 
     'n_steps':              10000,
     'lr':                   0.0001,
+
+    "n_episodes_per_step":  20,
 }
 
 @ex.config
@@ -142,25 +147,27 @@ def run(params):
     env = Environment(agents, params)
     epi_len, nwins = 0, 0
     for step_idx in range(params["n_steps"]):
-        episode = generate_episode(env)
+        batch = []
+        for _ in range(params["n_episodes_per_step"]):
+            episode = generate_episode(env)
+            batch.extend(episode)
 
-        epi_len += len(episode)
-        reward = episode[-1].rewards[env.agents[0]]
+            epi_len += len(episode)
+            reward = episode[-1].rewards[env.agents[0]]
 
-        ex.log_scalar('length', len(episode), step=step_idx)
-        ex.log_scalar('reward', reward, step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+            ex.log_scalar('length', len(episode), step=step_idx)
+            ex.log_scalar('reward', reward, step=step_idx)
+            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
 
-        if episode[-1].rewards[agents[0]] == 1:
-            nwins += 1
+            if episode[-1].rewards[agents[0]] == 1:
+                nwins += 1
 
         for agent in training_agents:
-            loss = agent.update(episode)
-        ex.log_scalar('loss', loss, step=step_idx)
-        
-        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
-            s  = f"Step {step_idx}: loss: {loss:8.4f} - "
-            s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
-            s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
-            print(s)
-            epi_len, nwins = 0, 0
+            loss = agent.update(batch)
+            ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
+
+        s  = f"Step {step_idx}: "
+        s += f"Average length: {epi_len/params['n_episodes_per_step']:5.2f} - "
+        s += f"win ratio: {nwins/params['n_episodes_per_step']:4.3f} - "
+        print(s)
+        epi_len, nwins = 0, 0
