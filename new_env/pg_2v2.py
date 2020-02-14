@@ -5,8 +5,13 @@ from torch.nn import functional as F
 from torch.distributions import Categorical
 
 from env import *
-from utilities import Experience
+from utilities import Experience, generate_episode
 
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment('PG-2v2')
+ex.observers.append(MongoObserver(url='localhost',
+                                db_name='my_database'))
 
 class PGModel(nn.Module):   # Q-Learning Model
     def __init__(self, input_shape, n_hidden, n_actions, lr):
@@ -67,27 +72,95 @@ class PGAgent(Agent):
                 logits[action] = -np.infty
             action = Categorical(logits=logits).sample().item()
         return action
+    
+    def compute_returns(self, rewards):
+        R = 0
+        returns = []
+        for r in reversed(rewards):
+            R = r + params['gamma'] * R
+            returns.insert(0, R)
+        return returns
+
+    def update(self, batch):
+        states, actions, rewards, _, _, observations, _, unavail = zip(*batch) # TODO: use unavail? -> actions not allowed aren't used
+        
+        # only perform updates on actions performed while alive
+        self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
+        observations = [observations[idx][self] for idx in self_alive_idx]
+        actions = torch.tensor([action[self] for action in actions])[self_alive_idx]
+
+        rewards = [reward[self] for reward in rewards]
+        expected_returns = torch.tensor(self.compute_returns(rewards))[self_alive_idx]
+
+        logits = self.model(observations)
+        for idx in self_alive_idx:
+            unavail_actions = unavail[idx][self]
+            logits[idx][unavail_actions] = -999
+
+        log_prob = F.log_softmax(logits, dim=-1)
+        log_prob_act = log_prob[self_alive_idx, actions]
+        #log_prob_act_val = expected_returns * log_prob_act
+        log_prob_act_val = (expected_returns - expected_returns.mean()) * log_prob_act
+        loss = -log_prob_act_val.mean()
+
+        self.model.optimizer.zero_grad()
+        loss.backward()
+        self.model.optimizer.step()
+        
+        return loss.item()
 
 params = {
-    'board_size':           7,
+    'board_size':           5,
     'init_ammo':            5,
     'max_range':            3,
     'step_penalty':         0.01,
     'max_episode_length':   100,
-    'gamma':                0.9,
+    'gamma':                0.99,
     'n_hidden':             128,
 
-    'n_steps':              20000,
+    'n_steps':              10000,
     'lr':                   0.0001,
 }
 
-def test():
+@ex.config
+def cfg():
+    params = params
+
+PRINT_INTERVAL = 100
+
+@ex.automain
+def run(params):
     model = PGModel(input_shape=13, n_hidden=params["n_hidden"],
                     n_actions=len(all_actions), lr=params["lr"])
+
     team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
     team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
-    agents = team_blue + team_red
-    env = Environment(agents, params)
 
-if __name__ == '__main__':
-    test()
+    training_agents = team_blue
+    agents = team_blue + team_red
+
+    env = Environment(agents, params)
+    epi_len, nwins = 0, 0
+    for step_idx in range(params["n_steps"]):
+        episode = generate_episode(env)
+
+        epi_len += len(episode)
+        reward = episode[-1].rewards[env.agents[0]]
+
+        ex.log_scalar('length', len(episode), step=step_idx)
+        ex.log_scalar('reward', reward, step=step_idx)
+        ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+
+        if episode[-1].rewards[agents[0]] == 1:
+            nwins += 1
+
+        for agent in training_agents:
+            loss = agent.update(episode)
+        ex.log_scalar('loss', loss, step=step_idx)
+        
+        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
+            s  = f"Step {step_idx}: loss: {loss:8.4f} - "
+            s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
+            s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
+            print(s)
+            epi_len, nwins = 0, 0

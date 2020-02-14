@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from env import *
-from utilities import LinearScheduler, ReplayBuffer, Experience
+from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -112,36 +112,6 @@ class IQLAgent(Agent):
         self.model.optimizer.step()
         return loss.item()
 
-def generate_episode(env, render=False):
-    episode = []
-    state, done = env.reset(), False
-    observations = env.get_all_observations()
-    n_steps = 0
-    while not done:
-        unavailable_actions = env.get_unavailable_actions()
-        actions = env.act(observations)
-
-        if render:
-            print(f"Step {n_steps}")
-            env.render()
-            print([all_actions[actions[agent]] for agent in env.agents])
-
-        next_state, rewards, done, _ = env.step(actions)
-        next_obs = env.get_all_observations()
-        
-        # episodes that take long are not allowed and penalized for both agents
-        n_steps += 1
-        if n_steps > params['max_episode_length']:
-            done = True
-            rewards = {env.agents[0]: -1,
-                       env.agents[1]: -1}
-
-        episode.append(Experience(state, actions, rewards, next_state, done, observations, next_obs, unavailable_actions))
-        state = next_state.copy()
-        observations = next_obs.copy()
-
-    return episode
-
 def generate_models():
     model  = IQLModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
     target = IQLModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
@@ -156,7 +126,7 @@ params = {
     'step_penalty':         0.01,
     'max_episode_length':   100,
     'gamma':                0.9,
-    'n_hidden':             256,
+    'n_hidden':             128,
     'scheduler':            LinearScheduler,
     'buffer_size':          5000,
     'batch_size':           512,
