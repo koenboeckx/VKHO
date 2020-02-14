@@ -69,13 +69,19 @@ class Observation:
         self.enemies = []
         own_pos = self.own_position
         for other in state.position:
-            if other is not agent and state.alive[other]:
+            if other is not agent:
                 other_pos = state.position[other]
                 rel_pos = other_pos[0]-own_pos[0], other_pos[1]-own_pos[1]
                 if other.team == agent.team: # same team -> friends
-                    self.friends.append(rel_pos)
+                    if not state.alive[other]:
+                        self.friends.append(False)
+                    else:
+                        self.friends.append(rel_pos)
                 else:
-                    self.enemies.append(rel_pos)
+                    if not state.alive[other]:
+                        self.enemies.append(False)
+                    else:
+                        self.enemies.append(rel_pos)
 
     def __str__(self):
         s  = f"Observation for agent {self.agent}: "
@@ -208,6 +214,12 @@ class Environment:
         x1, y1 = self.state.position[agent1]
         x2, y2 = self.state.position[agent2]
         return np.sqrt((x2-x1)**2 + (y2-y1)**2)
+    
+    def act(self, observations):
+        actions = {}
+        for agent in self.agents:
+            actions[agent] = agent.act(observations[agent])
+        return actions
 
     def step(self, actions):
         "'actions' is dict of agent -> action pairs"
@@ -255,7 +267,7 @@ class Environment:
             rewards = {}
             for agent in self.agents:
                 rewards[agent] = -1.
-        if not terminal: # game not done => reward is penalty for making move
+        elif not terminal: # game not done => reward is penalty for making move
             rewards = {}
             for agent in self.agents:
                 rewards[agent] = -self.params['step_penalty']
@@ -296,6 +308,12 @@ class Environment:
     
     def get_observation(self, agent):
         return Observation(self.state, agent)
+    
+    def get_all_observations(self):
+        observations = {}
+        for agent in self.agents:
+            observations[agent] = self.get_observation(agent)
+        return observations
 
 #---------------------------------- test -------------------------------------
 def test_step():
