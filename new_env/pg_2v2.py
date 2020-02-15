@@ -54,7 +54,7 @@ class PGModel(nn.Module):   # Q-Learning Model
                 x[obs_idx, 11]   = obs.ammo / params['init_ammo']
                 x[obs_idx, 12]   = int(obs.aim is not None)
         else:
-            raise ValueError((f"x should be (list of) Observation(s)"))
+            raise ValueError(f"x should be (list of) Observation(s)")
         return x
 
 class PGAgent(Agent):
@@ -112,8 +112,15 @@ class PGAgent(Agent):
         
         return loss.item()
 
+def play_from_file(filenames):
+    for filename in filenames:
+        with open(filename, 'rb') as file:
+            agent = pickle.load(file)
+            print('...')
+
+# --------------------------------------------------------------------------------------
 params = {
-    'board_size':           5,
+    'board_size':           7,
     'init_ammo':            5,
     'max_range':            3,
     'step_penalty':         0.01,
@@ -133,7 +140,7 @@ def cfg():
 
 PRINT_INTERVAL = 100
 
-@ex.automain
+#@ex.automain
 def run(params):
     model = PGModel(input_shape=13, n_hidden=params["n_hidden"],
                     n_actions=len(all_actions), lr=params["lr"])
@@ -171,3 +178,10 @@ def run(params):
         s += f"win ratio: {nwins/params['n_episodes_per_step']:4.3f} - "
         print(s)
         epi_len, nwins = 0, 0
+    
+    for agent in training_agents:
+        agent.save(f'REINFORCE-2v2_7_agent{agent.id}.p')
+
+if __name__ == '__main__':
+    filenames = ['/home/koen/Programming/VKHO/new_env/REINFORCE-2v2_7_agent0.p']
+    play_from_file(filenames)
