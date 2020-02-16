@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from env import *
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
-from models import IQLModel
+from models import ForwardModel
 from settings import params
 
 from sacred import Experiment
@@ -71,8 +71,8 @@ class IQLAgent(Agent):
         return loss.item()
 
 def generate_models():
-    model  = IQLModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
-    target = IQLModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
+    model  = ForwardModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
+    target = ForwardModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
     return {"model": model, "target": target}
 
 
@@ -129,6 +129,6 @@ def run(params):
     for agent in training_agents:
         agent.save(f'IQL-2v2_7_agent{agent.id}.p')
     torch.save(models["model"].state_dict(), 'IQL-2v2_7x7.torch')
-    
+
 #if __name__ == '__main__':
 #    test_take_action()

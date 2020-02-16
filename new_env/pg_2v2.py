@@ -6,7 +6,7 @@ from torch.distributions import Categorical
 
 from env import *
 from utilities import Experience, generate_episode
-from models import PGModel
+from models import ForwardModel
 from settings import params
 
 from sacred import Experiment
@@ -43,7 +43,7 @@ class PGAgent(Agent):
         return returns
 
     def update(self, batch):
-        states, actions, rewards, _, _, observations, _, unavail = zip(*batch) # TODO: use unavail? -> actions not allowed aren't used
+        _, actions, rewards, _, _, observations, _, unavail = zip(*batch)
         
         # only perform updates on actions performed while alive
         self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
@@ -70,11 +70,20 @@ class PGAgent(Agent):
         
         return loss.item()
 
-def play_from_file(filenames):
-    for filename in filenames:
-        with open(filename, 'rb') as file:
-            agent = pickle.load(file)
-            print('...')
+def play_from_file(filename):
+    model = PGModel(input_shape=13, n_hidden=params["n_hidden"],
+                    n_actions=len(all_actions), lr=params["lr"])
+    model.load_state_dict(torch.load(filename))
+    #team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
+    #team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
+
+    team_red  = [PGAgent(2, "red", model, params), PGAgent(3, "red", model, params)]
+    team_blue = [Agent(0, "blue", params),  Agent(1, "blue", params)]
+
+    agents = team_blue + team_red
+
+    env = Environment(agents, params)
+    _ = generate_episode(env, render=True)
 
 # -------------------------------------------------------------------------------------
 
@@ -86,8 +95,8 @@ PRINT_INTERVAL = 100
 
 @ex.automain
 def run(params):
-    model = PGModel(input_shape=13, n_hidden=params["n_hidden"],
-                    n_actions=len(all_actions), lr=params["lr"])
+    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
+                         n_actions=len(all_actions), lr=params["lr"])
 
     team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
     team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
@@ -97,25 +106,27 @@ def run(params):
 
     env = Environment(agents, params)
     epi_len, nwins = 0, 0
+    n_episodes = 0
     for step_idx in range(params["n_steps"]):
         batch = []
         for _ in range(params["n_episodes_per_step"]):
             episode = generate_episode(env)
+            n_episodes += 1 
             batch.extend(episode)
 
             epi_len += len(episode)
             reward = episode[-1].rewards[env.agents[0]]
 
-            ex.log_scalar('length', len(episode), step=step_idx)
-            ex.log_scalar('reward', reward, step=step_idx)
-            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+            ex.log_scalar('length', len(episode), step=n_episodes)
+            ex.log_scalar('reward', reward, step=n_episodes)
+            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=n_episodes)
 
             if episode[-1].rewards[agents[0]] == 1:
                 nwins += 1
 
         for agent in training_agents:
             loss = agent.update(batch)
-            ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
+            ex.log_scalar(f'loss{agent.id}', loss, step=n_episodes)
 
         s  = f"Step {step_idx}: "
         s += f"Average length: {epi_len/params['n_episodes_per_step']:5.2f} - "
@@ -129,6 +140,6 @@ def run(params):
 
 """
 if __name__ == '__main__':
-    filenames = ['/home/koen/Programming/VKHO/new_env/REINFORCE-2v2_7_agent0.p']
-    play_from_file(filenames)
+    filename = '/home/koen/Programming/VKHO/new_env/REINFORCE-2v2_7x7.torch'
+    play_from_file(filename)
 """

@@ -114,3 +114,8 @@
         * allows weight sharing across agents (only observation will be different)
         * enables "easy" integration of QMix (use Qtot in stead of Qa)
     1. [12Feb20]: [After complete rewrite of both Environment (-> SimpleEnvironment) and the QL algortihm] (I)QL: removing unavailable actions during both (1) action selection as (2) updating the network weights seems to remove all problems with convergence !!
+    1. [15Feb20]: Both IQL and PG work on new environment in 2v2 mode; furthermore, because dsitinction between observation and state and observation written in such a way that it is agent/team independent, transfer of (the single) nn.Module model works too (at least for PG, to test for IQL). Next steps:
+        1. either implement IAC, or
+        1. implement Q-Mixing (preferably?), or
+        1. extend environment to NvN games (not too much work?)
+    1. [16Feb20]: noticed: PG doesn't converge if gamma = 0.9, better: 0.99; IQL works better with gamma=0.9

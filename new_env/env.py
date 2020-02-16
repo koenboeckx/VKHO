@@ -22,7 +22,7 @@ class State:
         self.alive = {}
         self.ammo  = {}
         self.aim   = {}
-        taken = [] # avoids placing both players in same position
+        taken = [] # avoids placing players in same position
         for agent in self.agents:
             position = self.generate_position(params['board_size'])
             while position in taken:

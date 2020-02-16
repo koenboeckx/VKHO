@@ -1,14 +1,14 @@
 from utilities import LinearScheduler
 
 params = {
-    'n_steps':              50000,
+    'n_steps':              2000,
 
     'board_size':           7,
     'init_ammo':            5,
     'max_range':            3,
     'step_penalty':         0.01,
     'max_episode_length':   100,
-    'gamma':                0.9,
+    'gamma':                0.99,
     'n_hidden':             128,
 
     'scheduler':            LinearScheduler,
@@ -19,5 +19,5 @@ params = {
     'clip':                 10,
     'scheduler_steps':      500000,
 
-    'n_episodes_per_step':  20,
+    'n_episodes_per_step':  25,
 }

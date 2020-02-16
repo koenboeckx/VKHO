@@ -78,7 +78,9 @@ def generate_episode(env, render=False):
                 rewards[agent] = -1.
 
         episode.append(Experience(state, actions, rewards, next_state, done, observations, next_obs, unavailable_actions))
-        state = next_state.copy()
+        state = next_state.copy() # Warning: uses state gives keyError because agent's id is copied
         observations = next_obs.copy()
-
+    
+    if render:
+        print(f"Game won by team {env.terminal(next_state)}")
     return episode
