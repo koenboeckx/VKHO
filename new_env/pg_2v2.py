@@ -24,7 +24,7 @@ class PGAgent(Agent):
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
-            return Action(0, 'do_nothing', aim=None)
+            return Action(0, 'do_nothing', target=None)
         unavail_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
             logits = self.model([obs])[0]
@@ -117,7 +117,7 @@ def run(params):
     epi_len, nwins = 0, 0
     n_episodes = 0
     ex.log_scalar(f'win', 0.0, step=n_episodes + 1) # forces start of run at 0 wins ()
-    for step_idx in range(params["n_steps"]):
+    for step_idx in range(int(params["n_steps"]/params["n_episodes_per_step"])):
         batch = []
         for _ in range(params["n_episodes_per_step"]):
             episode = generate_episode(env)
