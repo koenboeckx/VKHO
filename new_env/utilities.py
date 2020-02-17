@@ -64,7 +64,7 @@ def generate_episode(env, render=False):
         if render:
             print(f"Step {n_steps}")
             env.render()
-            print([all_actions[actions[agent]] for agent in env.agents])
+            print([action.name for action in actions.values()])
 
         next_state, rewards, done, _ = env.step(actions)
         next_obs = env.get_all_observations()

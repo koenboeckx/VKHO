@@ -16,20 +16,22 @@ ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
 class PGAgent(Agent):
-    def __init__(self, id, team, model, params):
+    def __init__(self, id, team, params):
         super().__init__(id, team, params)
+        
+    def set_model(self, model):
         self.model = model
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
-            return 0
+            return self.actions[0] # do_nothing
         unavail_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
             logits = self.model([obs])[0]
             for action in unavail_actions:
-                logits[action] = -np.infty
+                logits[action.id] = -np.infty
             action = Categorical(logits=logits).sample().item()
-        return action
+        return self.actions[action]
     
     def compute_returns(self, batch):
         _, _, rewards, _, dones, _, _, _ = zip(*batch)
@@ -51,12 +53,13 @@ class PGAgent(Agent):
 
         rewards = [reward[self] for reward in rewards]
         expected_returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
-        actions = torch.tensor([action[self] for action in actions])[self_alive_idx]
+        actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
 
         logits = self.model(observations)
         for idx in self_alive_idx:
             unavail_actions = unavail[idx][self]
-            logits[idx][unavail_actions] = -999
+            unavail_ids = [action.id for action in unavail_actions]
+            logits[idx][unavail_ids] = -999
 
         log_prob = F.log_softmax(logits, dim=-1)
         log_prob_act = log_prob[self_alive_idx, actions]
@@ -71,7 +74,7 @@ class PGAgent(Agent):
         return loss.item()
 
 def play_from_file(filename):
-    model = PGModel(input_shape=13, n_hidden=params["n_hidden"],
+    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
                     n_actions=len(all_actions), lr=params["lr"])
     model.load_state_dict(torch.load(filename))
     #team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
@@ -95,16 +98,22 @@ PRINT_INTERVAL = 100
 
 @ex.automain
 def run(params):
-    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
-                         n_actions=len(all_actions), lr=params["lr"])
-
-    team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
+    team_blue = [PGAgent(0, "blue", params), PGAgent(1, "blue", params)]
     team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
 
     training_agents = team_blue
-    agents = team_blue + team_red
 
+    
+
+    agents = team_blue + team_red
     env = Environment(agents, params)
+
+    all_actions = team_blue[0].actions
+    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
+                         n_actions=len(all_actions), lr=params["lr"])
+    for agent in training_agents:
+        agent.set_model(model)
+
     epi_len, nwins = 0, 0
     n_episodes = 0
     ex.log_scalar(f'win', 0.0, step=n_episodes + 1) # forces start of run at 0 wins ()
