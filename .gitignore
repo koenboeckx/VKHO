@@ -19,3 +19,10 @@ game/powers.gif
 screenshot0*.png
 temp/gru_testing/data/*
 pandas/_libs/parsers.pyx
+game/los/*.p
+new_env/*.p
+*.p
+*.temp
+new_env/*.torch
+*.torch
+pg_2v2_7x7.t
