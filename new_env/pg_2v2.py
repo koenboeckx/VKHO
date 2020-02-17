@@ -107,6 +107,7 @@ def run(params):
     env = Environment(agents, params)
     epi_len, nwins = 0, 0
     n_episodes = 0
+    ex.log_scalar(f'win', 0.0, step=n_episodes + 1) # forces start of run at 0 wins ()
     for step_idx in range(params["n_steps"]):
         batch = []
         for _ in range(params["n_episodes_per_step"]):
@@ -119,7 +120,7 @@ def run(params):
 
             ex.log_scalar('length', len(episode), step=n_episodes)
             ex.log_scalar('reward', reward, step=n_episodes)
-            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=n_episodes)
+            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=n_episodes + 1)
 
             if episode[-1].rewards[agents[0]] == 1:
                 nwins += 1

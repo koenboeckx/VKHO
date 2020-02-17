@@ -4,6 +4,9 @@
 
 import random, copy, pickle
 import numpy as np
+from collections import namedtuple
+
+Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
 all_actions = { 0: 'do_nothing',
                 1: 'aim0', # aim at agent 0 of enemy
@@ -102,11 +105,26 @@ class Agent:
     
     def set_env(self, env):
         self.env = env
-    
+        self.actions = self.generate_actions()
+        self.n_actions = len(self.actions)
+ 
+    def generate_actions(self):
+        actions = [
+            Action(0, 'do_nothing', target=None),
+            Action(1, 'fire', target=None),
+            Action(2, 'move_north', target=None),
+            Action(3, 'move_south', target=None),
+            Action(4, 'move_west', target=None),
+            Action(5, 'move_east', target=None),
+        ]
+        enemies = [agent for agent in self.env.agents if agent.team != self.team]
+        for id, enemy in enumerate(enemies):
+            actions.append(Action(id + 6, 'aim', enemy))
+        return actions
+  
     def act(self, obs):
         unavail_actions = self.env.get_unavailable_actions()[self]
-        avail_actions = [action for action in range(self.env.n_actions)
-                        if action not in unavail_actions]
+        avail_actions = [action for action in self.actions if action not in unavail_actions]
         return random.choice(avail_actions)
         #return 0
     
@@ -131,7 +149,7 @@ class Environment:
             'blue':  [agent for agent in agents if agent.team == 'blue'],
             'red':   [agent for agent in agents if agent.team == 'red'],
         }
-    
+
     def reset(self):
         self.state = State(self.agents, self.params)
         self.unavailable_actions = self.get_unavailable_actions()
@@ -142,61 +160,39 @@ class Environment:
     
     def check_conditions(self, state, agent, action):
         assert agent in self.agents
-        if action == 0: # do_nothing
+        if action.name == 'do_nothing':
             return True # always allowed
         elif state.alive[agent] is False: # no actions (except 'do_nothing') allowed for dead agent
             return False
-        elif action == 1: # aim0
-            opponent = self.teams['red'][0] if agent.team == 'blue' else self.teams['blue'][0]
-            if state.aim[agent] is opponent: # not allowed if already aiming
-                return False
-            else:
-                return True
-        elif action == 2: # aim1
-            opponent = self.teams['red'][1] if agent.team == 'blue' else self.teams['blue'][1]
-            if state.aim[agent] is opponent: # not allowed if already aiming
-                return False
-            else:
-                return True
-        elif action == 3: # fire
+        elif action.name == 'fire':
             if state.aim[agent] is None: # not allowed if not aiming
                 return False
             elif state.ammo[agent] <= 0: # not allowed if no ammo remaining
                 return False
             else:
                 return True
-        elif action == 4: # move_north
-            if self.free(state.position[agent], 'north'):
+        elif action.name in ['move north', 'move_south', 'move_west', 'move_east']:
+            if self.free(state.position[agent], action.name):
                 return True
             else:
                 return False
-        elif action == 5: # move_south
-            if self.free(state.position[agent], 'south'):
-                return True
-            else:
+        elif action.name == 'aim':
+            if state.aim[agent] is action.target: # not allowed if already aiming
                 return False
-        elif action == 6: # move_west
-            if self.free(state.position[agent], 'west'):
-                return True
             else:
-                return False
-        elif action == 7: # move_east
-            if self.free(state.position[agent], 'east'):
                 return True
-            else:
-                return False
         else:
             return False # action not in all_actions
 
     def get_new_position(self, position, direction):
         "returns new position if taken step in direction from position"
-        if direction == 'north':
+        if direction == 'move_north':
             new_position = position[0]-1, position[1]
-        elif direction == 'south':
+        elif direction == 'move_south':
             new_position = position[0]+1, position[1]
-        elif direction == 'east':
+        elif direction == 'move_east':
             new_position = position[0], position[1]+1
-        elif direction == 'west':
+        elif direction == 'move_west':
             new_position = position[0], position[1]-1 
         return new_position
     
@@ -228,27 +224,22 @@ class Environment:
     def step(self, actions):
         "'actions' is dict of agent -> action pairs"
         assert len(actions) == len(self.agents)
-        for agent, action in actions.items():
+        for agent in self.agents:
+            action = actions[agent]
             if not self.check_conditions(self.state, agent, action):
                 continue # if action not allowed, do nothing
-            if action == 0: # do_nothing
+            if action.name == 'do_nothing':
                 continue
-            elif action == 1: # aim0
-                opponent = self.teams['red'][0] if agent.team == 'blue' else self.teams['blue'][0]
-                self.state.aim[agent] = opponent
-            elif action == 2: # aim0
-                opponent = self.teams['red'][1] if agent.team == 'blue' else self.teams['blue'][1]
-                self.state.aim[agent] = opponent
-            elif action == 3: # fire
+            elif action.name == 'aim':
+                self.state.aim[agent] = action.target
+            elif action.name == 'fire':
                 opponent = self.state.aim[agent]
                 if self.distance(agent, opponent) < agent.max_range:
                     self.state.alive[opponent] = False
                 self.state.aim[agent] = None    # lose aim after firing
                 self.state.ammo[agent] -= 1     # decrease ammo after firing
-            elif action in [4, 5, 6, 7]: # move north, south, west, east
-                directions = {4: 'north', 5: 'south', 6: 'west', 7: 'east'}
-                new_position = self.get_new_position(self.state.position[agent],
-                                                     directions[action])
+            elif action.name in ['move north', 'move_south', 'move_west', 'move_east']:
+                new_position = self.get_new_position(self.state.position[agent], action.name)
                 self.state.position[agent] = new_position
         self.available_actions = self.get_unavailable_actions()
 
@@ -295,7 +286,7 @@ class Environment:
         unavailable_actions = {}
         for agent in self.agents:
             unavailable_actions[agent] = []
-            for action in range(self.n_actions):
+            for action in agent.actions:
                 if not self.check_conditions(self.state, agent, action):
                     unavailable_actions[agent].append(action)
         return unavailable_actions
@@ -328,7 +319,7 @@ def test_step():
         "step_penalty": 0.01,
     }
     team_blue = [Agent(0, "blue", params), Agent(1, "blue", params)]
-    team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
+    team_red  = [Agent(2, "red", params),  Agent(3, "red", params), Agent(4, "red", params)]
     agents = team_blue + team_red
     env = Environment(agents, params)
     state, done = env.reset(), False
