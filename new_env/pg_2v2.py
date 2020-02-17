@@ -24,14 +24,14 @@ class PGAgent(Agent):
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
-            return self.actions[0] # do_nothing
+            return Action(0, 'do_nothing', aim=None)
         unavail_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
             logits = self.model([obs])[0]
             for action in unavail_actions:
                 logits[action.id] = -np.infty
-            action = Categorical(logits=logits).sample().item()
-        return self.actions[action]
+            action_idx = Categorical(logits=logits).sample().item()
+        return self.actions[action_idx]
     
     def compute_returns(self, batch):
         _, _, rewards, _, dones, _, _, _ = zip(*batch)

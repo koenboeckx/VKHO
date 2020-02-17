@@ -26,11 +26,11 @@ class IQLAgent(Agent):
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
-            return 0
+            return Action(0, 'do_nothing', target=None)
 
         unavail_actions = self.env.get_unavailable_actions()[self]
-        avail_actions = [action for action in range(self.env.n_actions)
-                            if action not in unavail_actions]
+        avail_actions = [action for action in self.actions
+                        if action not in unavail_actions]
         
         eps = self.scheduler()
         if random.random() < eps:
@@ -40,13 +40,14 @@ class IQLAgent(Agent):
                 qvals = self.model([obs])
                 # remove unavailable actions
                 for action in unavail_actions:
-                    qvals[0][action] = -np.infty
-                action = qvals.max(1)[1].item()
-                return action
+                    qvals[0][action.id] = -np.infty
+                action_idx = qvals.max(1)[1].item()
+                return self.actions[action_idx]
     
     def update(self, batch):
+        # TODO: exclude actions when not alive ??
         _, actions, rewards, _, dones, observations, next_obs, unavailable_actions = zip(*batch)
-        actions = [action[self] for action in actions]
+        actions = [action[self].id for action in actions]
         rewards = torch.tensor([reward[self] for reward in rewards])
         observations = [obs[self] for obs in observations]
         next_obs = [obs[self] for obs in next_obs]
@@ -58,7 +59,8 @@ class IQLAgent(Agent):
         # Set unavailable action to very low Q-value !!
         for idx in range(len(unavailable_actions)):
             unavail_actions = unavailable_actions[idx][self]
-            predicted_qvals[idx][unavail_actions] = -np.infty
+            unavail_ids = [action.id for action in unavail_actions]
+            predicted_qvals[idx][unavail_ids] = -np.infty
 
         predicted_qvals_max = predicted_qvals.max(1)[0]
         targets = rewards + params['gamma']*(1.-dones) * predicted_qvals_max
