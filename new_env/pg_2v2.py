@@ -7,7 +7,7 @@ from torch.distributions import Categorical
 from env import *
 from utilities import Experience, generate_episode
 from models import ForwardModel
-from settings import params
+from settings import args
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -16,8 +16,8 @@ ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
 class PGAgent(Agent):
-    def __init__(self, id, team, params):
-        super().__init__(id, team, params)
+    def __init__(self, id, team):
+        super().__init__(id, team)
         
     def set_model(self, model):
         self.model = model
@@ -40,7 +40,7 @@ class PGAgent(Agent):
         for reward, done in reversed(list(zip(rewards, dones))):
             if done:
                 R = 0.0
-            R = reward + params['gamma'] * R
+            R = reward + args.gamma * R
             returns.insert(0, R)
         return returns
 
@@ -74,52 +74,41 @@ class PGAgent(Agent):
         return loss.item()
 
 def play_from_file(filename):
-    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
-                    n_actions=len(all_actions), lr=params["lr"])
+    model = ForwardModel(input_shape=13, n_actions=7)
     model.load_state_dict(torch.load(filename))
-    #team_blue = [PGAgent(0, "blue", model, params), PGAgent(1, "blue", model, params)]
-    #team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
 
-    team_red  = [PGAgent(2, "red", model, params), PGAgent(3, "red", model, params)]
-    team_blue = [Agent(0, "blue", params),  Agent(1, "blue", params)]
+    team_red  = [PGAgent(2, "red", model), PGAgent(3, "red", model)]
+    team_blue = [Agent(0, "blue"),  Agent(1, "blue")]
 
     agents = team_blue + team_red
 
-    env = Environment(agents, params)
+    env = Environment(agents)
     _ = generate_episode(env, render=True)
 
 # -------------------------------------------------------------------------------------
-
-@ex.config
-def cfg():
-    params = params
-
 PRINT_INTERVAL = 100
 
 @ex.automain
-def run(params):
-    team_blue = [PGAgent(0, "blue", params), PGAgent(1, "blue", params)]
-    team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
+def run():
+    team_blue = [PGAgent(0, "blue"), PGAgent(1, "blue")]
+    team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
 
     training_agents = team_blue
 
-    
-
     agents = team_blue + team_red
-    env = Environment(agents, params)
+    env = Environment(agents)
 
-    all_actions = team_blue[0].actions
-    model = ForwardModel(input_shape=13, n_hidden=params["n_hidden"],
-                         n_actions=len(all_actions), lr=params["lr"])
+    args.all_actions = team_blue[0].actions
+    model = ForwardModel(input_shape=13, n_actions=training_agents[0].n_actions)
     for agent in training_agents:
         agent.set_model(model)
 
     epi_len, nwins = 0, 0
     n_episodes = 0
     ex.log_scalar(f'win', 0.0, step=n_episodes + 1) # forces start of run at 0 wins ()
-    for step_idx in range(int(params["n_steps"]/params["n_episodes_per_step"])):
+    for step_idx in range(int(args.n_steps/args.n_episodes_per_step)):
         batch = []
-        for _ in range(params["n_episodes_per_step"]):
+        for _ in range(args.n_episodes_per_step):
             episode = generate_episode(env)
             n_episodes += 1 
             batch.extend(episode)
@@ -139,8 +128,8 @@ def run(params):
             ex.log_scalar(f'loss{agent.id}', loss, step=n_episodes)
 
         s  = f"Step {step_idx}: "
-        s += f"Average length: {epi_len/params['n_episodes_per_step']:5.2f} - "
-        s += f"win ratio: {nwins/params['n_episodes_per_step']:4.3f} - "
+        s += f"Average length: {epi_len/args.n_episodes_per_step:5.2f} - "
+        s += f"win ratio: {nwins/args.n_episodes_per_step:4.3f} - "
         print(s)
         epi_len, nwins = 0, 0
     

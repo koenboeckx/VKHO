@@ -1,26 +1,31 @@
+import random
+
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from env import *
+from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
 from models import ForwardModel
-from settings import params
+from settings import args
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('QL-2v2')
+ex = Experiment(f'QL-2v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
 class IQLAgent(Agent):
-    def __init__(self, id, team, models, params):
-        super().__init__(id, team, params)
+    def __init__(self, id, team):
+        super().__init__(id, team)
+        self.scheduler = args.scheduler(start=1.0, stop=0.1,
+                                        steps=args.scheduler_steps)
+    def set_model(self, models):
         self.model  = models['model']
         self.target = models['target']
         self.sync_models()
-        self.scheduler = params['scheduler'](start=1.0, stop=0.1, steps=params['scheduler_steps'])
-    
+
     def sync_models(self):
         self.target.load_state_dict(self.model.state_dict())
     
@@ -63,18 +68,18 @@ class IQLAgent(Agent):
             predicted_qvals[idx][unavail_ids] = -np.infty
 
         predicted_qvals_max = predicted_qvals.max(1)[0]
-        targets = rewards + params['gamma']*(1.-dones) * predicted_qvals_max
+        targets = rewards + args.gamma * (1.-dones) * predicted_qvals_max
 
         self.model.optimizer.zero_grad()
         loss = F.mse_loss(current_qvals, targets.detach())
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), params['clip'])
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), args.clip)
         self.model.optimizer.step()
         return loss.item()
 
-def generate_models():
-    model  = ForwardModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
-    target = ForwardModel(input_shape=13, n_hidden=params['n_hidden'], n_actions=len(all_actions), lr=params['lr'])
+def generate_models(input_shape, n_actions):
+    model  = ForwardModel(input_shape=13, n_actions=n_actions)
+    target = ForwardModel(input_shape=13, n_actions=n_actions)
     return {"model": model, "target": target}
 
 
@@ -83,34 +88,35 @@ def generate_models():
 PRINT_INTERVAL = 100
 RENDER = False
 
-@ex.config
-def cfg():
-    params=params
-
 @ex.automain
-def run(params):
-    models = generate_models()
-    team_blue = [IQLAgent(0, "blue", models, params), IQLAgent(1, "blue", models, params)]
-    team_red  = [Agent(2, "red", params),  Agent(3, "red", params)]
+def run():
+    team_blue = [IQLAgent(0, "blue"), IQLAgent(1, "blue")]
+    team_red  = [Agent(2, "red"),  Agent(3, "red")]
 
     agents = team_blue + team_red
     training_agents = team_blue
-    env = Environment(agents, params)
-    buffer = ReplayBuffer(size=params['buffer_size'])
+
+    env = Environment(agents)
+
+    models = generate_models(input_shape=13, n_actions=training_agents[0].n_actions)
+    for agent in training_agents:
+        agent.set_model(models)
+
+    buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
-    for step_idx in range(params['n_steps']):
+    for step_idx in range(args.n_steps):
         episode = generate_episode(env)
         buffer.insert_list(episode)
-        if not buffer.can_sample(params['batch_size']):
+        if not buffer.can_sample(args.batch_size):
             continue
         epi_len += len(episode)
         if episode[-1].rewards[agents[0]] == 1:
             nwins += 1
-        batch = buffer.sample(params['batch_size'])
+        batch = buffer.sample(args.batch_size)
         for agent in training_agents:
             # TODO: how to handle update on dead agents?
             loss = agent.update(batch)
-            if step_idx > 0 and step_idx % params['sync_interval'] == 0:
+            if step_idx > 0 and step_idx % args.sync_interval == 0:
                 agent.sync_models()
 
             ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)

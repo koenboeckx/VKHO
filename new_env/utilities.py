@@ -1,6 +1,5 @@
 import random
 from collections import namedtuple
-from env import all_actions
 
 Experience = namedtuple('Experience', field_names = [
     'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'next_obs', 'unavailable_actions'

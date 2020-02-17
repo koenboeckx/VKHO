@@ -3,16 +3,16 @@ from torch import nn
 from torch.nn import functional as F
 
 from env import Observation
-from settings import params
+from settings import args
 
 class ForwardModel(nn.Module):  
-    def __init__(self, input_shape, n_hidden, n_actions, lr):
+    def __init__(self, input_shape, n_actions):
         super().__init__()
-        self.fc1 = nn.Linear(input_shape, n_hidden)
-        self.fc2 = nn.Linear(n_hidden, n_hidden)
-        self.fc3 = nn.Linear(n_hidden, n_actions)
+        self.fc1 = nn.Linear(input_shape, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
+        self.fc3 = nn.Linear(args.n_hidden, n_actions)
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr)
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
     def forward(self, x):
         x = self.process(x)
@@ -43,21 +43,21 @@ class ForwardModel(nn.Module):
                 else:
                     x[obs_idx, 8:11] = torch.tensor([0., 0., 0.])
 
-                x[obs_idx, 11]   = obs.ammo / params['init_ammo']
+                x[obs_idx, 11]   = obs.ammo / args.init_ammo
                 x[obs_idx, 12]   = int(obs.aim is not None)
         else:
             raise ValueError(f"x should be (list of) Observation(s)")
         return x
 
 class RNNModel(nn.Module):
-    def __init__(self, input_shape, n_hidden, n_actions, lr):
+    def __init__(self, input_shape, n_actions):
         super().__init__()
         self.rnn_hidden_dim = n_hidden
-        self.fc1 = nn.Linear(input_shape, n_hidden)
-        self.rnn = nn.GRUCell(n_hidden, n_hidden)
-        self.fc2 = nn.Linear(n_hidden, n_actions)
+        self.fc1 = nn.Linear(input_shape, args.n_hidden)
+        self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, n_actions)
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr)
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
     def init_hidden(self):
         return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
@@ -92,7 +92,7 @@ def process(obs_list):
             else:
                 x[obs_idx, 8:11] = torch.tensor([0., 0., 0.])
 
-            x[obs_idx, 11]   = obs.ammo / params['init_ammo']
+            x[obs_idx, 11]   = obs.ammo / args.init_ammo
             x[obs_idx, 12]   = int(obs.aim is not None)
     else:
         raise ValueError(f"x should be (list of) Observation(s)")

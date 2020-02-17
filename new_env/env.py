@@ -6,20 +6,12 @@ import random, copy, pickle
 import numpy as np
 from collections import namedtuple
 
+from settings import args
+
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
-all_actions = { 0: 'do_nothing',
-                1: 'aim0', # aim at agent 0 of enemy
-                2: 'aim1', # aim at agent 1 of enemy
-                3: 'fire',
-                4: 'move_north',
-                5: 'move_south',
-                6: 'move_west',
-                7: 'move_east'
-}
-
 class State:
-    def __init__(self, agents, params):
+    def __init__(self, agents):
         self.agents = agents
         self.position = {}
         self.alive = {}
@@ -27,14 +19,14 @@ class State:
         self.aim   = {}
         taken = [] # avoids placing players in same position
         for agent in self.agents:
-            position = self.generate_position(params['board_size'])
+            position = self.generate_position(args.board_size)
             while position in taken:
-                position = self.generate_position(params['board_size'])
+                position = self.generate_position(args.board_size)
             taken.append(position)
 
             self.position[agent] = position
             self.alive[agent] = True
-            self.ammo[agent]  = params['init_ammo']  
+            self.ammo[agent]  = args.init_ammo
             self.aim[agent]   = None
 
     def __str__(self):
@@ -95,10 +87,10 @@ class Observation:
     __repr__ = __str__
 
 class Agent:
-    def __init__(self, id, team, params):
+    def __init__(self, id, team):
         self.id = id
         self.team = team # "blue" or "red"
-        self.max_range = params['max_range']
+        self.max_range = args.max_range
     
     def __str__(self):
         return str(self.id)
@@ -133,13 +125,12 @@ class Agent:
             pickle.dump(self, file)
 
 class Environment:
-    def __init__(self, agents, params):
+    def __init__(self, agents):
         self.register_agents(agents)
-        self.actions = all_actions.copy()
-        self.n_actions = len(self.actions)
-        self.state = State(self.agents, params)
-        self.board_size = params["board_size"]
-        self.params = params
+        #self.actions = 0
+        #self.n_actions = len(self.actions)
+        self.state = State(self.agents)
+        self.board_size = args.board_size
     
     def register_agents(self, agents):
         self.agents = agents
@@ -151,7 +142,7 @@ class Environment:
         }
 
     def reset(self):
-        self.state = State(self.agents, self.params)
+        self.state = State(self.agents)
         self.unavailable_actions = self.get_unavailable_actions()
         return self.state.copy()
     
@@ -265,7 +256,7 @@ class Environment:
         elif not terminal: # game not done => reward is penalty for making move
             rewards = {}
             for agent in self.agents:
-                rewards[agent] = -self.params['step_penalty']
+                rewards[agent] = -args.step_penalty
         elif terminal == 'blue':
             rewards = {}
             for agent in self.teams["blue"]:
@@ -312,16 +303,10 @@ class Environment:
 
 #---------------------------------- test -------------------------------------
 def test_step():
-    params = {
-        "max_range":    100,
-        "board_size":   9,
-        "init_ammo":    5,
-        "step_penalty": 0.01,
-    }
-    team_blue = [Agent(0, "blue", params), Agent(1, "blue", params)]
-    team_red  = [Agent(2, "red", params),  Agent(3, "red", params), Agent(4, "red", params)]
+    team_blue = [Agent(0, "blue"), Agent(1, "blue")]
+    team_red  = [Agent(2, "red"),  Agent(3, "red"), Agent(4, "red")]
     agents = team_blue + team_red
-    env = Environment(agents, params)
+    env = Environment(agents)
     state, done = env.reset(), False
     while not done:
         env.render()
