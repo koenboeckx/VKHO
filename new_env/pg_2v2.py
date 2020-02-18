@@ -88,9 +88,14 @@ def play_from_file(filename):
 # -------------------------------------------------------------------------------------
 PRINT_INTERVAL = 100
 
+@ex.capture
+def get_run_id(_run):
+    return _run._id
+    #print(_run.experiment_info["name"])
+
 @ex.automain
 def run():
-    team_blue = [PGAgent(0, "blue"), PGAgent(1, "blue")]
+    team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends + 1)]
     team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
 
     training_agents = team_blue
@@ -98,8 +103,9 @@ def run():
     agents = team_blue + team_red
     env = Environment(agents)
 
-    args.all_actions = team_blue[0].actions
-    model = ForwardModel(input_shape=13, n_actions=training_agents[0].n_actions)
+    n_actions = 6 + args.n_enemies
+    n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies
+    model = ForwardModel(input_shape=n_inputs, n_actions=n_actions)
     for agent in training_agents:
         agent.set_model(model)
 
@@ -132,10 +138,13 @@ def run():
         s += f"win ratio: {nwins/args.n_episodes_per_step:4.3f} - "
         print(s)
         epi_len, nwins = 0, 0
+
+        #_ = generate_episode(env, render=True)
     
+    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:
-        agent.save(f'REINFORCE-2v2_7_agent{agent.id}.p.temp')
-    torch.save(model.state_dict(), 'REINFORCE-2v2_7x7.torch.temp')
+        agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(model.state_dict(), path+f'RUN_{get_run_id()}.torch')
 
 """
 if __name__ == '__main__':

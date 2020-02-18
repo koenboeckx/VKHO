@@ -78,8 +78,8 @@ class IQLAgent(Agent):
         return loss.item()
 
 def generate_models(input_shape, n_actions):
-    model  = ForwardModel(input_shape=13, n_actions=n_actions)
-    target = ForwardModel(input_shape=13, n_actions=n_actions)
+    model  = ForwardModel(input_shape=input_shape, n_actions=n_actions)
+    target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
 
@@ -90,15 +90,17 @@ RENDER = False
 
 @ex.automain
 def run():
-    team_blue = [IQLAgent(0, "blue"), IQLAgent(1, "blue")]
-    team_red  = [Agent(2, "red"),  Agent(3, "red")]
+    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)]
+    team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
 
-    agents = team_blue + team_red
     training_agents = team_blue
 
+    agents = team_blue + team_red
     env = Environment(agents)
 
-    models = generate_models(input_shape=13, n_actions=training_agents[0].n_actions)
+    n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
+    n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
+    models = generate_models(n_inputs, n_actions)
     for agent in training_agents:
         agent.set_model(models)
 
@@ -134,9 +136,10 @@ def run():
         ex.log_scalar(f'length', len(episode), step=step_idx)
         ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
     
+    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:
-        agent.save(f'IQL-2v2_7_agent{agent.id}.p')
-    torch.save(models["model"].state_dict(), 'IQL-2v2_7x7.torch')
+        agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
 
 #if __name__ == '__main__':
 #    test_take_action()

@@ -17,6 +17,7 @@ class Args:
     clip =                  10
     scheduler_steps =       500000
     n_episodes_per_step =   25
-    n_enemies =             3
+    n_enemies =             2
+    n_friends =             1
 
 args = Args()
