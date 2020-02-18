@@ -21,8 +21,8 @@ class IQLAgent(Agent):
         super().__init__(id, team)
         self.scheduler = args.scheduler(start=1.0, stop=0.1,
                                         steps=args.scheduler_steps)
-    def set_model(self, models):
         self.model  = models['model']
+    def set_model(self, models):
         self.target = models['target']
         self.sync_models()
 

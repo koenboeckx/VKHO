@@ -13,7 +13,7 @@ class Args:
     buffer_size =           5000
     batch_size =            512
     sync_interval =         90
-    lr =                    0.0001
+    lr =                    0.0005
     clip =                  10
     scheduler_steps =       500000
     n_episodes_per_step =   25
