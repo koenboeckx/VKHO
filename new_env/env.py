@@ -8,6 +8,7 @@ from collections import namedtuple
 
 from settings import args
 
+
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
 class State:
@@ -247,7 +248,7 @@ class Environment:
             return 'out-of-ammo'
         return False
     
-    def get_rewards(self, state):
+    def get_rewards_(self, state): # TODO: return reward per team, not per agent
         terminal = self.terminal(state)
         if terminal == 'out-of-ammo': # because all out of ammo
             rewards = {}
@@ -269,6 +270,20 @@ class Environment:
                 rewards[agent] = -1.0
             for agent in self.teams["red"]:
                 rewards[agent] =  1.0
+        else:
+            raise ValueError(f'Unknown team {terminal}')
+        return rewards
+    
+    def get_rewards(self, state): # TODO: return reward per team, not per agent
+        terminal = self.terminal(state)
+        if terminal == 'out-of-ammo': # because all out of ammo
+            rewards = {'blue': -1, 'red': -1}
+        elif not terminal: # game not done => reward is penalty for making move
+            rewards = {'blue': -args.step_penalty, 'red': -args.step_penalty}
+        elif terminal == 'blue':
+            rewards = {'blue': 1, 'red': -1}
+        elif terminal == 'red':
+            rewards = {'blue': -1, 'red': 1}
         else:
             raise ValueError(f'Unknown team {terminal}')
         return rewards

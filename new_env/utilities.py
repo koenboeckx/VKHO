@@ -1,6 +1,8 @@
 import random
 from collections import namedtuple
 
+import settings
+
 Experience = namedtuple('Experience', field_names = [
     'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'next_obs', 'unavailable_actions'
 ])
@@ -70,11 +72,9 @@ def generate_episode(env, render=False):
         
         # episodes that take long are not allowed and penalized for both agents
         n_steps += 1
-        if n_steps > 100: # max episode length
+        if n_steps > settings.Args.max_episode_length:
             done = True
-            rewards = {}
-            for agent in env.agents:
-                rewards[agent] = -1.
+            rewards = {'blue': -1, 'red': -1}
 
         episode.append(Experience(state, actions, rewards, next_state, done, observations, next_obs, unavailable_actions))
         state = next_state.copy() # Warning: uses state gives keyError because agent's id is copied

@@ -7,7 +7,7 @@ from torch.distributions import Categorical
 from env import *
 from utilities import Experience, generate_episode
 from models import ForwardModel
-from settings import args
+from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -35,7 +35,7 @@ class PGAgent(Agent):
     
     def compute_returns(self, batch):
         _, _, rewards, _, dones, _, _, _ = zip(*batch)
-        rewards = [reward[self] for reward in rewards]
+        rewards = [reward[self.team] for reward in rewards]
         returns, R = [], 0.0
         for reward, done in reversed(list(zip(rewards, dones))):
             if done:
@@ -51,7 +51,7 @@ class PGAgent(Agent):
         self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
         observations = [obs[self] for obs in observations]
 
-        rewards = [reward[self] for reward in rewards]
+        rewards = [reward[self.team] for reward in rewards]
         expected_returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
 
@@ -120,13 +120,13 @@ def run():
             batch.extend(episode)
 
             epi_len += len(episode)
-            reward = episode[-1].rewards[env.agents[0]]
+            reward = episode[-1].rewards["blue"]
 
             ex.log_scalar('length', len(episode), step=n_episodes)
             ex.log_scalar('reward', reward, step=n_episodes)
-            ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=n_episodes + 1)
+            ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=n_episodes + 1)
 
-            if episode[-1].rewards[agents[0]] == 1:
+            if episode[-1].rewards["blue"] == 1:
                 nwins += 1
 
         for agent in training_agents:

@@ -21,8 +21,9 @@ class IQLAgent(Agent):
         super().__init__(id, team)
         self.scheduler = args.scheduler(start=1.0, stop=0.1,
                                         steps=args.scheduler_steps)
-        self.model  = models['model']
+        
     def set_model(self, models):
+        self.model  = models['model']
         self.target = models['target']
         self.sync_models()
 
@@ -53,7 +54,7 @@ class IQLAgent(Agent):
         # TODO: exclude actions when not alive ??
         _, actions, rewards, _, dones, observations, next_obs, unavailable_actions = zip(*batch)
         actions = [action[self].id for action in actions]
-        rewards = torch.tensor([reward[self] for reward in rewards])
+        rewards = torch.tensor([reward[self.team] for reward in rewards])
         observations = [obs[self] for obs in observations]
         next_obs = [obs[self] for obs in next_obs]
         dones = torch.tensor(dones, dtype=torch.float)
@@ -90,8 +91,8 @@ RENDER = False
 
 @ex.automain
 def run():
-    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)]
-    team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
+    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
+    team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
 
@@ -112,7 +113,7 @@ def run():
         if not buffer.can_sample(args.batch_size):
             continue
         epi_len += len(episode)
-        if episode[-1].rewards[agents[0]] == 1:
+        if episode[-1].rewards["blue"] == 1:
             nwins += 1
         batch = buffer.sample(args.batch_size)
         for agent in training_agents:
@@ -134,7 +135,7 @@ def run():
             #_ = generate_episode(env, render=True)
 
         ex.log_scalar(f'length', len(episode), step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
+        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
     
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:

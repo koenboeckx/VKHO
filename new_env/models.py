@@ -24,7 +24,7 @@ class ForwardModel(nn.Module):
 class RNNModel(nn.Module):
     def __init__(self, input_shape, n_actions):
         super().__init__()
-        self.rnn_hidden_dim = n_hidden
+        self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden)
         self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
         self.fc2 = nn.Linear(args.n_hidden, n_actions)
