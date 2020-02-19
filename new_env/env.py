@@ -121,6 +121,15 @@ class Agent:
         return random.choice(avail_actions)
         #return 0
     
+    def set_hidden_state(self):
+        pass
+
+    def get_hidden_state(self):
+        if hasattr(self, 'hidden_state'):
+            return self.hidden_state
+        else:
+            return None
+    
     def save(self, filename):
         with open(filename, 'wb') as file:
             pickle.dump(self, file)

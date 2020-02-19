@@ -40,7 +40,7 @@ class RNNModel(nn.Module):
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
         q = self.fc2(h)
-        return q
+        return q, h
 
 def process(obs_list):
     "transform list of observations into tensor for use in model"

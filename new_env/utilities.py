@@ -4,7 +4,7 @@ from collections import namedtuple
 import settings
 
 Experience = namedtuple('Experience', field_names = [
-    'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'next_obs', 'unavailable_actions'
+    'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'hidden', 'next_obs', 'unavailable_actions'
 ])
 
 class ExponentialScheduler:
@@ -58,8 +58,18 @@ def generate_episode(env, render=False):
     state, done = env.reset(), False
     observations = env.get_all_observations()
     n_steps = 0
+
+    for agent in env.agents:        # for agents where it matters,
+        agent.set_hidden_state()    # set the init hidden state of the RNN
+
     while not done:
         unavailable_actions = env.get_unavailable_actions()
+        
+        # keep record of hidden state of the agents to store in experience
+        hidden = {}
+        for agent in env.agents:
+            hidden[agent] = agent.get_hidden_state()
+        
         actions = env.act(observations)
 
         if render:
@@ -76,7 +86,7 @@ def generate_episode(env, render=False):
             done = True
             rewards = {'blue': -1, 'red': -1}
 
-        episode.append(Experience(state, actions, rewards, next_state, done, observations, next_obs, unavailable_actions))
+        episode.append(Experience(state, actions, rewards, next_state, done, observations, hidden, next_obs, unavailable_actions))
         state = next_state.copy() # Warning: uses state gives keyError because agent's id is copied
         observations = next_obs.copy()
     

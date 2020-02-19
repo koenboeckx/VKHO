@@ -10,8 +10,8 @@ class Args:
     gamma =                 0.9
     n_hidden =              128
     scheduler =             LinearScheduler
-    buffer_size =           5000
-    batch_size =            512
+    buffer_size =           500
+    batch_size =            128
     sync_interval =         90
     lr =                    0.0001
     clip =                  10

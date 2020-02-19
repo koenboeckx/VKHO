@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
-from models import ForwardModel
+from models import ForwardModel, RNNModel
 from settings import args
 
 from sacred import Experiment
@@ -38,30 +38,41 @@ class IQLAgent(Agent):
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
         
+        with torch.no_grad():
+            qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            # remove unavailable actions
+            for action in unavail_actions:
+                qvals[0][action.id] = -np.infty
+            action_idx = qvals.max(1)[1].item()
+
         eps = self.scheduler()
         if random.random() < eps:
             return random.choice(avail_actions)
         else:
-            with torch.no_grad():
-                qvals = self.model([obs])
-                # remove unavailable actions
-                for action in unavail_actions:
-                    qvals[0][action.id] = -np.infty
-                action_idx = qvals.max(1)[1].item()
-                return self.actions[action_idx]
+            return self.actions[action_idx]
     
+    def set_hidden_state(self):
+        self.hidden_state = self.model.init_hidden()
+
     def update(self, batch):
         # TODO: exclude actions when not alive ??
-        _, actions, rewards, _, dones, observations, next_obs, unavailable_actions = zip(*batch)
+        _, actions, rewards, _, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
         actions = [action[self].id for action in actions]
         rewards = torch.tensor([reward[self.team] for reward in rewards])
         observations = [obs[self] for obs in observations]
         next_obs = [obs[self] for obs in next_obs]
+        hidden = [hidden_state[self] for hidden_state in hidden]
         dones = torch.tensor(dones, dtype=torch.float)
         
-        current_qvals = self.model(observations)[range(len(batch)), actions]
+        current_qvals   = torch.zeros(len(batch), args.n_actions)
+        predicted_qvals = torch.zeros(len(batch), args.n_actions)
+        for t in range(len(batch)):
+            current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
+            predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
+
         
-        predicted_qvals = self.target(next_obs)
+        current_qvals_actions = current_qvals[range(len(batch)), actions]
+        
         # Set unavailable action to very low Q-value !!
         for idx in range(len(unavailable_actions)):
             unavail_actions = unavailable_actions[idx][self]
@@ -72,15 +83,15 @@ class IQLAgent(Agent):
         targets = rewards + args.gamma * (1.-dones) * predicted_qvals_max
 
         self.model.optimizer.zero_grad()
-        loss = F.mse_loss(current_qvals, targets.detach())
+        loss = F.mse_loss(current_qvals_actions, targets.detach())
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), args.clip)
         self.model.optimizer.step()
         return loss.item()
 
 def generate_models(input_shape, n_actions):
-    model  = ForwardModel(input_shape=input_shape, n_actions=n_actions)
-    target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
+    model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    target = RNNModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
 
@@ -99,9 +110,9 @@ def run():
     agents = team_blue + team_red
     env = Environment(agents)
 
-    n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
-    n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
-    models = generate_models(n_inputs, n_actions)
+    args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
+    args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
+    models = generate_models(args.n_inputs, args.n_actions)
     for agent in training_agents:
         agent.set_model(models)
 
@@ -142,5 +153,7 @@ def run():
         agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
     torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
 
-#if __name__ == '__main__':
-#    test_take_action()
+"""
+if __name__ == '__main__':
+    run()
+"""
