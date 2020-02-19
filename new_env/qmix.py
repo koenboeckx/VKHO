@@ -95,7 +95,7 @@ def generate_models(input_shape, n_actions):
 PRINT_INTERVAL = 5
 RENDER = False
 
-@ex.automain
+#@ex.automain
 def run():
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
@@ -112,9 +112,12 @@ def run():
         agent.set_model(models)
     
     # configure mixers
-    if  args.mixer == 'VDN':
+    if args.mixer == 'VDN':
         mixer = VDNMixer()
         target_mixer = VDNMixer()
+    elif args.mixer == 'QMIX':
+        mixer = QMixer()
+        target_mixer = QMixer() # TODO: quid synchro target mixer? => include in target network synchro
 
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
@@ -134,10 +137,10 @@ def run():
             current_qvals[agent]   = current_q
             predicted_qvals[agent] = predicted_q
         
-        current_q_tot   = mixer(current_qvals)
-        predicted_q_tot = target_mixer(predicted_qvals)
+        states, _, rewards, _, dones, _, _, _, _ = zip(*batch)
+        current_q_tot   = mixer(current_qvals, states)
+        predicted_q_tot = target_mixer(predicted_qvals, states)
         
-        rewards, dones = list(zip(*batch))[2], list(zip(*batch))[4]
         rewards = torch.tensor([reward["blue"] for reward in rewards])
         dones = torch.tensor(dones, dtype=torch.float)
         targets = rewards + args.gamma * (1.-dones) * predicted_q_tot
@@ -159,14 +162,13 @@ def run():
             print(s)
             epi_len, nwins = 0, 0
         
-        ex.log_scalar(f'length', len(episode), step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
+##        ex.log_scalar(f'length', len(episode), step=step_idx)
+##        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
 
-    for agent in training_agents:
-        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
+##    for agent in training_agents:
+##        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+##    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
 
-"""
+
 if __name__ == '__main__':
     run()
-"""

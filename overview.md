@@ -135,6 +135,10 @@
         * IQL and PG can cpoe with actions that are not allowed:
             * in action selection
             * in update action
-        * Implemented RNN with `GRUCell` -> changes to:
-            * `generate_episode` and `Experience`: keep track of hidden state
-            * `update` method for IQL and PG
+        * Implemented RNN with `GRUCell` 
+            * changes to:
+                * `generate_episode` and `Experience`: keep track of hidden state
+                * `update` method for IQL and PG
+            * apparent convergence problem -> quid learning rate impact?
+            
+        * [19Feb20] First implementation of QMIX (with VDN)

@@ -19,8 +19,9 @@ class Args:
     n_episodes_per_step =   25
     n_enemies =             2
     n_friends =             1
+    n_agents =              n_enemies + n_friends + 1
 
-    mixer =                 'VDN'
+    mixer =                 'QMIX'
 
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
 
