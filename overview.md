@@ -119,3 +119,22 @@
         1. implement Q-Mixing (preferably?), or
         1. extend environment to NvN games : DONE [17Feb20]
     1. [16Feb20]: noticed: PG doesn't converge if gamma = 0.9, better: 0.99; IQL works better with gamma=0.9
+    1. [19Feb20] Update since 05Feb20 (last meeting with Steven):
+        * rewrite observation (agent-centered) -> no improvement; 
+        * complete rewrite of the Environment:
+            * assignment of team to agents
+            * allows multiple agents of both teams
+            * disctinction between `Observation` and  `State`:
+                - observation specific for each agent
+                - contains own position, own ammo, own aiming
+                - contains list with relative position of friends
+                - contains list with relative position of enemies
+            * multiple agents => action space depends on number of enemies
+                - is computed during execution
+        * `Observation` is processed to tensor as input for network
+        * IQL and PG can cpoe with actions that are not allowed:
+            * in action selection
+            * in update action
+        * Implemented RNN with `GRUCell` -> changes to:
+            * `generate_episode` and `Experience`: keep track of hidden state
+            * `update` method for IQL and PG

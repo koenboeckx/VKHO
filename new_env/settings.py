@@ -20,4 +20,8 @@ class Args:
     n_enemies =             2
     n_friends =             1
 
+    mixer =                 'VDN'
+
+    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
+
 args = Args()

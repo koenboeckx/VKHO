@@ -7,13 +7,13 @@ from torch.nn import functional as F
 
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
-from models import ForwardModel
+from models import ForwardModel, RNNModel
 from settings import args
-from mixers import VDNMixer
+from mixers import VDNMixer, QMixer
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'QL-2v{args.n_enemies}')
+ex = Experiment(f'QMIX-2v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
@@ -22,8 +22,9 @@ class IQLAgent(Agent):
         super().__init__(id, team)
         self.scheduler = args.scheduler(start=1.0, stop=0.1,
                                         steps=args.scheduler_steps)
-        self.model  = models['model']
+        
     def set_model(self, models):
+        self.model  = models['model']
         self.target = models['target']
         self.sync_models()
 
@@ -38,40 +39,60 @@ class IQLAgent(Agent):
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
         
+        with torch.no_grad():
+            qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            # remove unavailable actions
+            for action in unavail_actions:
+                qvals[0][action.id] = -np.infty
+            action_idx = qvals.max(1)[1].item()
+
         eps = self.scheduler()
         if random.random() < eps:
             return random.choice(avail_actions)
         else:
-            with torch.no_grad():
-                qvals = self.model([obs])
-                # remove unavailable actions
-                for action in unavail_actions:
-                    qvals[0][action.id] = -np.infty
-                action_idx = qvals.max(1)[1].item()
-                return self.actions[action_idx]
+            return self.actions[action_idx]
     
+    def set_hidden_state(self):
+        self.hidden_state = self.model.init_hidden()
+
     def compute_q(self, batch):
         # TODO: exclude actions when not alive ??
-        _, actions, rewards, _, dones, observations, next_obs, unavailable_actions = zip(*batch)
+        _, actions, rewards, _, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
         actions = [action[self].id for action in actions]
-        rewards = torch.tensor([reward[self] for reward in rewards])
+        rewards = torch.tensor([reward[self.team] for reward in rewards])
         observations = [obs[self] for obs in observations]
         next_obs = [obs[self] for obs in next_obs]
+        hidden = [hidden_state[self] for hidden_state in hidden]
         dones = torch.tensor(dones, dtype=torch.float)
         
-        current_qvals = self.model(observations)[range(len(batch)), actions]
-        predicted_qvals = self.target(next_obs)
+        current_qvals   = torch.zeros(len(batch), args.n_actions)
+        predicted_qvals = torch.zeros(len(batch), args.n_actions)
+        for t in range(len(batch)):
+            current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
+            predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
 
+        current_qvals_actions = current_qvals[range(len(batch)), actions]
+        
+        # Set unavailable action to very low Q-value !!
+        for idx in range(len(unavailable_actions)):
+            unavail_actions = unavailable_actions[idx][self]
+            unavail_ids = [action.id for action in unavail_actions]
+            predicted_qvals[idx][unavail_ids] = -np.infty
+
+        predicted_qvals_max = predicted_qvals.max(1)[0]
+
+        return current_qvals_actions, predicted_qvals_max
+    
 
 def generate_models(input_shape, n_actions):
-    model  = ForwardModel(input_shape=input_shape, n_actions=n_actions)
-    target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
+    model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    target = RNNModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
 
 #---------------------------------- test -------------------------------------
 
-PRINT_INTERVAL = 100
+PRINT_INTERVAL = 5
 RENDER = False
 
 @ex.automain
@@ -84,11 +105,16 @@ def run():
     agents = team_blue + team_red
     env = Environment(agents)
 
-    n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
-    n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
-    models = generate_models(n_inputs, n_actions)
+    args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
+    args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
+    models = generate_models(args.n_inputs, args.n_actions)
     for agent in training_agents:
         agent.set_model(models)
+    
+    # configure mixers
+    if  args.mixer == 'VDN':
+        mixer = VDNMixer()
+        target_mixer = VDNMixer()
 
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
@@ -98,34 +124,49 @@ def run():
         if not buffer.can_sample(args.batch_size):
             continue
         epi_len += len(episode)
-        if episode[-1].rewards[agents[0]] == 1:
+        if episode[-1].rewards["blue"] == 1:
             nwins += 1
         batch = buffer.sample(args.batch_size)
+
+        current_qvals, predicted_qvals = {}, {}
         for agent in training_agents:
-            # TODO: how to handle update on dead agents?
-            loss = agent.update(batch)
-            if step_idx > 0 and step_idx % args.sync_interval == 0:
-                agent.sync_models()
+            current_q, predicted_q = agent.compute_q(batch)
+            current_qvals[agent]   = current_q
+            predicted_qvals[agent] = predicted_q
+        
+        current_q_tot   = mixer(current_qvals)
+        predicted_q_tot = target_mixer(predicted_qvals)
+        
+        rewards, dones = list(zip(*batch))[2], list(zip(*batch))[4]
+        rewards = torch.tensor([reward["blue"] for reward in rewards])
+        dones = torch.tensor(dones, dtype=torch.float)
+        targets = rewards + args.gamma * (1.-dones) * predicted_q_tot
 
-            ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
-            ex.log_scalar(f'epsilon', agent.scheduler(), step=step_idx)
+        models["model"].zero_grad()
+        loss = F.mse_loss(current_q_tot, targets.detach())
+        loss.backward()
+        #torch.nn.utils.clip_grad_norm_(models["model"].parameters(), args.clip)
+        models["model"].optimizer.step()
 
+        if step_idx > 0 and step_idx % args.sync_interval == 0:
+            models["target"].load_state_dict(models["model"].state_dict())
+        
         if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             s  = f"Step {step_idx}: loss: {loss:8.4f} - "
             s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
             s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
-            s += f"epsilon: {agent.scheduler():4.3f} - "
+            #s += f"epsilon: {agent.scheduler():4.3f} - "
             print(s)
             epi_len, nwins = 0, 0
-            #_ = generate_episode(env, render=True)
-
+        
         ex.log_scalar(f'length', len(episode), step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards[agents[0]] == 1), step=step_idx)
-    
-    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
-    for agent in training_agents:
-        agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
+        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
 
-#if __name__ == '__main__':
-#    test_take_action()
+    for agent in training_agents:
+        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
+
+"""
+if __name__ == '__main__':
+    run()
+"""
