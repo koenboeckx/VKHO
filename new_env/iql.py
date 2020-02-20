@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
 from models import ForwardModel, RNNModel
-from settings import args
+from settings import Args, args
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -95,14 +95,7 @@ def generate_models(input_shape, n_actions):
     target = RNNModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-
-#---------------------------------- test -------------------------------------
-
-PRINT_INTERVAL = 100
-RENDER = False
-
-@ex.automain
-def run():
+def train(args):
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
 
@@ -153,6 +146,24 @@ def run():
     for agent in training_agents:
         agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
     torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
+#----------------------------------  run  -------------------------------------
+
+PRINT_INTERVAL = 5
+RENDER = False
+
+@ex.capture
+def get_run_id(_run):
+    return _run._id
+
+@ex.config
+def cgf():
+    args = args
+    args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
+
+
+@ex.automain
+def run():
+    train(args)
 
 """
 if __name__ == '__main__':

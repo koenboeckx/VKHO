@@ -165,6 +165,7 @@ def run():
         
         ex.log_scalar(f'length', len(episode), step=step_idx)
         ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
+        ex.log_scalar(f'loss', loss.item(), step=step_idx)
 
     for agent in training_agents:
         agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')

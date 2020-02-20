@@ -92,16 +92,7 @@ def play_from_file(filename):
     env = Environment(agents)
     _ = generate_episode(env, render=True)
 
-# -------------------------------------------------------------------------------------
-PRINT_INTERVAL = 100
-
-@ex.capture
-def get_run_id(_run):
-    return _run._id
-    #print(_run.experiment_info["name"])
-
-@ex.automain
-def run():
+def train(args):
     team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends + 1)]
     team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
 
@@ -158,6 +149,24 @@ def run():
     for agent in training_agents:
         agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
     torch.save(model.state_dict(), path+f'RUN_{get_run_id()}.torch')
+
+
+# -------------------------------------------------------------------------------------
+PRINT_INTERVAL = 100
+
+@ex.capture
+def get_run_id(_run):
+    return _run._id
+    #print(_run.experiment_info["name"])
+
+@ex.config
+def cgf():
+    args = args
+    args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
+
+@ex.automain
+def run(args):
+    train(args)
 
 
 if __name__ == '__main__':

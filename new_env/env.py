@@ -95,6 +95,7 @@ class Agent:
     
     def __str__(self):
         return str(self.id)
+    __repr__ = __str__
     
     def set_env(self, env):
         self.env = env
@@ -172,7 +173,7 @@ class Environment:
                 return False
             else:
                 return True
-        elif action.name in ['move north', 'move_south', 'move_west', 'move_east']:
+        elif action.name in ['move_north', 'move_south', 'move_west', 'move_east']:
             if self.free(state.position[agent], action.name):
                 return True
             else:
@@ -309,11 +310,21 @@ class Environment:
     def render(self, state=None):
         if state is None:
             state = self.state
-        arr = np.zeros((self.board_size, self.board_size))
+        arr = np.zeros((self.board_size, self.board_size)) - 1
         for agent in self.agents:
-            pos = state.position[agent]
-            arr[pos[0], pos[1]] = agent.id + 1
-        print(arr)
+            x, y = state.position[agent]
+            arr[x, y] = agent.id
+        s = '_' * (self.board_size + 2) + '\n'
+        for x in range(self.board_size):
+            s += '|'
+            for y in range(self.board_size):
+                if arr[x, y] == -1:
+                    s += '.'
+                else:
+                    s += str(int(arr[x, y]))
+            s += '|\n'
+        s += '_' * self.board_size
+        print(s)
         print(state)
     
     def get_observation(self, agent):
@@ -328,16 +339,22 @@ class Environment:
 #---------------------------------- test -------------------------------------
 def test_step():
     team_blue = [Agent(0, "blue"), Agent(1, "blue")]
-    team_red  = [Agent(2, "red"),  Agent(3, "red"), Agent(4, "red")]
+    team_red  = [Agent(2, "red"),  Agent(3, "red")]
     agents = team_blue + team_red
     env = Environment(agents)
     state, done = env.reset(), False
+    i = 0
     while not done:
+        print(f"step {i}")
         env.render()
         print(env.get_observation(agents[0]))
         actions = dict([(agent, agent.act(state)) for agent in env.agents])
+        print(actions)
         next_state, rewards, done, _ = env.step(actions)
         state = next_state
+        i += 1
+        if i > 100:
+            print('stop')
     env.render()
     print(env.get_observation(agents[0]))
     print(env.get_observation(agents[2]))
