@@ -7,7 +7,7 @@ class Args:
     max_range =             3
     step_penalty =          0.01
     max_episode_length =    100
-    gamma =                 0.9
+    gamma =                 0.99
     n_hidden =              128
     scheduler =             LinearScheduler
     buffer_size =           500
@@ -21,7 +21,8 @@ class Args:
     n_friends =             1
     n_agents =              n_enemies + n_friends + 1
 
-    mixer =                 'QMIX'
+    mixer =                 'QMIX'  # 'VDN' or 'QMIX'
+    model =                 'RNN'   # 'FORWARD' or 'RNN'
 
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
 

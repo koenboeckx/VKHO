@@ -14,12 +14,16 @@ class ForwardModel(nn.Module):
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
-    def forward(self, inputs):
+    def init_hidden(self):
+        "dummy method for equivalence with RNN"
+        return 0
+
+    def forward(self, inputs, hidden_state):
         x = process(inputs)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         logits = self.fc3(x)
-        return logits
+        return logits, 0
     
 class RNNModel(nn.Module):
     def __init__(self, input_shape, n_actions):

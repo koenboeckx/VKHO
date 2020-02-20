@@ -112,7 +112,13 @@ def run():
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies
-    model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+    
+    # setup model
+    if args.model == 'FORWARD':
+        model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+    elif args.model == 'RNN':
+        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+    
     for agent in training_agents:
         agent.set_model(model)
 

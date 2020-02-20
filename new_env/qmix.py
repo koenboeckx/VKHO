@@ -95,7 +95,7 @@ def generate_models(input_shape, n_actions):
 PRINT_INTERVAL = 5
 RENDER = False
 
-#@ex.automain
+@ex.automain
 def run():
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
@@ -153,6 +153,7 @@ def run():
 
         if step_idx > 0 and step_idx % args.sync_interval == 0:
             models["target"].load_state_dict(models["model"].state_dict())
+            target_mixer.load_state_dict(mixer.state_dict())
         
         if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             s  = f"Step {step_idx}: loss: {loss:8.4f} - "
@@ -162,12 +163,13 @@ def run():
             print(s)
             epi_len, nwins = 0, 0
         
-##        ex.log_scalar(f'length', len(episode), step=step_idx)
-##        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
+        ex.log_scalar(f'length', len(episode), step=step_idx)
+        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
 
-##    for agent in training_agents:
-##        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-##    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
+    for agent in training_agents:
+        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
+    torch.save(mixer.state_dict(), args.path+f'RUN_{get_run_id()}_MIXER.torch')
 
 
 if __name__ == '__main__':

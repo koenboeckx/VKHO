@@ -37,7 +37,7 @@ class VDNMixer(nn.Module): # Value-Decomposition Networks For Cooperative Multi-
         return torch.sum(agent_qs, dim=1)
 
 class QMixer(nn.Module):
-    def __init__(self, embed_dim=50):
+    def __init__(self, embed_dim=64):
         super().__init__()
         # Hypernetwork
         self.n_trainers = args.n_friends + 1
