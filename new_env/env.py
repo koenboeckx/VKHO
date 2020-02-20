@@ -254,7 +254,7 @@ class Environment:
             return "blue"
         elif all([state.alive[agent] == False for agent in self.teams["blue"]]):   # all "blue"s are dead
             return "red"
-        if all([state.ammo[agent] == 0 for agent in self.agents]):
+        if all([state.ammo[agent] == 0 for agent in self.agents if state.alive[agent]]):
             return 'out-of-ammo'
         return False
     
