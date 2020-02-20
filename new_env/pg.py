@@ -168,8 +168,9 @@ def cgf():
 def run(args):
     train(args)
 
-
+"""
 if __name__ == '__main__':
     #filename = '/home/koen/Programming/VKHO/new_env/REINFORCE-2v2_7x7.torch'
     #play_from_file(filename)
     run()
+"""
