@@ -240,7 +240,7 @@ class Environment:
                     self.state.alive[opponent] = False
                 self.state.aim[agent] = None    # lose aim after firing
                 self.state.ammo[agent] -= 1     # decrease ammo after firing
-            elif action.name in ['move north', 'move_south', 'move_west', 'move_east']:
+            elif action.name in ['move_north', 'move_south', 'move_west', 'move_east']:
                 new_position = self.get_new_position(self.state.position[agent], action.name)
                 self.state.position[agent] = new_position
         self.available_actions = self.get_unavailable_actions()
