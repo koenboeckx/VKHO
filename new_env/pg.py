@@ -25,11 +25,18 @@ class PGAgent(Agent):
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
             return Action(0, 'do_nothing', target=None)
-        unavail_actions = self.env.get_unavailable_actions()[self]
+        
+        unavailable_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
-            logits, self.hidden_state = self.model([obs], self.hidden_state)
-            for action in unavail_actions:
-                logits[0][action.id] = -np.infty
+            if args.model == 'RNN':
+                logits, self.hidden_state = self.model([obs], self.hidden_state)
+                logits = logits[0]
+            else:
+                logits = self.model([obs])[0]
+            
+            for action in unavailable_actions:
+                logits[action.id] = -np.infty
+
             action_idx = Categorical(logits=logits).sample().item()
         return self.actions[action_idx]
     
@@ -59,9 +66,12 @@ class PGAgent(Agent):
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
         hidden = [hidden_state[self] for hidden_state in hidden]
 
-        logits = torch.zeros(len(batch), args.n_actions)
-        for t in range(len(batch)):
-            logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+        if args.model == 'RNN':
+            logits = torch.zeros(len(batch), args.n_actions)
+            for t in range(len(batch)):
+                logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+        else:
+            logits = self.model(observations)
 
         for idx in self_alive_idx:
             unavail_actions = unavail[idx][self]

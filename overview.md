@@ -132,9 +132,10 @@
             * multiple agents => action space depends on number of enemies
                 - is computed during execution
         * `Observation` is processed to tensor as input for network
-        * IQL and PG can cpoe with actions that are not allowed:
+        * IQL and PG can cope with actions that are not allowed:
             * in action selection
             * in update action
+        * Both IQL and PG agents share network weights (*weight sharing*)
         * Implemented RNN with `GRUCell` 
             * changes to:
                 * `generate_episode` and `Experience`: keep track of hidden state
@@ -142,3 +143,8 @@
             * apparent convergence problem -> quid learning rate impact?
             
         * [19Feb20] First implementation of QMIX (with VDN)
+    1. [20Feb20] - After issues with low yield after update of env: cause seems to be random initial positions; behavior is much more stable when initial positions are fixed. Furthermore, `max_range` has significant impact on convergence speed. To improve development iteration, use:
+        * `board_size` = 7
+        * `init_ammo` = 5
+        * `max_range` = 5
+        * (fixed initial positions)

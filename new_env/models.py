@@ -18,12 +18,12 @@ class ForwardModel(nn.Module):
         "dummy method for equivalence with RNN"
         return 0
 
-    def forward(self, inputs, hidden_state):
+    def forward(self, inputs):
         x = process(inputs)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         logits = self.fc3(x)
-        return logits, 0
+        return logits
     
 class RNNModel(nn.Module):
     def __init__(self, input_shape, n_actions):

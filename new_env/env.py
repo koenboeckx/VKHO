@@ -24,8 +24,15 @@ class State:
             while position in taken:
                 position = self.generate_position(args.board_size)
             taken.append(position)
-
             self.position[agent] = position
+
+        if args.fixed_init_position: # set fixed initial position (only use for 2v2)
+            self.position[agents[0]] = (args.board_size//2-1, 0)
+            self.position[agents[1]] = (args.board_size//2+1, 0)
+            self.position[agents[2]] = (args.board_size//2-1, args.board_size-1)
+            self.position[agents[3]] = (args.board_size//2+1, args.board_size-1)
+
+        for agent in self.agents:
             self.alive[agent] = True
             self.ammo[agent]  = args.init_ammo
             self.aim[agent]   = None
@@ -323,7 +330,7 @@ class Environment:
                 else:
                     s += str(int(arr[x, y]))
             s += '|\n'
-        s += '_' * self.board_size
+        s += '-' * (self.board_size + 2)
         print(s)
         print(state)
     
@@ -348,6 +355,8 @@ def test_step():
         print(f"step {i}")
         env.render()
         print(env.get_observation(agents[0]))
+        print('Unavaible for agent 0:\n', env.get_unavailable_actions()[agents[0]])
+
         actions = dict([(agent, agent.act(state)) for agent in env.agents])
         print(actions)
         next_state, rewards, done, _ = env.step(actions)
@@ -359,6 +368,7 @@ def test_step():
     print(env.get_observation(agents[0]))
     print(env.get_observation(agents[2]))
     print(rewards.values())
+    print(f'Terminated in {i} steps')
 
 if __name__ == '__main__':
     test_step()

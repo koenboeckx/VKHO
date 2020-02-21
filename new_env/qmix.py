@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
 from models import ForwardModel, RNNModel
-from settings import args
+from settings import args, Args
 from mixers import VDNMixer, QMixer
 
 from sacred import Experiment
@@ -95,6 +95,16 @@ def generate_models(input_shape, n_actions):
 PRINT_INTERVAL = 5
 RENDER = False
 
+@ex.capture
+def get_run_id(_run):
+    return _run._id
+
+@ex.config
+def cgf():
+    args = args
+    args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
+
+
 @ex.automain
 def run():
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
@@ -148,7 +158,7 @@ def run():
         models["model"].zero_grad()
         loss = F.mse_loss(current_q_tot, targets.detach())
         loss.backward()
-        #torch.nn.utils.clip_grad_norm_(models["model"].parameters(), args.clip)
+        torch.nn.utils.clip_grad_norm_(models["model"].parameters(), args.clip)
         models["model"].optimizer.step()
 
         if step_idx > 0 and step_idx % args.sync_interval == 0:

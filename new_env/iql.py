@@ -40,7 +40,10 @@ class IQLAgent(Agent):
                         if action not in unavail_actions]
         
         with torch.no_grad():
-            qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            if args.model == 'RNN':
+                qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            else:
+                qvals = self.model([obs])
             # remove unavailable actions
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
@@ -65,13 +68,16 @@ class IQLAgent(Agent):
         hidden = [hidden_state[self] for hidden_state in hidden]
         dones = torch.tensor(dones, dtype=torch.float)
         
-        current_qvals   = torch.zeros(len(batch), args.n_actions)
-        predicted_qvals = torch.zeros(len(batch), args.n_actions)
-        for t in range(len(batch)):
-            current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
-            predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
+        if args.model == 'RNN':
+            current_qvals   = torch.zeros(len(batch), args.n_actions)
+            predicted_qvals = torch.zeros(len(batch), args.n_actions)
+            for t in range(len(batch)):
+                current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
+                predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
+        else:
+            current_qvals = self.model(observations)
+            predicted_qvals = self.model(next_obs)
 
-        
         current_qvals_actions = current_qvals[range(len(batch)), actions]
         
         # Set unavailable action to very low Q-value !!
@@ -91,8 +97,12 @@ class IQLAgent(Agent):
         return loss.item()
 
 def generate_models(input_shape, n_actions):
-    model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
-    target = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    if args.model == 'RNN':
+        model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
+        target = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    else:
+        model  = ForwardModel(input_shape=input_shape, n_actions=n_actions)
+        target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
 def train(args):
@@ -112,11 +122,14 @@ def train(args):
 
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
+    
+    ex.log_scalar(f'win', 0.0, step=0) # forces start of run at 0 wins ()
     for step_idx in range(args.n_steps):
         episode = generate_episode(env)
         buffer.insert_list(episode)
         if not buffer.can_sample(args.batch_size):
             continue
+        
         epi_len += len(episode)
         if episode[-1].rewards["blue"] == 1:
             nwins += 1
@@ -139,8 +152,8 @@ def train(args):
             epi_len, nwins = 0, 0
             #_ = generate_episode(env, render=True)
 
-        ex.log_scalar(f'length', len(episode), step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
+        ex.log_scalar(f'length', len(episode), step=step_idx+1)
+        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
     
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:
