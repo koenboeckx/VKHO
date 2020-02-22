@@ -110,20 +110,23 @@ def train(args):
         target_mixer = VDNMixer()
     elif args.mixer == 'QMIX':
         mixer = QMixer()
-        target_mixer = QMixer() # TODO: quid synchro target mixer? => include in target network synchro
+        target_mixer = QMixer() 
 
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
+
+    ex.log_scalar(f'win', 0.0, step=1) # forces start of run at 0 wins ()
     for step_idx in range(args.n_steps):
         episode = generate_episode(env)
         buffer.insert_list(episode)
         if not buffer.can_sample(args.batch_size):
             continue
+        batch = buffer.sample(args.batch_size)
+
         epi_len += len(episode)
         if episode[-1].rewards["blue"] == 1:
             nwins += 1
-        batch = buffer.sample(args.batch_size)
-
+        
         current_qvals, predicted_qvals = {}, {}
         for agent in training_agents:
             current_q, predicted_q = agent.compute_q(batch)
@@ -156,9 +159,9 @@ def train(args):
             print(s)
             epi_len, nwins = 0, 0
         
-        ex.log_scalar(f'length', len(episode), step=step_idx)
-        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx)
-        ex.log_scalar(f'loss', loss.item(), step=step_idx)
+        ex.log_scalar(f'length', len(episode), step=step_idx+1)
+        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
+        ex.log_scalar(f'loss', loss.item(), step=step_idx+1)
 
     for agent in training_agents:
         agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
