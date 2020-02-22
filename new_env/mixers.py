@@ -53,7 +53,6 @@ class QMixer(nn.Module):
         )
 
     def forward(self, agent_qs, states):
-        agent_qs_ = agent_qs.copy()
         agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
         states = process_states(states)
 
@@ -61,10 +60,13 @@ class QMixer(nn.Module):
         states = states.reshape(-1, self.state_dim)
         W1 = torch.abs(self.HW1(states))
         W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
+        
         b1 = self.Hb1(states)
         b1 = b1.reshape(-1, self.embed_dim, 1)
+        
         W2 = torch.abs(self.HW2(states))
         W2 = W2.reshape(-1, 1, self.embed_dim)
+        
         b2 = F.relu(self.Hb2(states))
         b2 = b2.reshape(-1, 1, 1)
 
@@ -74,4 +76,3 @@ class QMixer(nn.Module):
         QW2 = torch.bmm(W2, Qb1)        # (bs x 1 x 1)
         Qtot = QW2 + b2                 # (bs x 1 x 1)
         return Qtot.squeeze()           # (bs)
-        #return list(agent_qs_.values())[0] # cheat - TODO: remove
