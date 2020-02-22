@@ -113,3 +113,40 @@
     1. TODO: re-implemented so that observation is window centered on agent
         * allows weight sharing across agents (only observation will be different)
         * enables "easy" integration of QMix (use Qtot in stead of Qa)
+    1. [12Feb20]: [After complete rewrite of both Environment (-> SimpleEnvironment) and the QL algortihm] (I)QL: removing unavailable actions during both (1) action selection as (2) updating the network weights seems to remove all problems with convergence !!
+    1. [15Feb20]: Both IQL and PG work on new environment in 2v2 mode; furthermore, because dsitinction between observation and state and observation written in such a way that it is agent/team independent, transfer of (the single) nn.Module model works too (at least for PG, to test for IQL). Next steps:
+        1. either implement IAC, or
+        1. implement Q-Mixing (preferably?), or
+        1. extend environment to NvN games : DONE [17Feb20]
+    1. [16Feb20]: noticed: PG doesn't converge if gamma = 0.9, better: 0.99; IQL works better with gamma=0.9
+    1. [19Feb20] Update since 05Feb20 (last meeting with Steven):
+        * rewrite observation (agent-centered) -> no improvement; 
+        * complete rewrite of the Environment:
+            * assignment of team to agents
+            * allows multiple agents of both teams
+            * disctinction between `Observation` and  `State`:
+                - observation specific for each agent
+                - contains own position, own ammo, own aiming
+                - contains list with relative position of friends
+                - contains list with relative position of enemies
+            * multiple agents => action space depends on number of enemies
+                - is computed during execution
+        * `Observation` is processed to tensor as input for network
+        * IQL and PG can cope with actions that are not allowed:
+            * in action selection
+            * in update action
+        * Both IQL and PG agents share network weights (*weight sharing*)
+        * Implemented RNN with `GRUCell` 
+            * changes to:
+                * `generate_episode` and `Experience`: keep track of hidden state
+                * `update` method for IQL and PG
+            * apparent convergence problem -> quid learning rate impact?
+            
+        * [19Feb20] First implementation of QMIX (with VDN)
+    1. [20Feb20] - After issues with low yield after update of env: cause seems to be random initial positions; behavior is much more stable when initial positions are fixed. Furthermore, `max_range` has significant impact on convergence speed. To improve development iteration, use:
+        * `board_size` = 7
+        * `init_ammo` = 5
+        * `max_range` = 5
+        * (fixed initial positions)
+    1. [22Feb20] TODO: to evaluate (I)QL: add possibility to set eps=0.0 in action selection so that always best action can be chosen during evaluation (<-> training)
+    1. [22Feb20]: TODO: MongoDB: how extract info - make better figures
