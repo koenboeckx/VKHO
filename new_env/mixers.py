@@ -53,7 +53,8 @@ class QMixer(nn.Module):
         )
 
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs).unsqueeze(2)
+        agent_qs_ = agent_qs.copy()
+        agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
         states = process_states(states)
 
         # computes matrices via hypernetwork
@@ -73,3 +74,4 @@ class QMixer(nn.Module):
         QW2 = torch.bmm(W2, Qb1)        # (bs x 1 x 1)
         Qtot = QW2 + b2                 # (bs x 1 x 1)
         return Qtot.squeeze()           # (bs)
+        #return list(agent_qs_.values())[0] # cheat - TODO: remove

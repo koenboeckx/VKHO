@@ -13,7 +13,7 @@ from mixers import VDNMixer, QMixer
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'QMIX-2v{args.n_enemies}')
+ex = Experiment(f'QMIX-{args.n_friends+1}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
