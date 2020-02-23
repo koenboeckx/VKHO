@@ -1,5 +1,3 @@
-"""Policy Gradients Algorithm"""
-
 from collections import namedtuple
 import torch
 from torch import nn
