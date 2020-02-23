@@ -17,7 +17,7 @@ ex = Experiment(f'QMIX-{args.n_friends+1}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
-class IQLAgent(Agent):
+class QMixAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
         self.scheduler = args.scheduler(start=1.0, stop=0.1,
@@ -90,7 +90,7 @@ def generate_models(input_shape, n_actions):
     return {"model": model, "target": target}
 
 def train(args):
-    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
+    team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
