@@ -27,10 +27,14 @@ class State:
             self.position[agent] = position
 
         if args.fixed_init_position: # set fixed initial position (only use for 2v2)
-            self.position[agents[0]] = (args.board_size//2-1, 0)
-            self.position[agents[1]] = (args.board_size//2+1, 0)
-            self.position[agents[2]] = (args.board_size//2-1, args.board_size-1)
-            self.position[agents[3]] = (args.board_size//2+1, args.board_size-1)
+            if args.n_friends == 0:
+                self.position[agents[0]] = (args.board_size//2, 0)
+                self.position[agents[1]] = (args.board_size//2, args.board_size-1)
+            else:
+                self.position[agents[0]] = (args.board_size//2-1, 0)
+                self.position[agents[1]] = (args.board_size//2+1, 0)
+                self.position[agents[2]] = (args.board_size//2-1, args.board_size-1)
+                self.position[agents[3]] = (args.board_size//2+1, args.board_size-1)
 
         for agent in self.agents:
             self.alive[agent] = True

@@ -13,7 +13,7 @@ from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('PG-{args.n_friends+1}v{args.n_enemies}')
+ex = Experiment(f'PG-{args.n_friends+1}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 

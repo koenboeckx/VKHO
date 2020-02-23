@@ -71,7 +71,7 @@ class IQLAgent(Agent):
         if args.model == 'RNN':
             current_qvals   = torch.zeros(len(batch), args.n_actions)
             predicted_qvals = torch.zeros(len(batch), args.n_actions)
-            for t in range(len(batch)):
+            for t in range(len(batch)): # TODO: verify: is this correct?
                 current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
                 predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
         else:

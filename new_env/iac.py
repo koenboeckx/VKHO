@@ -16,7 +16,7 @@ from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('IAC-{args.n_friends+1}v{args.n_enemies}')
+ex = Experiment(f'IAC-{args.n_friends+1}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
@@ -80,13 +80,16 @@ class IACAgent(Agent):
         loss.backward()
         self.model.optimizer.step()
 
-        return loss.item()
+        return {'loss':         loss.item(),
+                'policy_loss':  loss_pol.item(),
+                'value_loss':   loss_val.item()
+        }
 
 def play_from_file(filename):
     model = IACModel(input_shape=13, n_actions=7)
     model.load_state_dict(torch.load(filename))
 
-    team_red  = [IACAgent(2, "red", model), PGAgent(3, "red", model)]
+    team_red  = [IACAgent(2, "red"), PGAgent(3, "red")]
     team_blue = [Agent(0, "blue"),  Agent(1, "blue")]
 
     agents = team_blue + team_red
@@ -118,7 +121,7 @@ def train(args):
 
     epi_len, nwins = 0, 0
     n_episodes = 0
-    #ex.log_scalar(f'win', 0.0, step=n_episodes + 1) # forces start of run at 0 wins ()
+    ex.log_scalar(f'win', 0.0, step=0) # forces start of run at 0 wins ()
     for step_idx in range(int(args.n_steps/args.n_episodes_per_step)):
         batch = []
         for _ in range(args.n_episodes_per_step):
@@ -129,16 +132,18 @@ def train(args):
             epi_len += len(episode)
             reward = episode[-1].rewards["blue"]
 
-            #ex.log_scalar('length', len(episode), step=n_episodes)
-            #ex.log_scalar('reward', reward, step=n_episodes)
-            #ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=n_episodes + 1)
+            ex.log_scalar('length', len(episode), step=n_episodes)
+            ex.log_scalar('reward', reward, step=n_episodes)
+            ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=n_episodes + 1)
 
             if episode[-1].rewards["blue"] == 1:
                 nwins += 1
 
         for agent in training_agents:
             loss = agent.update(batch)
-            #ex.log_scalar(f'loss{agent.id}', loss, step=n_episodes)
+            ex.log_scalar(f'policy_loss{agent.id}', loss['policy_loss'], step=n_episodes)
+            ex.log_scalar(f'value_loss{agent.id}',  loss['value_loss'],  step=n_episodes)
+            ex.log_scalar(f'loss{agent.id}', loss['loss'], step=n_episodes)
 
         s  = f"Step {step_idx}: "
         s += f"Average length: {epi_len/args.n_episodes_per_step:5.2f} - "
@@ -167,9 +172,11 @@ def cgf():
     args = args
     args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
 
-#@ex.automain
+@ex.automain
 def run(args):
     train(args)
 
+"""
 if __name__ == '__main__':
     run(args)
+"""    
