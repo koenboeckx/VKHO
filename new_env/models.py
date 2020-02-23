@@ -14,16 +14,28 @@ class ForwardModel(nn.Module):
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
-    def init_hidden(self):
-        "dummy method for equivalence with RNN"
-        return 0
-
     def forward(self, inputs):
         x = process(inputs)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         logits = self.fc3(x)
         return logits
+
+class ValueModel(nn.Module):
+    def __init__(self, input_shape):
+        super().__init__()
+        self.fc1 = nn.Linear(input_shape, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
+        self.fc3 = nn.Linear(args.n_hidden, 1)
+
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
+
+    def forward(self, inputs):
+        x = process(inputs)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        value = self.fc3(x)
+        return value    
     
 class RNNModel(nn.Module):
     def __init__(self, input_shape, n_actions):

@@ -1,3 +1,8 @@
+"""[23Feb20]
+Independent Actor-Critic
+Uses independent A2C agents with common weights
+"""
+
 from collections import namedtuple
 import torch
 from torch import nn
@@ -11,16 +16,17 @@ from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('PG-2v2')
+ex = Experiment('IAC-2v2')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
-class PGAgent(Agent):
+class IACAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
         
     def set_model(self, model):
-        self.model = model
+        self.policy_model = model['policy']
+        self.value_model  = model['value']
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
@@ -28,11 +34,7 @@ class PGAgent(Agent):
         
         unavailable_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
-            if args.model == 'RNN':
-                logits, self.hidden_state = self.model([obs], self.hidden_state)
-                logits = logits[0]
-            else:
-                logits = self.model([obs])[0]
+            logits = self.policy_model([obs])[0]
             
             for action in unavailable_actions:
                 logits[action.id] = -np.infty
@@ -61,22 +63,18 @@ class PGAgent(Agent):
         self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
         observations = [obs[self] for obs in observations]
 
-        rewards = [reward[self.team] for reward in rewards]
-        expected_returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
+        rewards = torch.tensor([reward[self.team] for reward in rewards])
+        advantage = self.value_model(observations)[self_alive_idx]
+
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
         hidden = [hidden_state[self] for hidden_state in hidden]
 
-        if args.model == 'RNN':
-            logits = torch.zeros(len(batch), args.n_actions)
-            for t in range(len(batch)):
-                logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
-        else:
-            logits = self.model(observations)
+        logits = self.policy_model(observations)
 
         for idx in self_alive_idx:
             unavail_actions = unavail[idx][self]
             unavail_ids = [action.id for action in unavail_actions]
-            logits[idx][unavail_ids] = -999
+            logits[idx][unavail_ids] = -99999
 
         log_prob = F.log_softmax(logits, dim=-1)
         log_prob_act = log_prob[self_alive_idx, actions]
@@ -102,6 +100,16 @@ def play_from_file(filename):
     env = Environment(agents)
     _ = generate_episode(env, render=True)
 
+def generate_models(input_shape, n_actions):
+    if args.model == 'FORWARD':
+        policy_model =  = ForwardModel(input_shape, n_actions)
+    elif args.model == 'RNN':
+        policy_model =  = RNNModel(input_shape, n_actions)
+    value_model = ValueModel(input_shape)
+
+    return {'policy': policy_model,
+            'value':  value_model}
+
 def train(args):
     team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends + 1)]
     team_red  = [Agent(2 + idx, "red") for idx in range(args.n_enemies)]
@@ -114,11 +122,8 @@ def train(args):
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies
     
-    # setup model
-    if args.model == 'FORWARD':
-        model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-    elif args.model == 'RNN':
-        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+    # setup model   
+    models = generate_models(input_shape=args.n_inputs, n_actions=args.n_actions)
     
     for agent in training_agents:
         agent.set_model(model)
