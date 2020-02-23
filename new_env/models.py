@@ -14,6 +14,9 @@ class ForwardModel(nn.Module):
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
+    def init_hidden(self):
+        return 0.0
+
     def forward(self, inputs):
         x = process(inputs)
         x = F.relu(self.fc1(x))
@@ -21,21 +24,26 @@ class ForwardModel(nn.Module):
         logits = self.fc3(x)
         return logits
 
-class ValueModel(nn.Module):
-    def __init__(self, input_shape):
+class IACModel(nn.Module):
+    def __init__(self, input_shape, n_actions):
         super().__init__()
         self.fc1 = nn.Linear(input_shape, args.n_hidden)
         self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
-        self.fc3 = nn.Linear(args.n_hidden, 1)
+        self.policy = nn.Linear(args.n_hidden, n_actions)
+        self.value  = nn.Linear(args.n_hidden, 1)
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
+
+    def init_hidden(self):
+        return 0.0
 
     def forward(self, inputs):
         x = process(inputs)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        value = self.fc3(x)
-        return value    
+        logits = self.policy(x)
+        value  = self.value(x)
+        return value, logits
     
 class RNNModel(nn.Module):
     def __init__(self, input_shape, n_actions):

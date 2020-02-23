@@ -4,7 +4,8 @@ from collections import namedtuple
 import settings
 
 Experience = namedtuple('Experience', field_names = [
-    'state', 'actions', 'rewards', 'next_state', 'done', 'observations', 'hidden', 'next_obs', 'unavailable_actions'
+    'state', 'actions', 'rewards', 'next_state', 'done', 'observations',
+    'hidden', 'next_obs', 'unavailable_actions'
 ])
 
 class ExponentialScheduler:
