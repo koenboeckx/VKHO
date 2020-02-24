@@ -72,12 +72,7 @@ class IACAgent(Agent):
 
         rewards = torch.tensor([reward[self.team] for reward in rewards])
         returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
-        value, logits = self.model(observations)
-
-        probs = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        entropy = -(probs * log_probs).sum(dim=1)
-        mean_entropy = entropy.mean()
+        values, logits = self.model(observations)
 
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
 
@@ -86,19 +81,23 @@ class IACAgent(Agent):
             unavail_ids = [action.id for action in unavail_actions]
             logits[idx][unavail_ids] = -99999
 
-        next_val, _ = self.target_model(next_obs) # TODO: use target network and compare
-        target = rewards + args.gamma * next_val * (1.0 - dones)
-        advantage = target.detach() - value
+        next_vals, _ = self.target_model(next_obs) # TODO: use target network and compare
+        target = rewards + args.gamma * next_vals.squeeze() * (1.0 - dones)
+        advantage = target.detach() - values.squeeze() # TODO: detach  ok?
         advantage = advantage[self_alive_idx]        
 
         log_prob = F.log_softmax(logits, dim=-1)
         log_prob_act = log_prob[self_alive_idx, actions]
-        log_prob_act_val = advantage * log_prob_act
+        log_prob_act_val = advantage.detach() * log_prob_act # TODO: where to detach ?
         #log_prob_act_val = returns * log_prob_act
+
+        probs = F.softmax(logits, dim=1)
+        entropy = -(probs * log_prob).sum(dim=1)
+        loss_entropy = entropy.mean()
         
         loss_pol = -log_prob_act_val.mean()
         loss_val = advantage.pow(2).mean()
-        loss = loss_pol + loss_val
+        loss = loss_pol + loss_val - args.beta * loss_entropy # try to maximize entropy
 
         self.model.optimizer.zero_grad()
         loss.backward()
@@ -107,7 +106,7 @@ class IACAgent(Agent):
         return {'loss':         loss.item(),
                 'policy_loss':  loss_pol.item(),
                 'value_loss':   loss_val.item(),
-                'entropy':      mean_entropy.item(),
+                'entropy':      loss_entropy.item(),
         }
 
 def play_from_file(filename):
