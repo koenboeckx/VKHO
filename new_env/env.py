@@ -79,12 +79,12 @@ class Observation:
             if other is not agent:
                 other_pos = state.position[other]
                 rel_pos = other_pos[0]-own_pos[0], other_pos[1]-own_pos[1]
-                if other.team == agent.team: # same team -> friends
+                if other.team == agent.team:    # same team -> friends
                     if not state.alive[other]:
                         self.friends.append(False)
                     else:
                         self.friends.append(rel_pos)
-                else:
+                else:                           # other team -> enemies
                     if not state.alive[other]:
                         self.enemies.append(False)
                     else:

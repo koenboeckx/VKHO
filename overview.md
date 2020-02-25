@@ -151,3 +151,6 @@
     1. [22Feb20] TODO: to evaluate (I)QL: add possibility to set eps=0.0 in action selection so that always best action can be chosen during evaluation (<-> training)
     1. [22Feb20]: TODO: MongoDB: how extract info - make better figures
     1. [24Feb20]: IAC correctly impelemented (extension of PG) and working for 1v1 AND 2v2
+    1. [25Feb20]: implemented iterative training. 
+        * TODO: generalise function `train_iteratively` to work with all algorithms/agents
+        * TODO: after transfer to opponent: keep working with current model in stead of restarting from zero
