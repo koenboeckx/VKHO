@@ -18,9 +18,9 @@ class Args:
     clip =                  10
     scheduler_steps =       100000
     n_episodes_per_step =   25
-    n_enemies =             2
-    n_friends =             1
-    n_agents =              n_enemies + n_friends + 1
+    n_enemies =             3
+    n_friends =             3
+    n_agents =              n_enemies + n_friends
 
     mixer =                 'QMIX'      # 'VDN' or 'QMIX'
     model =                 'FORWARD'   # 'FORWARD' or 'RNN'

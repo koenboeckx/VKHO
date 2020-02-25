@@ -126,8 +126,8 @@ def generate_model(input_shape, n_actions):
     return model
 
 def train(args):
-    team_blue = [IACAgent(idx, "blue") for idx in range(args.n_friends + 1)]
-    team_red  = [Agent(args.n_friends + 1 + idx, "red") for idx in range(args.n_enemies)]
+    team_blue = [IACAgent(idx, "blue") for idx in range(args.n_friends)]
+    team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
     training_agents = team_blue
 
@@ -135,7 +135,7 @@ def train(args):
     env = Environment(agents)
 
     args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies
+    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
     
     # setup model   
     model = generate_model(input_shape=args.n_inputs, n_actions=args.n_actions)

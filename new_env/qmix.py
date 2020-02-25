@@ -13,7 +13,7 @@ from mixers import VDNMixer, QMixer
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'QMIX-{args.n_friends+1}v{args.n_enemies}')
+ex = Experiment(f'QMIX-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
@@ -90,8 +90,8 @@ def generate_models(input_shape, n_actions):
     return {"model": model, "target": target}
 
 def train(args):
-    team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends + 1)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
-    team_red  = [Agent(idx + args.n_friends + 1, "red") for idx in range(args.n_enemies)] 
+    team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
+    team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
 
@@ -99,7 +99,7 @@ def train(args):
     env = Environment(agents)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
-    args.n_inputs  = 4 + 3*args.n_friends + 3*args.n_enemies # see process function in models.py
+    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies # see process function in models.py
     models = generate_models(args.n_inputs, args.n_actions)
     for agent in training_agents:
         agent.set_model(models)
