@@ -26,7 +26,7 @@ class Args:
     model =                 'FORWARD'   # 'FORWARD' or 'RNN'
 
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
-    fixed_init_position =   False
+    fixed_init_position =   True
 
     n_iterations =          5
 

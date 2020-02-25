@@ -106,7 +106,7 @@ class Agent:
     
     def __str__(self):
         return str(self.id)
-    __repr__ = __str__
+    #__repr__ = __str__
     
     def set_env(self, env):
         self.env = env
@@ -166,7 +166,7 @@ class Environment:
     def reset(self):
         self.state = State(self.agents)
         self.unavailable_actions = self.get_unavailable_actions()
-        return self.state.copy()
+        return self.state.copy() # TODO: does this create problems?
     
     def get_state(self):
         return self.state

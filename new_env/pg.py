@@ -216,7 +216,8 @@ def train_iteratively(args):
     training_agents = train_agents(env, training_agents, args)
     trained_model = copy.deepcopy(training_agents[0].model)
     
-    for _ in range(args.n_iterations):
+    for iteration in range(args.n_iterations):
+        args.n_steps = 10000 * (iteration + 2)
         team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
         team_red  = [PGAgent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
