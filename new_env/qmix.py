@@ -1,3 +1,7 @@
+# TODO: ablations
+#           * QMIX-NS : QMIX without hypernetworks 
+
+
 import random
 
 import numpy as np
@@ -9,7 +13,7 @@ from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
 from models import ForwardModel, RNNModel
 from settings import args, Args
-from mixers import VDNMixer, QMixer
+from mixers import VDNMixer, QMixer, QMixer_NS
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -110,7 +114,10 @@ def train(args):
         target_mixer = VDNMixer()
     elif args.mixer == 'QMIX':
         mixer = QMixer()
-        target_mixer = QMixer() 
+        target_mixer = QMixer()
+    elif args.mixer == 'QMIX_NS':
+        mixer = QMixer_NS()
+        target_mixer = QMixer_NS()
 
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
@@ -136,6 +143,10 @@ def train(args):
         states, _, rewards, _, dones, _, _, _, _ = zip(*batch)
         current_q_tot   = mixer(current_qvals, states)
         predicted_q_tot = target_mixer(predicted_qvals, states)
+
+        # for test
+        #current_q_tot = current_qvals[agent]
+        #predicted_q_tot = predicted_qvals[agent]
         
         rewards = torch.tensor([reward["blue"] for reward in rewards])
         dones = torch.tensor(dones, dtype=torch.float)

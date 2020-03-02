@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import pygame
 import time
 import imageio # for generation of gifs
+import numpy as np
 
 from settings import args
 
@@ -22,6 +23,26 @@ def plot(id, keys, filename=None, show=True):
         ax.plot(x, y, label=key)
         plt.xlabel('episode')
     plt.legend()
+    if filename is not None:
+        plt.savefig(args.path+filename)
+    if show: plt.show()
+
+def plot_window(id, keys, window_size=100, filename=None, show=True):
+    "Plot values averaged over a window"
+    client = MongoClient('localhost', 27017)
+    db = client["my_database"]
+    metrics = db.metrics
+    fig, ax = plt.subplots()
+    for key in keys:
+        result = metrics.find_one({'run_id': id, 'name' : key})
+        x = np.array(result['steps'])
+        y = np.array(result['values'])
+        y_mean = np.convolve(y, np.ones((window_size,))/window_size, mode='valid')
+        x = x[range(len(y_mean))]
+        ax.plot(x, y_mean, label=key)
+        plt.xlabel('episode')
+    plt.legend()
+    plt.grid()
     if filename is not None:
         plt.savefig(args.path+filename)
     if show: plt.show()
@@ -155,8 +176,6 @@ def visualize(env, episode, period=None):
     pygame.display.update()
     input('Press any key to continue...')
 
-
-
 def create_gif(path):
     import imageio, os
     filenames = os.listdir(path)
@@ -166,8 +185,10 @@ def create_gif(path):
     imageio.mimsave(path+'movie.gif', images, 'GIF', duration=1)
 
 if __name__ == '__main__':
-    #plot(id=681, keys=['length', 'reward'], filename='test')
+    #plot(id=675, keys=['length', 'reward'], filename='test')
+    plot_window(id=675, keys=['reward', 'win_blue'], filename='test', window_size=200)
 
+    """
     from utilities import generate_episode
     from env import Environment, Agent
 
@@ -178,3 +199,4 @@ if __name__ == '__main__':
     episode = generate_episode(env)
     print(len(episode))
     visualize(env, episode)
+    """
