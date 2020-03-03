@@ -1,3 +1,4 @@
+
 Step 10: loss:  31.1073 - Average length:  6.20 - win ratio: 0.200 - 
 Step 15: loss:  25.4420 - Average length: 14.80 - win ratio: 0.600 - 
 Step 20: loss:  23.3012 - Average length: 14.40 - win ratio: 0.600 - 
