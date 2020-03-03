@@ -41,19 +41,19 @@ class QMixer_NS(nn.Module):
     ablation experimentation."""
     def __init__(self, embed_dim=64):
         super().__init__()
-        self.W1 = torch.rand((args.batch_size, embed_dim, args.n_friends))
-        self.b1 = torch.rand((args.batch_size, embed_dim, 1))
-        self.W2 = torch.rand((args.batch_size, 1, embed_dim))
-        self.b2 = torch.rand((args.batch_size, 1, 1))
+        self.W1 = torch.rand((args.n_friends, embed_dim)) # assumes all friends and only friends are training
+        self.b1 = torch.rand(embed_dim)
+        self.W2 = torch.rand(embed_dim, 1)
+        self.b2 = torch.rand(1)
         
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
+        agent_qs = process_qs(agent_qs) # add 3rd dimension: (bs x n_trainers)
         # real network updates
-        QW1 = torch.bmm(torch.abs(self.W1), agent_qs)   # (bs x embed_dim x 1)
-        Qb1 = F.elu(QW1 + self.b1)           # (bs x embed_dim x 1)
-        QW2 = torch.bmm(torch.abs(self.W2), Qb1)        # (bs x 1 x 1)
-        Qtot = QW2 + self.b2                 # (bs x 1 x 1)
-        return Qtot.squeeze()           # (bs)
+        QW1 = torch.matmul(agent_qs, torch.abs(self.W1))    # (bs x embed_dim)
+        Qb1 = F.elu(QW1 + self.b1)                          # (bs x embed_dim )
+        QW2 = torch.matmul(Qb1, torch.abs(self.W2))         # (bs x 1)
+        Qtot = QW2 + self.b2                                # (bs x 1)
+        return Qtot.squeeze()                               # (bs)
 
 
 class QMixer(nn.Module):

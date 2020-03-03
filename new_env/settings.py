@@ -1,13 +1,13 @@
 from utilities import LinearScheduler
 
 class Args:
-    n_steps =               50000
+    n_steps =               1000 #15000
     board_size =            7
     init_ammo =             5
     max_range =             5 # 3
     step_penalty =          0.01
     max_episode_length =    100
-    gamma =                 0.99
+    gamma =                 0.9
     n_hidden =              128
     scheduler =             LinearScheduler
     buffer_size =           500
@@ -18,12 +18,12 @@ class Args:
     clip =                  10
     scheduler_steps =       100000
     n_episodes_per_step =   25
-    n_enemies =             2
-    n_friends =             2
+    n_enemies =             1
+    n_friends =             1
     n_agents =              n_enemies + n_friends
 
-    mixer =                 'VDN'      # 'VDN' or 'QMIX' or 'QMIX_NS'
-    model =                 'RNN'   # 'FORWARD' or 'RNN'
+    mixer =                 'QMIX_NS'       # 'VDN' or 'QMIX' or 'QMIX_NS'
+    model =                 'RNN'       # 'FORWARD' or 'RNN'
 
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     fixed_init_position =   True
