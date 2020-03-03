@@ -1,7 +1,7 @@
 from utilities import LinearScheduler
 
 class Args:
-    n_steps =               1000 #15000
+    n_steps =               15000
     board_size =            7
     init_ammo =             5
     max_range =             5 # 3
@@ -13,7 +13,7 @@ class Args:
     buffer_size =           500
     batch_size =            128
     sync_interval =         90
-    lr =                    0.00005 #0.000001
+    lr =                     0.00005 # 0.000001 #
     beta =                  0.01 #0.05 #0.1 # entroply loss coefficient
     clip =                  10
     scheduler_steps =       100000

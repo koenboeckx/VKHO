@@ -95,7 +95,7 @@ def generate_models(input_shape, n_actions):
     target = RNNModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-@profile
+#@profile
 def train(args):
     team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
@@ -125,7 +125,7 @@ def train(args):
     buffer = ReplayBuffer(size=args.buffer_size)
     epi_len, nwins = 0, 0
 
-    #ex.log_scalar(f'win', 0.0, step=1) # forces start of run at 0 wins ()
+    ex.log_scalar(f'win', 0.0, step=1) # forces start of run at 0 wins ()
     for step_idx in range(args.n_steps):
         episode = generate_episode(env)
         buffer.insert_list(episode)
@@ -173,12 +173,12 @@ def train(args):
             #s += f"epsilon: {agent.scheduler():4.3f} - "
             print(s)
             epi_len, nwins = 0, 0
-        """
+        
         ex.log_scalar(f'length', len(episode), step=step_idx+1)
         ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
         ex.log_scalar(f'loss', loss.item(), step=step_idx+1)
         ex.log_scalar(f'reward', reward, step=step_idx+1)
-        """
+        
 
     for agent in training_agents:
         agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
@@ -200,10 +200,11 @@ def cgf():
     args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
 
 
-#@ex.automain
+@ex.automain
 def run(args):
     train(args)
     
-
+"""
 if __name__ == '__main__':
     train(args)
+"""
