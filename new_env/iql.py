@@ -59,9 +59,13 @@ class IQLAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
     def update(self, batch):
-        # TODO: exclude actions when not alive ??
+        # TODO: exclude update for observations/actions when not alive -> done
         _, actions, rewards, _, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
-        actions = [action[self].id for action in actions]
+
+        # only perform updates on actions performed while alive
+        self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
+
+        actions = [action[self].id for idx, action in enumerate(actions) if idx in self_alive_idx]
         rewards = torch.tensor([reward[self.team] for reward in rewards])
         observations = [obs[self] for obs in observations]
         next_obs = [obs[self] for obs in next_obs]
@@ -77,8 +81,7 @@ class IQLAgent(Agent):
         else:
             current_qvals = self.model(observations)
             predicted_qvals = self.model(next_obs)
-
-        current_qvals_actions = current_qvals[range(len(batch)), actions]
+        current_qvals_actions = current_qvals[self_alive_idx, actions]
         
         # Set unavailable action to very low Q-value !!
         for idx in range(len(unavailable_actions)):
@@ -88,6 +91,7 @@ class IQLAgent(Agent):
 
         predicted_qvals_max = predicted_qvals.max(1)[0]
         targets = rewards + args.gamma * (1.-dones) * predicted_qvals_max
+        targets = targets[self_alive_idx]
 
         self.model.optimizer.zero_grad()
         loss = F.mse_loss(current_qvals_actions, targets.detach())
