@@ -13,7 +13,7 @@ from torch.distributions import Categorical
 
 from env import *
 from utilities import Experience, generate_episode
-from models import IACModel
+from models import IACModel, IACRNNModel
 from settings import *
 
 from sacred import Experiment
@@ -26,12 +26,13 @@ class IACAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
         
-    def set_model(self, model):
-        self.model = model
-        self.target_model = copy.deepcopy(model)
+    def set_models(self, models):
+        self.model  = models['model']
+        self.target = models['target']
+        self.sync_models()
     
     def sync_models(self):
-        self.target_model.load_state_dict(self.model.state_dict())
+        self.target.load_state_dict(self.model.state_dict())
     
     def act(self, obs):
         if not obs.alive: # if not alive, do nothing
@@ -39,7 +40,10 @@ class IACAgent(Agent):
         
         unavailable_actions = self.env.get_unavailable_actions()[self]
         with torch.no_grad():
-            _, logits = self.model([obs])
+            if args.model == 'RNN':
+                _, logits, self.hidden_state = self.model([obs], self.hidden_state)
+            else:
+                _, logits = self.model([obs])
             
             for action in unavailable_actions:
                 logits[0][action.id] = -np.infty
@@ -62,17 +66,27 @@ class IACAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
     def update(self, batch):
-        _, actions, rewards, _, dones, observations, _, next_obs, unavail = zip(*batch)
+        _, actions, rewards, _, dones, observations, hidden, next_obs, unavail = zip(*batch)
         
         # only perform updates on actions performed while alive
         self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
         observations = [obs[self] for obs in observations]
         next_obs     = [obs[self] for obs in next_obs]
         dones = torch.tensor(dones, dtype=torch.float)
+        hidden = [hidden_state[self] for hidden_state in hidden]
 
         rewards = torch.tensor([reward[self.team] for reward in rewards])
         returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
-        values, logits = self.model(observations)
+        
+        if args.model == 'RNN':
+            logits = torch.zeros(len(batch), args.n_actions)
+            values = torch.zeros(len(batch), 1)
+            next_vals = torch.zeros(len(batch), 1)
+            for t in range(len(batch)):
+                values[t, :], logits[t, :], h = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+                next_vals[t, :], _, _ = self.target([next_obs[t]], h)
+        else:
+            values, logits = self.model(observations)        
 
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
 
@@ -80,8 +94,7 @@ class IACAgent(Agent):
             unavail_actions = unavail[idx][self]
             unavail_ids = [action.id for action in unavail_actions]
             logits[idx][unavail_ids] = -99999
-
-        next_vals, _ = self.target_model(next_obs) # TODO: use target network and compare
+        
         target = rewards + args.gamma * next_vals.squeeze() * (1.0 - dones)
         advantage = target.detach() - values.squeeze() # TODO: detach  ok?
         advantage = advantage[self_alive_idx]        
@@ -128,8 +141,13 @@ def play_from_file(filename):
     _ = generate_episode(env, render=True)
 
 def generate_model(input_shape, n_actions):
-    model = IACModel(input_shape, n_actions)
-    return model
+    if args.model == 'RNN':
+        model  = IACRNNModel(input_shape=input_shape, n_actions=n_actions)
+        target = IACRNNModel(input_shape=input_shape, n_actions=n_actions)
+    else:
+        model  = IACModel(input_shape=input_shape, n_actions=n_actions)
+        target = IACModel(input_shape=input_shape, n_actions=n_actions)
+    return {"model": model, "target": target}
 
 def train(args):
     team_blue = [IACAgent(idx, "blue") for idx in range(args.n_friends)]
@@ -144,10 +162,10 @@ def train(args):
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
     
     # setup model   
-    model = generate_model(input_shape=args.n_inputs, n_actions=args.n_actions)
+    models = generate_model(input_shape=args.n_inputs, n_actions=args.n_actions)
     
     for agent in training_agents:
-        agent.set_model(model)
+        agent.set_models(models)
 
     epi_len, nwins = 0, 0
     n_episodes = 0

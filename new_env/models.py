@@ -44,7 +44,33 @@ class IACModel(nn.Module):
         logits = self.policy(x)
         value  = self.value(x)
         return value, logits
+
+class IACRNNModel(nn.Module): # TODO: add last action as input
+    def __init__(self, input_shape, n_actions):
+        super().__init__()
+        self.rnn_hidden_dim = args.n_hidden
+        self.fc1 = nn.Linear(input_shape, args.n_hidden) 
+        self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
+
+        self.policy = nn.Linear(args.n_hidden, n_actions)
+        self.value  = nn.Linear(args.n_hidden, 1)
+
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
+    def init_hidden(self):
+        return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
+    
+    def forward(self, inputs, hidden_state):
+        x = process(inputs)
+        x = F.relu(self.fc1(x))
+        h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
+        h = self.rnn(x, h_in)
+        q = self.fc2(h)
+        logits = self.policy(q)
+        value  = self.value(q)
+        return value, logits, h
+
 class RNNModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions):
         super().__init__()
