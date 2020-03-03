@@ -11,37 +11,43 @@ import numpy as np
 
 from settings import args
 
-def plot(id, keys, filename=None, show=True):
+def plot(ids, keys, filename=None, show=True):
     client = MongoClient('localhost', 27017)
     db = client["my_database"]
     metrics = db.metrics
     fig, ax = plt.subplots()
     for key in keys:
-        result = metrics.find_one({'run_id': id, 'name' : key})
-        x = result['steps']
-        y = result['values']
-        ax.plot(x, y, label=key)
-        plt.xlabel('episode')
+        for id in ids:
+            result = metrics.find_one({'run_id': id, 'name' : key})
+            x = result['steps']
+            y = result['values']
+            ax.plot(x, y, label=key)
+            plt.xlabel('episode')
     plt.legend()
     if filename is not None:
         plt.savefig(args.path+filename)
     if show: plt.show()
 
-def plot_window(id, keys, window_size=100, filename=None, show=True):
+def plot_window(runs, keys, window_size=100, filename=None, show=True):
     "Plot values averaged over a window"
     client = MongoClient('localhost', 27017)
     db = client["my_database"]
     metrics = db.metrics
     fig, ax = plt.subplots()
     for key in keys:
-        result = metrics.find_one({'run_id': id, 'name' : key})
-        x = np.array(result['steps'])
-        y = np.array(result['values'])
-        y_mean = np.convolve(y, np.ones((window_size,))/window_size, mode='valid')
-        x = x[range(len(y_mean))]
-        ax.plot(x, y_mean, label=key)
-        plt.xlabel('episode')
-    plt.legend()
+        for run in runs:
+            result = metrics.find_one({'run_id': run, 'name' : key})
+            x = np.array(result['steps'])
+            y = np.array(result['values'])
+            y_mean = np.array([np.mean(y[idx-window_size:idx]) for idx in range(window_size, len(y))])
+            # TODO: remove term "0.1" below - variance should be taken over multiple runs
+            y_std  = 0.2*np.array([np.std(y[idx-window_size:idx])  for idx in range(window_size, len(y))])
+            x = x[range(len(y_mean))]
+            ax.plot(x, y_mean, label=f'{runs[run]} - {key}')
+            ax.fill_between(x, y_mean-y_std, y_mean+y_std, alpha=0.2)
+
+            plt.xlabel('episode')
+    plt.legend(loc='lower right')
     plt.grid()
     if filename is not None:
         plt.savefig(args.path+filename)
@@ -185,8 +191,15 @@ def create_gif(path):
     imageio.mimsave(path+'movie.gif', images, 'GIF', duration=1)
 
 if __name__ == '__main__':
-    #plot(id=675, keys=['length', 'reward'], filename='test')
-    plot_window(id=675, keys=['reward', 'win_blue'], filename='test', window_size=200)
+    #plot(ids=[672, 675], keys=['length', 'reward'], filename='test')
+    #plot_window(ids=[672, 675], keys=['reward', 'win_blue'], filename='test', window_size=200)
+
+    runs = {
+        #706:    'QMIX',
+        #707:    'VDN',
+        713:    'REINFORCE'
+    }
+    plot_window(runs=runs, keys=['grads0', 'grads1'], filename='test', window_size=500)
 
     """
     from utilities import generate_episode

@@ -26,7 +26,7 @@ class State:
             taken.append(position)
             self.position[agent] = position
 
-        if args.fixed_init_position: # set fixed initial position (only use for 2v2)
+        if args.fixed_init_position: # set fixed initial position (only use for 1v1 and 2v2)
             if args.n_friends == 1:
                 self.position[agents[0]] = (args.board_size//2, 0)
                 self.position[agents[1]] = (args.board_size//2, args.board_size-1)

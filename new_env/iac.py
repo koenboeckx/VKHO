@@ -18,7 +18,7 @@ from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'IAC-{args.n_friends+1}v{args.n_enemies}')
+ex = Experiment(f'IAC-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
@@ -103,10 +103,16 @@ class IACAgent(Agent):
         loss.backward()
         self.model.optimizer.step()
 
+        grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                for p in self.model.parameters()
+                                if p.grad is not None])
+
         return {'loss':         loss.item(),
                 'policy_loss':  loss_pol.item(),
                 'value_loss':   loss_val.item(),
                 'entropy':      loss_entropy.item(),
+                'grads_l2':     np.sqrt(np.mean(np.square(grads))),
+                'grads_var':    np.var(grads),
         }
 
 def play_from_file(filename):
@@ -164,11 +170,13 @@ def train(args):
                 nwins += 1
 
         for agent in training_agents:
-            loss = agent.update(batch)
-            ex.log_scalar(f'policy_loss{agent.id}', loss['policy_loss'], step=n_episodes)
-            ex.log_scalar(f'value_loss{agent.id}',  loss['value_loss'],  step=n_episodes)
-            ex.log_scalar(f'loss{agent.id}', loss['loss'], step=n_episodes)
-            ex.log_scalar(f'entropy{agent.id}', loss['entropy'], step=n_episodes)
+            stats = agent.update(batch)
+            ex.log_scalar(f'policy_loss{agent.id}', stats['policy_loss'], step=n_episodes)
+            ex.log_scalar(f'value_loss{agent.id}',  stats['value_loss'],  step=n_episodes)
+            ex.log_scalar(f'loss{agent.id}', stats['loss'], step=n_episodes)
+            ex.log_scalar(f'entropy{agent.id}', stats['entropy'], step=n_episodes)
+            ex.log_scalar(f'grads{agent.id}', stats["grads_l2"], step=n_episodes)
+            ex.log_scalar(f'grads_var{agent.id}', stats["grads_var"], step=n_episodes)
 
             if step_idx % 50 == 0: #args.sync_interval == 0:
                 agent.sync_models()

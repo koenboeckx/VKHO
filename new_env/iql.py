@@ -12,7 +12,7 @@ from settings import Args, args
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'QL--{args.n_friends}v{args.n_enemies}')')
+ex = Experiment(f'QL-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 
@@ -131,6 +131,7 @@ def train(args):
             continue
         
         epi_len += len(episode)
+        reward = episode[-1].rewards["blue"]
         if episode[-1].rewards["blue"] == 1:
             nwins += 1
         batch = buffer.sample(args.batch_size)
@@ -154,6 +155,7 @@ def train(args):
 
         ex.log_scalar(f'length', len(episode), step=step_idx+1)
         ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
+        ex.log_scalar(f'reward', reward, step=step_idx+1)
     
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:

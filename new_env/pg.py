@@ -89,8 +89,15 @@ class PGAgent(Agent):
         self.model.optimizer.zero_grad()
         loss.backward()
         self.model.optimizer.step()
+
+        grads = np.concatenate([p.grad.data.cpu().numpy().flatten()
+                                for p in self.model.parameters()
+                                if p.grad is not None])
         
-        return loss.item()
+        return {'loss':         loss.item(),
+                'grads_l2':     np.sqrt(np.mean(np.square(grads))),
+                'grads_var':    np.var(grads),
+        }
 
 def play_from_file(filename):
     model = ForwardModel(input_shape=13, n_actions=7)
@@ -146,8 +153,11 @@ def train(args):
                 nwins += 1
 
         for agent in training_agents:
-            loss = agent.update(batch)
-            ex.log_scalar(f'loss{agent.id}', loss, step=n_episodes)
+            stats = agent.update(batch)
+            ex.log_scalar(f'loss{agent.id}', stats["loss"], step=n_episodes)
+            ex.log_scalar(f'grads{agent.id}', stats["grads_l2"], step=n_episodes)
+            ex.log_scalar(f'grads_var{agent.id}', stats["grads_var"], step=n_episodes)
+
 
         s  = f"Step {step_idx}: "
         s += f"Average length: {epi_len/args.n_episodes_per_step:5.2f} - "
@@ -298,8 +308,8 @@ def cgf():
 
 @ex.automain
 def run(args):
-    #train(args)
-    train_iteratively(args)
+    train(args)
+    #train_iteratively(args)
     #test_transferability(args, 'RUN_667.torch')
 
 """
