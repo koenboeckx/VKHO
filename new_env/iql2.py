@@ -7,11 +7,15 @@ import random
 
 import numpy as np
 import torch
+from torch.nn import functional as F
 
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
 from models import RNNModel
+from mixers import QMixer, QMixer_NS
 from env import Environment, Agent, Action
 from settings import args # to replace with sacred
+
+# TODO: update generate_episode and Experience so that observation is stored as tensor
 
 class QMIXAgent(Agent):
     def __init__(self, id, team):
@@ -47,27 +51,67 @@ class QMIXAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
 
-
-
 class MultiAgentController:
     def __init__(self, env, agents, models):
         self.env = env # check needed here?
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
+        self.mixer  = QMixer_NS()
+        parameters = list(self.model.parameters()) + list(self.mixer.parameters())
+        self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
+        
+    def update(self, batch): 
+        obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
 
-    def update(self, batch):
+        current_q_vals   = torch.zeros((len(obs), args.n_actions))
+        predicted_q_vals = torch.zeros((len(obs), args.n_actions))
+        for t in range(len(obs)):
+            current_q_vals[t, :],   h = self.model([obs[t]], hidden[t])
+            predicted_q_vals[t, :], _ = self.model([next_obs[t]], h) # TODO: should be target
         
+        current_q_vals_actions = current_q_vals[range(len(obs)), actions]
+        current_q_vals_actions = current_q_vals_actions.reshape((-1, len(self.agents)))
+        predicted_q_vals_max = predicted_q_vals.max(1)[0].reshape((-1, len(self.agents)))
+
+        # TODO: do states
+        states, next_states = None, None
+
+        current_q_tot   = self.mixer(current_q_vals_actions, states)
+        predicted_q_tot = self.mixer(predicted_q_vals_max, next_states)
+        target = rewards + args.gamma * (1. - dones) * predicted_q_tot
         
-        print('wait')
-    
+        loss = F.mse_loss(current_q_tot, target.detach())
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
+        
     def transform_batch(self, batch):
         """Transforms the inputs of a batch in set of tensors"""
         states, actions, rewards, next_state, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
         obs_list = []
         for obs in observations:
-            for agent in self.agents:
-                obs_list.append(obs[agent])
+            obs_list.extend([obs[agent] for agent in self.agents])
+        
+        next_obs_list = []
+        for obs in next_obs:
+            next_obs_list.extend([obs[agent] for agent in self.agents])
+        
+        hidden_list = []
+        for hid in hidden:
+            hidden_list.extend([hid[agent] for agent in self.agents])
+        
+        action_list = []
+        for action in actions:
+            action_list.extend([action[agent].id for agent in self.agents])
+
+        rewards = torch.tensor([reward["blue"] for reward in rewards])
+        dones = torch.tensor(dones, dtype=torch.float)
+        
+        return obs_list, hidden_list, next_obs_list, action_list, rewards, dones
+        
 
 def generate_models(input_shape, n_actions):
     model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
@@ -97,7 +141,9 @@ def train():
         if len(buffer) < args.batch_size:
             continue
         batch = buffer.sample(args.batch_size)
-        mac.update(batch)
+        loss = mac.update(batch)
+
+        print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
 
 if __name__ == '__main__':
     train()

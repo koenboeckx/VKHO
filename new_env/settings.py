@@ -13,7 +13,7 @@ class Args:
     buffer_size =           500
     batch_size =            16
     sync_interval =         90
-    lr =                     0.00005 # 0.000001 #
+    lr =                    0.0005 # 0.000001 #
     beta =                  0.01 #0.05 #0.1 # entroply loss coefficient
     clip =                  10
     scheduler_steps =       100000

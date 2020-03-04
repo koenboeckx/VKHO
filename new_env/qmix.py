@@ -154,6 +154,7 @@ def train():
         dones = torch.tensor(dones, dtype=torch.float)
         targets = rewards + args.gamma * (1.-dones) * predicted_q_tot
 
+        ### !!!! TODO: mixer optimizer ?? ###
         models["model"].zero_grad()
         loss = F.mse_loss(current_q_tot, targets.detach())
         loss.backward()

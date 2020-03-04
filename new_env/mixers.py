@@ -47,7 +47,7 @@ class QMixer_NS(nn.Module):
         self.b2 = torch.rand(1)
         
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs) # add 3rd dimension: (bs x n_trainers)
+        #agent_qs = process_qs(agent_qs) # add 3rd dimension: (bs x n_trainers)
         # real network updates
         QW1 = torch.matmul(agent_qs, torch.abs(self.W1))    # (bs x embed_dim)
         Qb1 = F.elu(QW1 + self.b1)                          # (bs x embed_dim )
