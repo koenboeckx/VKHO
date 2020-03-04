@@ -76,7 +76,8 @@ class IQLAgent(Agent):
             predicted_qvals = torch.zeros(len(batch), args.n_actions)
             for t in range(len(batch)): # TODO: verify: is this correct?
                 current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
-                predicted_qvals[t, :], _ = self.model([next_obs[t]], h) # TODO: why not target?
+                #predicted_qvals[t, :], _ = self.model([next_obs[t]], h) # TODO: why not target?
+                predicted_qvals[t, :], _ = self.target([next_obs[t]], h)
         else:
             current_qvals = self.model(observations)
             predicted_qvals = self.model(next_obs)
@@ -139,7 +140,6 @@ def train(args):
             nwins += 1
         batch = buffer.sample(args.batch_size)
         for agent in training_agents:
-            # TODO: how to handle update on dead agents?
             loss = agent.update(batch)
             if step_idx > 0 and step_idx % args.sync_interval == 0:
                 agent.sync_models()

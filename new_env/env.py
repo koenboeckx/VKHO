@@ -50,9 +50,6 @@ class State:
         return s
     __repr__ = __str__
 
-    def copy(self):
-        return copy.deepcopy(self)
-
     def generate_position(self, board_size):
         position = (random.randint(0, board_size-1),
                     random.randint(0, board_size-1))
@@ -149,8 +146,6 @@ class Agent:
 class Environment:
     def __init__(self, agents):
         self.register_agents(agents)
-        #self.actions = 0
-        #self.n_actions = len(self.actions)
         self.state = State(self.agents)
         self.board_size = args.board_size
     
@@ -166,7 +161,7 @@ class Environment:
     def reset(self):
         self.state = State(self.agents)
         self.unavailable_actions = self.get_unavailable_actions()
-        return self.state.copy() # TODO: does this create problems?
+        return self.state
     
     def get_state(self):
         return self.state
@@ -295,7 +290,7 @@ class Environment:
             raise ValueError(f'Unknown team {terminal}')
         return rewards
     
-    def get_rewards(self, state): # TODO: return reward per team, not per agent
+    def get_rewards(self, state):
         terminal = self.terminal(state)
         if terminal == 'out-of-ammo': # because all out of ammo
             rewards = {'blue': -1, 'red': -1}

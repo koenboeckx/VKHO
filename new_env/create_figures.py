@@ -19,6 +19,6 @@ runs = {
         713:    'REINFORCE',
         714:    'IAC',
         #716:    'IQL',
-        733:    'IQL'
+        737:    'IQL'
 }
 plot_window(runs=runs, keys=['reward'], filename='compare_reward', window_size=1000, show=True)

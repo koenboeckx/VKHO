@@ -7,7 +7,7 @@ class Args:
     max_range =             5 # 3
     step_penalty =          0.01
     max_episode_length =    100
-    gamma =                 0.9
+    gamma =                 0.99
     n_hidden =              128
     scheduler =             LinearScheduler
     buffer_size =           500

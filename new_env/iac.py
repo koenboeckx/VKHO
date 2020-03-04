@@ -212,7 +212,7 @@ def train(args):
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:
         agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(model.state_dict(), path+f'RUN_{get_run_id()}.torch')
+    torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
 
 
 # -------------------------------------------------------------------------------------
