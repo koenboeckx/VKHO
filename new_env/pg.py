@@ -15,8 +15,7 @@ from sacred.observers import MongoObserver
 ex = Experiment(f'PG-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML
-args = get_args(ex)                               
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML                          
 
 class PGAgent(Agent):
     def __init__(self, id, team):
@@ -112,7 +111,7 @@ def play_from_file(filename):
     env = Environment(agents)
     _ = generate_episode(env, render=True)
 
-def train(args):
+def train():
     team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
@@ -302,8 +301,10 @@ def get_run_id(_run): # enables saving model with run id
     return _run._id
 
 @ex.automain
-def run():
-    train(args)
+def run(_config):
+    global args
+    args = get_args(_config)
+    train()
     #train_iteratively(args)
     #test_transferability(args, 'RUN_667.torch')
 

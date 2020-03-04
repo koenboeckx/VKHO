@@ -8,15 +8,14 @@ from torch.nn import functional as F
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
 from models import ForwardModel, RNNModel
-from settings import Args, args
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'QL-{args.n_friends}v{args.n_enemies}')
+#ex = Experiment(f'IQL-{args.n_friends}v{args.n_enemies}')
+ex = Experiment('IQL')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML
-args = get_args(ex)                                
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML                            
 
 class IQLAgent(Agent):
     def __init__(self, id, team):
@@ -61,7 +60,6 @@ class IQLAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
     def update(self, batch):
-        # TODO: exclude update for observations/actions when not alive -> done
         _, actions, rewards, _, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
 
         # only perform updates on actions performed while alive
@@ -112,7 +110,7 @@ def generate_models(input_shape, n_actions):
         target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-def train(args):
+def train():
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
@@ -177,8 +175,10 @@ def get_run_id(_run):
     return _run._id
 
 @ex.automain
-def run():
-    train(args)
+def run(_config):
+    global args
+    args = get_args(_config)
+    train()
 
 """
 if __name__ == '__main__':

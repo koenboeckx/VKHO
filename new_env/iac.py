@@ -21,8 +21,7 @@ from sacred.observers import MongoObserver
 ex = Experiment(f'IAC-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML
-args = get_args(ex)                                 
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML                             
 
 class IACAgent(Agent):
     def __init__(self, id, team):
@@ -151,7 +150,7 @@ def generate_model(input_shape, n_actions):
         target = IACModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-def train(args):
+def train():
     team_blue = [IACAgent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
@@ -226,8 +225,10 @@ def get_run_id(_run):
     #print(_run.experiment_info["name"])
 
 @ex.automain
-def run():
-    train(args)
+def run(_config):
+    global args
+    args = get_args(_config)
+    train()
 
 """
 if __name__ == '__main__':

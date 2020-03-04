@@ -12,15 +12,14 @@ from torch.nn import functional as F
 from env import Action, Agent, Environment
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
 from models import ForwardModel, RNNModel
-from settings import args, Args
 from mixers import VDNMixer, QMixer, QMixer_NS
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'{args.mixer}-{args.n_friends}v{args.n_enemies}')
+ex = Experiment('QMIX')
 ex.observers.append(MongoObserver(url='localhost',
-                                db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML
+                                  db_name='my_database'))
+ex.add_config('new_env/default_config.yaml')
 args = get_args(ex)                                   
 
 class QMixAgent(Agent):
@@ -96,8 +95,7 @@ def generate_models(input_shape, n_actions):
     target = RNNModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-#@profile
-def train(args):
+def train():
     team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
@@ -196,8 +194,10 @@ def get_run_id(_run):
     return _run._id
 
 @ex.automain
-def run():
-    train(args)
+def run(_config):
+    global args
+    args = get_args(_config)
+    train()
     
 """
 if __name__ == '__main__':
