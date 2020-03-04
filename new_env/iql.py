@@ -21,8 +21,9 @@ args = get_args(ex)
 class IQLAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
-        self.scheduler = args.scheduler(start=1.0, stop=0.1,
-                                        steps=args.scheduler_steps)
+        if args.scheduler == 'LinearScheduler':
+            self.scheduler = LinearScheduler(start=1.0, stop=0.1,
+                                            steps=args.scheduler_steps)
 
     def set_model(self, models):
         self.model  = models['model']
