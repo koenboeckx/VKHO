@@ -7,15 +7,16 @@ from torch.nn import functional as F
 from torch.distributions import Categorical
 
 from env import *
-from utilities import Experience, generate_episode
+from utilities import Experience, generate_episode, get_args
 from models import ForwardModel, RNNModel
-from settings import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
 ex = Experiment(f'PG-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML
+args = get_args(ex)                               
 
 class PGAgent(Agent):
     def __init__(self, id, team):
@@ -297,17 +298,11 @@ def test_transferability(args, filename):
 PRINT_INTERVAL = 100
 
 @ex.capture
-def get_run_id(_run):
+def get_run_id(_run): # enables saving model with run id
     return _run._id
-    #print(_run.experiment_info["name"])
-
-@ex.config
-def cgf():
-    args = args
-    args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
 
 @ex.automain
-def run(args):
+def run():
     train(args)
     #train_iteratively(args)
     #test_transferability(args, 'RUN_667.torch')

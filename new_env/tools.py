@@ -12,7 +12,8 @@ import numpy as np
 from settings import args
 
 def plot(ids, keys, filename=None, show=True):
-    client = MongoClient('localhost', 27017)
+    #client = MongoClient('localhost', 27017)
+    client = MongoClient('ampere.elte.rma.ac.be', 27017)
     db = client["my_database"]
     metrics = db.metrics
     fig, ax = plt.subplots()
@@ -30,7 +31,8 @@ def plot(ids, keys, filename=None, show=True):
 
 def plot_window(runs, keys, window_size=100, filename=None, show=True):
     "Plot values averaged over a window"
-    client = MongoClient('localhost', 27017)
+    #client = MongoClient('localhost', 27017)
+    client = MongoClient('ampere.elte.rma.ac.be', 27017)
     db = client["my_database"]
     metrics = db.metrics
     fig, ax = plt.subplots()
@@ -199,7 +201,8 @@ if __name__ == '__main__':
         #707:    'VDN',
         713:    'REINFORCE'
     }
-    plot_window(runs=runs, keys=['grads0', 'grads1'], filename='test', window_size=500)
+    runs = {1: 'REINFORCE'}
+    plot_window(runs=runs, keys=['reward'], filename='test', window_size=500)
 
     """
     from utilities import generate_episode

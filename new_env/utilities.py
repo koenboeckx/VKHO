@@ -95,6 +95,15 @@ def generate_episode(env, render=False):
         print(f"Game won by team {env.terminal(next_state)}")
     return episode
 
+def get_args(ex):
+    class Args:
+        def __init__(self):
+            dictionary = ex.configurations[0]._conf
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
+            self.n_agents = self.n_enemies + self.n_friends
+    return Args()
+
 if __name__ == '__main__':
     from env import Environment, Agent
     from settings import args

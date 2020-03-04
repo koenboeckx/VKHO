@@ -10,7 +10,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from env import Action, Agent, Environment
-from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode
+from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
 from models import ForwardModel, RNNModel
 from settings import args, Args
 from mixers import VDNMixer, QMixer, QMixer_NS
@@ -20,8 +20,8 @@ from sacred.observers import MongoObserver
 ex = Experiment(f'{args.mixer}-{args.n_friends}v{args.n_enemies}')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-
-from profilehooks import profile                            
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML
+args = get_args(ex)                                   
 
 class QMixAgent(Agent):
     def __init__(self, id, team):
@@ -194,14 +194,8 @@ RENDER = False
 def get_run_id(_run):
     return _run._id
 
-@ex.config
-def cgf():
-    args = args
-    args_dict = dict([(key, Args.__dict__[key]) for key in Args.__dict__ if key[0] != '_'])
-
-
 @ex.automain
-def run(args):
+def run():
     train(args)
     
 """
