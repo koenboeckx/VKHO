@@ -161,10 +161,9 @@ def train():
         ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
         ex.log_scalar(f'reward', reward, step=step_idx+1)
     
-    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
     for agent in training_agents:
-        agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), path+f'RUN_{get_run_id()}.torch')
+        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
 #----------------------------------  run  -------------------------------------
 
 PRINT_INTERVAL = 5
