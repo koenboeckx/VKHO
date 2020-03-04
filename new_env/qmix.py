@@ -19,8 +19,7 @@ from sacred.observers import MongoObserver
 ex = Experiment('QMIX')
 ex.observers.append(MongoObserver(url='localhost',
                                   db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')
-args = get_args(ex)                                   
+ex.add_config('new_env/default_config.yaml')                            
 
 class QMixAgent(Agent):
     def __init__(self, id, team):

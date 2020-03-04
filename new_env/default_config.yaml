@@ -11,7 +11,7 @@ fixed_init_position: True # start from fixed initial position for all agents?
 n_friends: 2              # number of friends (team "blue")
 n_enemies: 2              # number of enemies (team "red")
 
-path: '/home/koen/Programming/VKHO/new_env/agent_dumps/'
+path: '~/Programming/VKHO/new_env/agent_dumps/'
 
 # --- general marl parameters
 n_steps: 15000            # number of episodes to generate

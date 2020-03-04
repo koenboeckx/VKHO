@@ -111,7 +111,7 @@ def generate_models(input_shape, n_actions):
     return {"model": model, "target": target}
 
 def train():
-    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
+    team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
@@ -143,7 +143,7 @@ def train():
         for agent in training_agents:
             loss = agent.update(batch)
             if step_idx > 0 and step_idx % args.sync_interval == 0:
-                agent.sync_models()
+                agent.sync_models() # TODO: same models get synced for all agents => to correct
 
             ex.log_scalar(f'loss{agent.id}', loss, step=step_idx)
             ex.log_scalar(f'epsilon', agent.scheduler(), step=step_idx)

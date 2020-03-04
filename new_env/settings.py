@@ -1,4 +1,4 @@
-from utilities import LinearScheduler
+#from utilities import LinearScheduler
 
 class Args:
     n_steps =               15000
@@ -9,9 +9,9 @@ class Args:
     max_episode_length =    100
     gamma =                 0.9
     n_hidden =              128
-    scheduler =             LinearScheduler
+    #scheduler =             LinearScheduler
     buffer_size =           500
-    batch_size =            128
+    batch_size =            16
     sync_interval =         90
     lr =                     0.00005 # 0.000001 #
     beta =                  0.01 #0.05 #0.1 # entroply loss coefficient
