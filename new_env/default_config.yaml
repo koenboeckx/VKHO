@@ -1,29 +1,54 @@
 # --- Defaults ---
 
-n_steps: 100    # number of episodes to generate
-board_size: 7
-init_ammo: 5
-max_range: 5
-step_penalty: 0.01
-max_episode_length: 100
-gamma: 0.9
-n_hidden: 128
-scheduler: LinearScheduler
-buffer_size: 500
-batch_size: 128
-sync_interval: 90
-lr: 0.00005 # 0.000001 #
-beta: 0.01 #0.05 #0.1 # entroply loss coefficient
-clip: 10
-scheduler_steps: 100000
-n_episodes_per_step: 25
-n_enemies: 2
-n_friends: 2
-
-mixer: 'QMIX_NS'       # 'VDN' or 'QMIX' or 'QMIX_NS'
-model: 'RNN'       # 'FORWARD' or 'RNN'
+# --- Environment options ---
+board_size: 7             # size of the board
+init_ammo: 5              # initial ammo of a tank
+max_range: 5              # maximum firing range of a tank
+step_penalty: 0.01        # penalty for taking a step
+max_episode_length: 100   # maximum length of an episode
+gamma: 0.9                # discount factor
+fixed_init_position: True # start from fixed initial position for all agents?
+n_friends: 2              # number of friends (team "blue")
+n_enemies: 2              # number of enemies (team "red")
 
 path: '/home/koen/Programming/VKHO/new_env/agent_dumps/'
-fixed_init_position: True
 
-n_iterations: 5
+# --- general marl parameters
+n_steps: 15000            # number of episodes to generate
+gamma: 0.9                # discount factor
+
+model: 'RNN'              # type of neural network: 'FORWARD' or 'RNN
+n_hidden: 128             # number of hidden layers
+lr: 0.00005               # learning rate for ADAM
+n_iterations: 5           # nubmer of iterations for transfer learning
+
+# --- policy gradient parameters
+beta: 0.01                # entropy loss coefficient
+n_episodes_per_step: 25   # number of episodes to generate per update step
+
+# --- q-learning parameters
+scheduler: 'LinearScheduler'  # type of scheduler to use
+scheduler_steps: 100000       # maximum number of steps before deactivating scheduler
+buffer_size: 500              # size of the replay buffer
+batch_size: 128               # number of samples from replay buffer per update
+sync_interval: 90             # number of updates before syncing target model with current model
+clip: 10                      # gradient clip rate
+
+# --- QMix parameters
+mixer: 'QMIX_NS'              # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
+
+
+
+
+
+
+
+
+
+
+'
+
+
+
+
+

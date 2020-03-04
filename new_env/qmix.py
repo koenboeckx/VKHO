@@ -28,7 +28,7 @@ class QMixAgent(Agent):
         super().__init__(id, team)
         if args.scheduler == 'LinearScheduler':
             self.scheduler = LinearScheduler(start=1.0, stop=0.1,
-                                        steps=args.scheduler_steps)
+                                             steps=args.scheduler_steps)
         
     def set_model(self, models):
         self.model  = models['model']

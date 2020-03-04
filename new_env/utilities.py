@@ -96,6 +96,7 @@ def generate_episode(env, render=False):
     return episode
 
 def get_args(ex):
+    "Generate an args Class based on the entries from the yaml config file"
     class Args:
         def __init__(self):
             dictionary = ex.configurations[0]._conf
