@@ -154,3 +154,4 @@
     1. [25Feb20]: implemented iterative training. 
         * TODO: generalise function `train_iteratively` to work with all algorithms/agents
         * TODO: after transfer to opponent: keep working with current model in stead of restarting from zero
+    1. [06Mar20]: reimplemented QMIX with `MultiAgentController`
