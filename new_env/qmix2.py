@@ -13,9 +13,13 @@ from torch.nn import functional as F
 from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
 from models import RNNModel
 from env import Environment, Agent, Action, Observation
-from settings import args # to replace with sacred
 
-# TODO: update generate_episode and Experience so that observation is stored as tensor
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment(f'QMIX')
+ex.observers.append(MongoObserver(url='localhost',
+                                db_name='my_database'))
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
 class QMixModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions):
@@ -86,7 +90,7 @@ class QMIXAgent(Agent):
     def set_model(self, models):
         self.model  = models['model']
     
-    def act(self, obs):
+    def act(self, obs, eps=0.0):
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
@@ -202,7 +206,9 @@ class MultiAgentController:
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
-        self.mixer  = QMixer()
+        self.mixer        = QMixer()
+        self.target_mixer = QMixer()
+        self.sync_networks()
         parameters = list(self.model.parameters()) + list(self.mixer.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
         
@@ -228,8 +234,9 @@ class MultiAgentController:
             predicted_q_vals[t, :,  :], _ = self.model(next_obs[t], h) # TODO: should be target
         
         # gather q-vals corresponding to the actions taken
-        current_q_vals_actions = current_q_vals.reshape(2*batch_size, -1)[range(batch_size * len(self.agents)), actions.reshape(-1)]
-        current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)
+        current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
+        current_q_vals_actions = current_q_vals[range(batch_size * len(self.agents)), actions.reshape(-1)] # select qval for action
+        current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)     # restore to (batch_size x n_agents)
         predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
 
@@ -243,6 +250,10 @@ class MultiAgentController:
         self.optimizer.step()
 
         return loss.item()
+    
+    def sync_networks(self):
+        self.target.load_state_dict(self.model.state_dict())
+        self.target_mixer.load_state_dict(self.mixer.state_dict())
         
 
 def generate_models(input_shape, n_actions):
@@ -278,8 +289,26 @@ def train():
         
         loss = mac.update(batch)
 
-        if step_idx > 0 and step_idx%PRINT_INTERVAL == 0:
+        ex.log_scalar('length', len(episode))
+        ex.log_scalar('reward', episode[-1].rewards["blue"])
+        ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
+        ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
+        ex.log_scalar('loss', loss)
+
+        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
         
-if __name__ == '__main__':
+        if step_idx % args.sync_interval == 0:
+            print('Syncing networks ...')
+            mac.sync_networks()
+
+#--------------------------------------------------------------------        
+@ex.capture
+def get_run_id(_run): # enables saving model with run id
+    return _run._id
+
+@ex.automain
+def run(_config):
+    global args
+    args = get_args(_config)
     train()

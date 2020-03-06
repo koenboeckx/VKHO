@@ -31,7 +31,7 @@ scheduler: 'LinearScheduler'  # type of scheduler to use
 scheduler_steps: 100000       # maximum number of steps before deactivating scheduler
 buffer_size: 500              # size of the replay buffer
 batch_size: 128               # number of samples from replay buffer per update
-sync_interval: 90             # number of updates before syncing target model with current model
+sync_interval: 100            # number of updates before syncing target model with current model
 clip: 10                      # gradient clip rate
 
 # --- QMix parameters

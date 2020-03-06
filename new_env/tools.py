@@ -201,8 +201,8 @@ if __name__ == '__main__':
         #707:    'VDN',
         713:    'REINFORCE'
     }
-    runs = {18: 'IQL'}
-    plot_window(runs=runs, keys=['reward'], filename='test', window_size=1000)
+    runs = {31: 'IQL'}
+    plot_window(runs=runs, keys=['reward'], filename='test', window_size=500)
 
     """
     from utilities import generate_episode
