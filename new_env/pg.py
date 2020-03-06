@@ -166,11 +166,12 @@ def train():
         epi_len, nwins = 0, 0
 
         #_ = generate_episode(env, render=True)
-    
-    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
+
+    from os.path import expanduser
+    home = expanduser("~")
     for agent in training_agents:
-        agent.save(path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(model.state_dict(), path+f'RUN_{get_run_id()}.torch')
+        agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(model.state_dict(), home+args.path+f'RUN_{get_run_id()}.torch')
 
 def train_agents(env, training_agents, args):
     epi_len, nwins = 0, 0

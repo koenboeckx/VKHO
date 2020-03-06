@@ -161,9 +161,11 @@ def train():
         ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
         ex.log_scalar(f'reward', reward, step=step_idx+1)
     
+    from os.path import expanduser
+    home = expanduser("~")
     for agent in training_agents:
-        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
+        agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(model.state_dict(), home+args.path+f'RUN_{get_run_id()}.torch')
 #----------------------------------  run  -------------------------------------
 
 PRINT_INTERVAL = 5

@@ -39,6 +39,47 @@ class QMixModel(nn.Module): # TODO: add last action as input
         q = self.fc2(h)
         return q, h
 
+class QMixer(nn.Module):
+    def __init__(self, embed_dim=64):
+        super().__init__()
+        # Hypernetwork
+        self.n_trainers = args.n_friends # assumes all friends are learning
+        self.embed_dim = embed_dim
+        self.state_dim = 5 * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
+        self.HW1 = nn.Linear(self.state_dim, embed_dim * self.n_trainers)
+        self.Hb1 = nn.Linear(self.state_dim, embed_dim)
+        self.HW2 = nn.Linear(self.state_dim, embed_dim)
+        self.Hb2 = nn.Sequential(
+            nn.Linear(self.state_dim, embed_dim),
+            nn.ReLU(),
+            nn.Linear(embed_dim, 1)
+        )
+
+    def forward(self, agent_qs, states):
+        agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
+        states = process_states(states)
+
+        # computes matrices via hypernetwork
+        states = states.reshape(-1, self.state_dim)
+        W1 = torch.abs(self.HW1(states))
+        W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
+        
+        b1 = self.Hb1(states)
+        b1 = b1.reshape(-1, self.embed_dim, 1)
+        
+        W2 = torch.abs(self.HW2(states))
+        W2 = W2.reshape(-1, 1, self.embed_dim)
+        
+        b2 = F.relu(self.Hb2(states))
+        b2 = b2.reshape(-1, 1, 1)
+
+        # real network updates
+        QW1 = torch.bmm(W1, agent_qs)   # (bs x embed_dim x 1)
+        Qb1 = F.elu(QW1 + b1)           # (bs x embed_dim x 1)
+        QW2 = torch.bmm(W2, Qb1)        # (bs x 1 x 1)
+        Qtot = QW2 + b2                 # (bs x 1 x 1)
+        return Qtot.squeeze()           # (bs)
+
 class QMIXAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
@@ -164,7 +205,7 @@ class MultiAgentController:
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
-        self.mixer  = QMixer_NS()
+        self.mixer  = QMixer()
         parameters = list(self.model.parameters()) + list(self.mixer.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
         

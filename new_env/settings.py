@@ -22,7 +22,7 @@ class Args:
     n_friends =             2
     n_agents =              n_enemies + n_friends
 
-    mixer =                 'QMIX_NS'       # 'VDN' or 'QMIX' or 'QMIX_NS'
+    mixer =                 'QMIX'       # 'VDN' or 'QMIX' or 'QMIX_NS'
     model =                 'RNN'       # 'FORWARD' or 'RNN'
 
     path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
