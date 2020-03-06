@@ -12,7 +12,6 @@ from torch.nn import functional as F
 
 from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
 from models import RNNModel
-from mixers import QMixer, QMixer_NS
 from env import Environment, Agent, Action, Observation
 from settings import args # to replace with sacred
 
@@ -56,10 +55,8 @@ class QMixer(nn.Module):
         )
 
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
-        states = process_states(states)
-
         # computes matrices via hypernetwork
+        agent_qs = agent_qs.unsqueeze(-1) # add dimension for torch.bmm
         states = states.reshape(-1, self.state_dim)
         W1 = torch.abs(self.HW1(states))
         W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
@@ -213,9 +210,10 @@ class MultiAgentController:
         #obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
         agent_idxs = list(range(len(self.agents)))
         batch_size = len(batch)
-        states, actions, rewards, next_state, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
-        states = torch.stack(states)
-
+        states, actions, rewards, next_states, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
+        
+        states       = torch.stack(states)
+        next_states  = torch.stack(next_states)
         observations = torch.stack(observations)[:, agent_idxs, :]
         next_obs     = torch.stack(next_obs)[:, agent_idxs, :]
         hidden       = torch.stack(hidden)[:, agent_idxs, :]
@@ -234,8 +232,6 @@ class MultiAgentController:
         current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)
         predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
-        # TODO: do states
-        states, next_states = None, None
 
         current_q_tot   = self.mixer(current_q_vals_actions, states)
         predicted_q_tot = self.mixer(predicted_q_vals_max, next_states)
