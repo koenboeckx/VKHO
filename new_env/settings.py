@@ -11,7 +11,7 @@ class Args:
     n_hidden =              128
     #scheduler =             LinearScheduler
     buffer_size =           500
-    batch_size =            16
+    batch_size =            7
     sync_interval =         90
     lr =                    0.0005 # 0.000001 #
     beta =                  0.01 #0.05 #0.1 # entroply loss coefficient

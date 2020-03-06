@@ -7,15 +7,37 @@ import random
 
 import numpy as np
 import torch
+from torch import nn
 from torch.nn import functional as F
 
-from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
+from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
 from models import RNNModel
 from mixers import QMixer, QMixer_NS
-from env import Environment, Agent, Action
+from env import Environment, Agent, Action, Observation
 from settings import args # to replace with sacred
 
 # TODO: update generate_episode and Experience so that observation is stored as tensor
+
+class QMixModel(nn.Module): # TODO: add last action as input
+    def __init__(self, input_shape, n_actions):
+        super().__init__()
+        self.rnn_hidden_dim = args.n_hidden
+        self.fc1 = nn.Linear(input_shape, args.n_hidden) 
+        self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, n_actions)
+
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
+    
+    def init_hidden(self):
+        return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
+    
+    def forward(self, inputs, hidden_state):
+        x = inputs
+        x = F.relu(self.fc1(x))
+        h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
+        h = self.rnn(x, h_in)
+        q = self.fc2(h)
+        return q, h
 
 class QMIXAgent(Agent):
     def __init__(self, id, team):
@@ -27,15 +49,12 @@ class QMIXAgent(Agent):
         self.model  = models['model']
     
     def act(self, obs):
-        if not obs.alive: # if not alive, do nothing
-            return Action(0, 'do_nothing', target=None)
-
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
         
         with torch.no_grad():
-            qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
             # remove unavailable actions
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
@@ -50,6 +69,94 @@ class QMIXAgent(Agent):
     def set_hidden_state(self):
         self.hidden_state = self.model.init_hidden()
 
+def transform_obs(observations):
+    "transform lobservation into tensor for storage and use in model"
+    result = []
+    for agent in observations:
+        obs = observations[agent]
+        if isinstance(obs, Observation):
+            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) # own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1)
+            x = torch.zeros((N)) 
+            x[0:2] = torch.tensor(obs.own_position)
+            idx = 2
+            for friend in obs.friends:
+                if friend:  # friend is alive
+                    x[idx:idx+3] = torch.tensor([1.,] + list(friend))
+                else:       # friend is dead
+                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                idx += 3
+            for enemy in obs.enemies:
+                if enemy:   # enemy is alive
+                    x[idx:idx+3] = torch.tensor([1.,] + list(enemy))
+                else:       # enemy is dead
+                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                idx += 1
+            x[idx]   = obs.ammo / args.init_ammo
+            x[idx+1] = obs.aim.id if obs.aim is not None else -1
+            result.append(x)
+        else:
+            raise ValueError(f"'obs' should be an Observation, and is a {type(obs)}")
+    return torch.stack(result)
+
+def transform_state(state):
+    """Transforms State into tensor"""
+    n_agents = len(state.agents)
+    states_v = torch.zeros(n_agents, 5) # 5 = x, y, alive, ammo, aim
+    for agent_idx, agent in enumerate(state.agents):
+        states_v[agent_idx, 0] = state.position[agent][0] # x
+        states_v[agent_idx, 1] = state.position[agent][1] # y
+        states_v[agent_idx, 2] = state.alive[agent]
+        states_v[agent_idx, 3] = state.ammo[agent] / args.init_ammo
+        states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
+    return states_v
+
+def generate_episode(env, render=False):
+    episode = []
+    state, done = env.reset(), False
+    observations = transform_obs(env.get_all_observations())
+    n_steps = 0
+
+    for agent in env.agents:        # for agents where it matters,
+        agent.set_hidden_state()    # set the init hidden state of the RNN
+
+    while not done:
+        unavailable_actions = env.get_unavailable_actions()
+        
+        # keep record of hidden state of the agents to store in experience
+        hidden = []
+        for agent in env.agents:
+            hidden.append(agent.get_hidden_state())
+        
+        #actions = env.act(observations)
+        actions = {}
+        for idx, agent in enumerate(env.agents):
+            actions[agent] = agent.act(observations[idx, :])
+
+        if render:
+            print(f"Step {n_steps}")
+            env.render()
+            print([action.name for action in actions.values()])
+
+        next_state, rewards, done, _ = env.step(actions)
+        next_obs = transform_obs(env.get_all_observations())
+        
+        # episodes that take long are not allowed and penalized for both agents
+        n_steps += 1
+        if n_steps > args.max_episode_length:
+            done = True
+            rewards = {'blue': -1, 'red': -1}
+
+        actions = torch.tensor([action.id for action in actions.values()])
+        episode.append(Experience(transform_state(state), actions, rewards, 
+                                  transform_state(next_state), done, 
+                                  observations, torch.stack(hidden), 
+                                  next_obs, unavailable_actions))
+        state = next_state
+        observations = next_obs
+    
+    if render:
+        print(f"Game won by team {env.terminal(next_state)}")
+    return episode
 
 class MultiAgentController:
     def __init__(self, env, agents, models):
@@ -62,17 +169,29 @@ class MultiAgentController:
         self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
         
     def update(self, batch): 
-        obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
+        #obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
+        agent_idxs = list(range(len(self.agents)))
+        batch_size = len(batch)
+        states, actions, rewards, next_state, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
+        states = torch.stack(states)
 
-        current_q_vals   = torch.zeros((len(obs), args.n_actions))
-        predicted_q_vals = torch.zeros((len(obs), args.n_actions))
-        for t in range(len(obs)):
-            current_q_vals[t, :],   h = self.model([obs[t]], hidden[t])
-            predicted_q_vals[t, :], _ = self.model([next_obs[t]], h) # TODO: should be target
+        observations = torch.stack(observations)[:, agent_idxs, :]
+        next_obs     = torch.stack(next_obs)[:, agent_idxs, :]
+        hidden       = torch.stack(hidden)[:, agent_idxs, :]
+        actions      = torch.stack(actions)[:, agent_idxs]
+        rewards      = torch.tensor([reward['blue'] for reward in rewards])
+        dones        = torch.tensor(dones, dtype=torch.float)
+
+        current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
+        predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
+        for t in range(batch_size):
+            current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
+            predicted_q_vals[t, :,  :], _ = self.model(next_obs[t], h) # TODO: should be target
         
-        current_q_vals_actions = current_q_vals[range(len(obs)), actions]
-        current_q_vals_actions = current_q_vals_actions.reshape((-1, len(self.agents)))
-        predicted_q_vals_max = predicted_q_vals.max(1)[0].reshape((-1, len(self.agents)))
+        # gather q-vals corresponding to the actions taken
+        current_q_vals_actions = current_q_vals.reshape(2*batch_size, -1)[range(batch_size * len(self.agents)), actions.reshape(-1)]
+        current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)
+        predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
         # TODO: do states
         states, next_states = None, None
@@ -88,35 +207,13 @@ class MultiAgentController:
 
         return loss.item()
         
-    def transform_batch(self, batch):
-        """Transforms the inputs of a batch in set of tensors"""
-        states, actions, rewards, next_state, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
-        obs_list = []
-        for obs in observations:
-            obs_list.extend([obs[agent] for agent in self.agents])
-        
-        next_obs_list = []
-        for obs in next_obs:
-            next_obs_list.extend([obs[agent] for agent in self.agents])
-        
-        hidden_list = []
-        for hid in hidden:
-            hidden_list.extend([hid[agent] for agent in self.agents])
-        
-        action_list = []
-        for action in actions:
-            action_list.extend([action[agent].id for agent in self.agents])
-
-        rewards = torch.tensor([reward["blue"] for reward in rewards])
-        dones = torch.tensor(dones, dtype=torch.float)
-        
-        return obs_list, hidden_list, next_obs_list, action_list, rewards, dones
-        
 
 def generate_models(input_shape, n_actions):
-    model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
-    target = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
+    target = QMixModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
+
+PRINT_INTERVAL = 10
 
 def train():
     team_blue = [QMIXAgent(idx, "blue") for idx in range(args.n_friends)] 
@@ -141,9 +238,11 @@ def train():
         if len(buffer) < args.batch_size:
             continue
         batch = buffer.sample(args.batch_size)
+        
         loss = mac.update(batch)
 
-        print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
-
+        if step_idx > 0 and step_idx%PRINT_INTERVAL == 0:
+            print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
+        
 if __name__ == '__main__':
     train()

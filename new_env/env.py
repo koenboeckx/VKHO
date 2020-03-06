@@ -6,6 +6,8 @@ import random, copy, pickle
 import numpy as np
 from collections import namedtuple
 
+import torch
+
 from settings import args
 
 
@@ -137,7 +139,7 @@ class Agent:
         if hasattr(self, 'hidden_state'):
             return self.hidden_state
         else:
-            return None
+            return torch.zeros((1, args.n_hidden)) # changed from None because of issue with torch.stack() in qmix2.py
     
     def save(self, filename):
         with open(filename, 'wb') as file:
