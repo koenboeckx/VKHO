@@ -17,7 +17,7 @@ from env import Environment, Agent, Action, Observation
 from sacred import Experiment
 from sacred.observers import MongoObserver
 ex = Experiment(f'QMIX')
-ex.observers.append(MongoObserver(url='localhost',
+ex.observers.append(MongoObserver(url='ampere',
                                 db_name='my_database'))
 ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
@@ -90,7 +90,7 @@ class QMIXAgent(Agent):
     def set_model(self, models):
         self.model  = models['model']
     
-    def act(self, obs, eps=0.0):
+    def act(self, obs):
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
@@ -100,7 +100,7 @@ class QMIXAgent(Agent):
             # remove unavailable actions
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
-            action_idx = qvals.max(1)[1].item()
+            action_idx = qvals.max(1)[1].item() # pick position of maximum
 
         eps = self.scheduler()
         if random.random() < eps:
@@ -112,7 +112,7 @@ class QMIXAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
 def transform_obs(observations):
-    "transform lobservation into tensor for storage and use in model"
+    "transform observation into tensor for storage and use in model"
     result = []
     for agent in observations:
         obs = observations[agent]
@@ -153,6 +153,7 @@ def transform_state(state):
     return states_v
 
 def generate_episode(env, render=False):
+    "Generate episode; store observations and states as tensors"
     episode = []
     state, done = env.reset(), False
     observations = transform_obs(env.get_all_observations())
@@ -169,7 +170,6 @@ def generate_episode(env, render=False):
         for agent in env.agents:
             hidden.append(agent.get_hidden_state())
         
-        #actions = env.act(observations)
         actions = {}
         for idx, agent in enumerate(env.agents):
             actions[agent] = agent.act(observations[idx, :])
@@ -206,8 +206,8 @@ class MultiAgentController:
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
-        self.mixer        = QMixer()
-        self.target_mixer = QMixer()
+        self.mixer        = QMixer(args.embed_dim)
+        self.target_mixer = QMixer(args.embed_dim)
         self.sync_networks()
         parameters = list(self.model.parameters()) + list(self.mixer.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
@@ -231,8 +231,8 @@ class MultiAgentController:
         predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
         for t in range(batch_size):
             current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
-            predicted_q_vals[t, :,  :], _ = self.model(next_obs[t], h) # TODO: should be target
-        
+            predicted_q_vals[t, :,  :], _ = self.target(next_obs[t], h) 
+
         # gather q-vals corresponding to the actions taken
         current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
         current_q_vals_actions = current_q_vals[range(batch_size * len(self.agents)), actions.reshape(-1)] # select qval for action

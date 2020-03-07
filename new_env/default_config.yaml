@@ -36,3 +36,4 @@ clip: 10                      # gradient clip rate
 
 # --- QMix parameters
 mixer: 'QMIX_NS'              # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
+embed_dim: 128                 # embedding size of Q-mixer
