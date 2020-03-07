@@ -296,6 +296,7 @@ def train():
         ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
         ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
         ex.log_scalar('loss', loss)
+        ex.log_scalar('epsilon', training_agents[0].scheduler())
 
         if PRINT and step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
