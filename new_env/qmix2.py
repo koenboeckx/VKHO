@@ -21,6 +21,8 @@ ex.observers.append(MongoObserver(url='ampere',
                                 db_name='my_database'))
 ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
+PRINT = False
+
 class QMixModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions):
         super().__init__()
@@ -295,11 +297,11 @@ def train():
         ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
         ex.log_scalar('loss', loss)
 
-        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
+        if PRINT and step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
         
         if step_idx % args.sync_interval == 0:
-            print('Syncing networks ...')
+            if PRINT: print('Syncing networks ...')
             mac.sync_networks()
 
 #--------------------------------------------------------------------        
