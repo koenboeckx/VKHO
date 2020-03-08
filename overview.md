@@ -155,5 +155,4 @@
         * TODO: generalise function `train_iteratively` to work with all algorithms/agents
         * TODO: after transfer to opponent: keep working with current model in stead of restarting from zero
     1. [06Mar20]: reimplemented QMIX with `MultiAgentController`
-    1. [08Mar20]: restructured master branch - for backup: see branch 'development'
-    
+    1. [08Mar20]: restructured master branch - for backup: see branch 'backup'
