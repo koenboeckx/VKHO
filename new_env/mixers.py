@@ -2,8 +2,6 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from settings import args
-
 def process_qs(agent_qs):
     """Transforms Qs into tensor to be used in network."""
     n_agents = len(agent_qs)
@@ -33,8 +31,8 @@ class VDNMixer(nn.Module): # Ref: Value-Decomposition Networks For Cooperative M
         super().__init__()
 
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs)
-        return torch.sum(agent_qs, dim=1)
+        #agent_qs = process_qs(agent_qs)
+        return -10*torch.sum(agent_qs, dim=1).unsqueeze(-1)
 
 class QMixer_NS(nn.Module):
     """No conditioning on state information. Used for 
@@ -55,14 +53,13 @@ class QMixer_NS(nn.Module):
         Qtot = QW2 + self.b2                                # (bs x 1)
         return Qtot.squeeze()                               # (bs)
 
-
 class QMixer(nn.Module):
-    def __init__(self, embed_dim=64):
+    def __init__(self, embed_dim=64, n_agents=4, n_learners=2):
         super().__init__()
         # Hypernetwork
-        self.n_trainers = args.n_friends # assumes all friends are learning
+        self.n_trainers = n_learners # assumes all friends are learning
         self.embed_dim = embed_dim
-        self.state_dim = 5 * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
+        self.state_dim = 5 * n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
         self.HW1 = nn.Linear(self.state_dim, embed_dim * self.n_trainers)
         self.Hb1 = nn.Linear(self.state_dim, embed_dim)
         self.HW2 = nn.Linear(self.state_dim, embed_dim)
@@ -73,10 +70,8 @@ class QMixer(nn.Module):
         )
 
     def forward(self, agent_qs, states):
-        agent_qs = process_qs(agent_qs).unsqueeze(2) # add 3rd dimension: (bs x n_trainers x 1)
-        states = process_states(states)
-
         # computes matrices via hypernetwork
+        agent_qs = agent_qs.unsqueeze(-1) # add dimension for torch.bmm
         states = states.reshape(-1, self.state_dim)
         W1 = torch.abs(self.HW1(states))
         W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
@@ -90,9 +85,9 @@ class QMixer(nn.Module):
         b2 = F.relu(self.Hb2(states))
         b2 = b2.reshape(-1, 1, 1)
 
-        # real network updates
+        # real network updates          # agent_qs = (bs x n_trainers)
         QW1 = torch.bmm(W1, agent_qs)   # (bs x embed_dim x 1)
         Qb1 = F.elu(QW1 + b1)           # (bs x embed_dim x 1)
         QW2 = torch.bmm(W2, Qb1)        # (bs x 1 x 1)
         Qtot = QW2 + b2                 # (bs x 1 x 1)
-        return Qtot.squeeze()           # (bs)
+        return Qtot.squeeze(-1)         # (bs x 1)

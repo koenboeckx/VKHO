@@ -110,14 +110,14 @@ def generate_models(input_shape, n_actions):
         target = ForwardModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-def train():
+def train(args):
     team_blue = [IQLAgent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents)
+    env = Environment(agents, args)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
     args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies # see process function in models.py
@@ -180,7 +180,7 @@ def get_run_id(_run):
 def run(_config):
     global args
     args = get_args(_config)
-    train()
+    train(args)
 
 """
 if __name__ == '__main__':

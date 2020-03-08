@@ -31,12 +31,13 @@ n_episodes_per_step: 25   # number of episodes to generate per update step
 
 # --- q-learning parameters
 scheduler: 'LinearScheduler'  # type of scheduler to use
-scheduler_steps: 100000       # maximum number of steps before deactivating scheduler
+scheduler_steps: 30000        # maximum number of steps before deactivating scheduler (reduced from 100000)
 buffer_size: 500              # size of the replay buffer
 batch_size: 128               # number of samples from replay buffer per update
 sync_interval: 100            # number of updates before syncing target model with current model
 clip: 10                      # gradient clip rate
 
 # --- QMix parameters
-mixer: 'QMIX_NS'              # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
-embed_dim: 128                 # embedding size of Q-mixer
+use_mixer: False              # use mixer?
+mixer: 'QMIX'                  # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
+embed_dim: 64                 # embedding size of Q-mixer 

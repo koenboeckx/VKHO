@@ -1,6 +1,7 @@
-# TODO: ablations
-#           * QMIX-NS : QMIX without hypernetworks 
-
+"""
+New implementation of IQL, with one common 
+multi-agent controller (MAC)
+"""
 
 import random
 
@@ -9,47 +10,134 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from env import Action, Agent, Environment
-from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
-from models import ForwardModel, RNNModel
-from mixers import VDNMixer, QMixer, QMixer_NS
+from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
+from models import QMixModel
+from mixers import VDNMixer, QMixer
+from env import Environment, Agent, Action, Observation
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('QMIX')
+ex = Experiment(f'QMIX')
 ex.observers.append(MongoObserver(url='localhost',
-                                  db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')                            
+                                db_name='my_database'))
+ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
-class QMixAgent(Agent):
+PRINT = True
+
+def transform_obs(observations):
+    "transform observation into tensor for storage and use in model"
+    result = []
+    for agent in observations:
+        obs = observations[agent]
+        if isinstance(obs, Observation):
+            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) # own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1)
+            x = torch.zeros((N)) 
+            x[0:2] = torch.tensor(obs.own_position)
+            idx = 2
+            for friend in obs.friends:
+                if friend:  # friend is alive
+                    x[idx:idx+3] = torch.tensor([1.,] + list(friend))
+                else:       # friend is dead
+                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                idx += 3
+            for enemy in obs.enemies:
+                if enemy:   # enemy is alive
+                    x[idx:idx+3] = torch.tensor([1.,] + list(enemy))
+                else:       # enemy is dead
+                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                idx += 1
+            x[idx]   = obs.ammo / args.init_ammo
+            x[idx+1] = obs.aim.id if obs.aim is not None else -1
+            result.append(x)
+        else:
+            raise ValueError(f"'obs' should be an Observation, and is a {type(obs)}")
+    return torch.stack(result)
+
+def transform_state(state):
+    """Transforms State into tensor"""
+    n_agents = len(state.agents)
+    states_v = torch.zeros(n_agents, 5) # 5 = x, y, alive, ammo, aim
+    for agent_idx, agent in enumerate(state.agents):
+        states_v[agent_idx, 0] = state.position[agent][0] # x
+        states_v[agent_idx, 1] = state.position[agent][1] # y
+        states_v[agent_idx, 2] = state.alive[agent]
+        states_v[agent_idx, 3] = state.ammo[agent] / args.init_ammo
+        states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
+    return states_v
+
+def generate_episode(env, render=False):
+    "Generate episode; store observations and states as tensors"
+    episode = []
+    state, done = env.reset(), False
+    observations = transform_obs(env.get_all_observations())
+    n_steps = 0
+
+    for agent in env.agents:        # for agents where it matters,
+        agent.set_hidden_state()    # set the init hidden state of the RNN
+
+    while not done:
+        unavailable_actions = env.get_unavailable_actions()
+        
+        # keep record of hidden state of the agents to store in experience
+        hidden = []
+        for agent in env.agents:
+            hidden.append(agent.get_hidden_state())
+        
+        actions = {}
+        for idx, agent in enumerate(env.agents):
+            actions[agent] = agent.act(observations[idx, :])
+
+        if render:
+            print(f"Step {n_steps}")
+            env.render()
+            print([action.name for action in actions.values()])
+
+        next_state, rewards, done, _ = env.step(actions)
+        next_obs = transform_obs(env.get_all_observations())
+        
+        # episodes that take long are not allowed and penalized for both agents
+        n_steps += 1
+        if n_steps > args.max_episode_length:
+            done = True
+            rewards = {'blue': -1, 'red': -1}
+
+        actions = torch.tensor([action.id for action in actions.values()])
+        unavail_actions = torch.zeros((args.n_agents, args.n_actions), dtype=torch.long)
+        for idx, agent in enumerate(env.agents):
+            act_ids = [act.id for act in unavailable_actions[agent]]
+            unavail_actions[idx, act_ids] = 1.
+
+        episode.append(Experience(transform_state(state), actions, rewards, 
+                                  transform_state(next_state), done, 
+                                  observations, torch.stack(hidden), 
+                                  next_obs, unavail_actions))
+        state = next_state
+        observations = next_obs
+    
+    if render:
+        print(f"Game won by team {env.terminal(next_state)}")
+    return episode
+
+class QMIXAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
-        if args.scheduler == 'LinearScheduler':
-            self.scheduler = LinearScheduler(start=1.0, stop=0.1,
-                                             steps=args.scheduler_steps)
-        
+        self.scheduler = LinearScheduler(start=1.0, stop=0.1,
+                                         steps=args.scheduler_steps)
+
     def set_model(self, models):
         self.model  = models['model']
-        self.target = models['target']
-        self.sync_models()
-
-    def sync_models(self):
-        self.target.load_state_dict(self.model.state_dict())
     
     def act(self, obs):
-        if not obs.alive: # if not alive, do nothing
-            return Action(0, 'do_nothing', target=None)
-
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
         
         with torch.no_grad():
-            qvals, self.hidden_state = self.model([obs], self.hidden_state)
+            qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
             # remove unavailable actions
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
-            action_idx = qvals.max(1)[1].item()
+            action_idx = qvals.max(1)[1].item() # pick position of maximum
 
         eps = self.scheduler()
         if random.random() < eps:
@@ -60,146 +148,136 @@ class QMixAgent(Agent):
     def set_hidden_state(self):
         self.hidden_state = self.model.init_hidden()
 
-    def compute_q(self, batch):
-        # TODO: exclude actions when not alive ??
-        _, actions, rewards, _, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
-        actions = [action[self].id for action in actions]
-        rewards = torch.tensor([reward[self.team] for reward in rewards])
-        observations = [obs[self] for obs in observations]
-        next_obs = [obs[self] for obs in next_obs]
-        hidden = [hidden_state[self] for hidden_state in hidden]
-        dones = torch.tensor(dones, dtype=torch.float)
+class MultiAgentController:
+    def __init__(self, env, agents, models):
+        self.env = env # check needed here?
+        self.agents = agents
+        self.model  = models["model"]
+        self.target = models["target"]
+        if args.use_mixer:
+            if args.mixer == "VDN":
+                self.mixer        = VDNMixer()
+                self.target_mixer = VDNMixer()
+            elif args.mixer == "QMIX":
+                self.mixer        = QMixer(embed_dim=args.embed_dim, n_agents=args.n_agents, n_learners=len(agents))
+                self.target_mixer = QMixer(embed_dim=args.embed_dim, n_agents=args.n_agents, n_learners=len(agents))
+            self.sync_networks()
+        parameters = list(self.model.parameters())
+        if args.use_mixer:
+            parameters += list(self.mixer.parameters())
+        self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
         
-        current_qvals   = torch.zeros(len(batch), args.n_actions)
-        predicted_qvals = torch.zeros(len(batch), args.n_actions)
-        for t in range(len(batch)):
-            current_qvals[t, :],   h = self.model([observations[t]], hidden[t])
-            predicted_qvals[t, :], _ = self.model([next_obs[t]], h)
-
-        current_qvals_actions = current_qvals[range(len(batch)), actions]
+    def update(self, batch): 
+        #obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
+        agent_idxs = list(range(len(self.agents)))
+        batch_size = len(batch)
+        states, actions, rewards, next_states, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
         
-        # Set unavailable action to very low Q-value !!
-        for idx in range(len(unavailable_actions)):
-            unavail_actions = unavailable_actions[idx][self]
-            unavail_ids = [action.id for action in unavail_actions]
-            predicted_qvals[idx][unavail_ids] = -np.infty
+        states       = torch.stack(states)
+        next_states  = torch.stack(next_states)
+        observations = torch.stack(observations)[:, agent_idxs, :]
+        next_obs     = torch.stack(next_obs)[:, agent_idxs, :]
+        hidden       = torch.stack(hidden)[:, agent_idxs, :]
+        actions      = torch.stack(actions)[:, agent_idxs]
+        rewards      = torch.tensor([reward['blue'] for reward in rewards]).unsqueeze(-1)
+        dones        = torch.tensor(dones, dtype=torch.float).unsqueeze(-1)
+        unavail      = torch.stack(unavailable_actions)[:, agent_idxs, :]
 
-        predicted_qvals_max = predicted_qvals.max(1)[0]
+        current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
+        predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
+        for t in range(batch_size):
+            current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
+            predicted_q_vals[t, :,  :], _ = self.target(next_obs[t], h) 
 
-        return current_qvals_actions, predicted_qvals_max
+        # gather q-vals corresponding to the actions taken
+        current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
+        current_q_vals_actions = current_q_vals[range(batch_size * len(self.agents)), actions.reshape(-1)] # select qval for action
+        current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)     # restore to (batch_size x n_agents)
+
+        predicted_q_vals[unavail==1] = -1e10 # set unavailable actions to low value
+        predicted_q_vals_max = predicted_q_vals.max(2)[0]
+
+        if args.use_mixer:
+            current_q_tot   = self.mixer(current_q_vals_actions, states)
+            predicted_q_tot = self.mixer(predicted_q_vals_max, next_states)
+        else:
+            current_q_tot   = current_q_vals_actions
+            predicted_q_tot = predicted_q_vals_max
+
+        target = rewards + args.gamma * (1. - dones) * predicted_q_tot
+        
+        loss = F.mse_loss(current_q_tot, target.detach())
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
     
-
+    def sync_networks(self):
+        self.target.load_state_dict(self.model.state_dict())
+        self.target_mixer.load_state_dict(self.mixer.state_dict())
+        
 def generate_models(input_shape, n_actions):
-    model  = RNNModel(input_shape=input_shape, n_actions=n_actions)
-    target = RNNModel(input_shape=input_shape, n_actions=n_actions)
+    model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
+    target = QMixModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
-def train():
-    team_blue = [QMixAgent(idx, "blue") for idx in range(args.n_friends)] # TODO: args.n_friends should be 2 when 2 agents in team "blue"
+PRINT_INTERVAL = 10
+
+def train(args):
+    team_blue = [QMIXAgent(idx, "blue") for idx in range(args.n_friends)] 
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents)
+    env = Environment(agents, args)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies # see process function in models.py
+    args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies # see process function in models.py
     models = generate_models(args.n_inputs, args.n_actions)
     for agent in training_agents:
         agent.set_model(models)
-    
-    # configure mixers
-    if args.mixer == 'VDN':
-        mixer = VDNMixer()
-        target_mixer = VDNMixer()
-    elif args.mixer == 'QMIX':
-        mixer = QMixer()
-        target_mixer = QMixer()
-    elif args.mixer == 'QMIX_NS':
-        mixer = QMixer_NS()
-        target_mixer = QMixer_NS()
 
     buffer = ReplayBuffer(size=args.buffer_size)
-    epi_len, nwins = 0, 0
-
-    ex.log_scalar(f'win', 0.0, step=1) # forces start of run at 0 wins ()
+    mac = MultiAgentController(env, training_agents, models)
     for step_idx in range(args.n_steps):
         episode = generate_episode(env)
         buffer.insert_list(episode)
-        if not buffer.can_sample(args.batch_size):
+        if len(buffer) < args.batch_size:
             continue
         batch = buffer.sample(args.batch_size)
-
-        epi_len += len(episode)
-        reward = episode[-1].rewards["blue"]
-        if episode[-1].rewards["blue"] == 1:
-            nwins += 1
         
-        current_qvals, predicted_qvals = {}, {}
-        for agent in training_agents:
-            current_q, predicted_q = agent.compute_q(batch)
-            current_qvals[agent]   = current_q
-            predicted_qvals[agent] = predicted_q
+        loss = mac.update(batch)
+
+        ex.log_scalar('length', len(episode))
+        ex.log_scalar('reward', episode[-1].rewards["blue"])
+        ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
+        ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
+        ex.log_scalar('loss', loss)
+        ex.log_scalar('epsilon', training_agents[0].scheduler())
+
+        if PRINT and step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
+            print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
+            #episode = generate_episode(env, render=True)
         
-        states, _, rewards, _, dones, _, _, _, _ = zip(*batch)
-        current_q_tot   = mixer(current_qvals, states)
-        predicted_q_tot = target_mixer(predicted_qvals, states)
-
-        # for test
-        #current_q_tot = current_qvals[agent]
-        #predicted_q_tot = predicted_qvals[agent]
+        if args.use_mixer and step_idx % args.sync_interval == 0:
+            if PRINT: print('Syncing networks ...')
+            mac.sync_networks()
         
-        rewards = torch.tensor([reward["blue"] for reward in rewards])
-        dones = torch.tensor(dones, dtype=torch.float)
-        targets = rewards + args.gamma * (1.-dones) * predicted_q_tot
+        if args.save_model and step_idx > 0 and step_idx % args.save_model_interval == 0:
+            from os.path import expanduser
+            home = expanduser("~")
+            torch.save(models["model"].state_dict(), home+args.path+f'RUN_{get_run_id()}_MODEL.torch')
+            torch.save(mac.mixer.state_dict(), home+args.path+f'RUN_{get_run_id()}_MIXER.torch')
 
-        ### !!!! TODO: mixer optimizer ?? ###
-        models["model"].zero_grad()
-        loss = F.mse_loss(current_q_tot, targets.detach())
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(models["model"].parameters(), args.clip)
-        models["model"].optimizer.step()
-
-        if step_idx > 0 and step_idx % args.sync_interval == 0:
-            models["target"].load_state_dict(models["model"].state_dict())
-            target_mixer.load_state_dict(mixer.state_dict())
-        
-        if step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
-            s  = f"Step {step_idx}: loss: {loss:8.4f} - "
-            s += f"Average length: {epi_len/PRINT_INTERVAL:5.2f} - "
-            s += f"win ratio: {nwins/PRINT_INTERVAL:4.3f} - "
-            #s += f"epsilon: {agent.scheduler():4.3f} - "
-            print(s)
-            epi_len, nwins = 0, 0
-        
-        ex.log_scalar(f'length', len(episode), step=step_idx+1)
-        ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=step_idx+1)
-        ex.log_scalar(f'loss', loss.item(), step=step_idx+1)
-        ex.log_scalar(f'reward', reward, step=step_idx+1)
-        
-
-    for agent in training_agents:
-        agent.save(args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), args.path+f'RUN_{get_run_id()}.torch')
-    torch.save(mixer.state_dict(), args.path+f'RUN_{get_run_id()}_MIXER.torch')
-
-#---------------------------------- test -------------------------------------
-
-PRINT_INTERVAL = 5
-RENDER = False
-
+#--------------------------------------------------------------------        
 @ex.capture
-def get_run_id(_run):
+def get_run_id(_run): # enables saving model with run id
     return _run._id
 
 @ex.automain
 def run(_config):
     global args
     args = get_args(_config)
-    train()
-    
-"""
-if __name__ == '__main__':
     train(args)
-"""

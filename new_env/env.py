@@ -8,13 +8,10 @@ from collections import namedtuple
 
 import torch
 
-from settings import args
-
-
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
 class State:
-    def __init__(self, agents):
+    def __init__(self, agents, args):
         self.agents = agents
         self.position = {}
         self.alive = {}
@@ -101,7 +98,7 @@ class Agent:
     def __init__(self, id, team):
         self.id = id
         self.team = team # "blue" or "red"
-        self.max_range = args.max_range
+        
     
     def __str__(self):
         return str(self.id)
@@ -111,6 +108,7 @@ class Agent:
         self.env = env
         self.actions = self.generate_actions()
         self.n_actions = len(self.actions)
+        self.max_range = env.args.max_range # defined here to use args from env
  
     def generate_actions(self):
         actions = [
@@ -139,16 +137,17 @@ class Agent:
         if hasattr(self, 'hidden_state'):
             return self.hidden_state
         else:
-            return torch.zeros((1, args.n_hidden)) # changed from None because of issue with torch.stack() in qmix2.py
+            return torch.zeros((1, self.env.args.n_hidden)) # changed from None because of issue with torch.stack() in qmix2.py
     
     def save(self, filename):
         with open(filename, 'wb') as file:
             pickle.dump(self, file)
 
 class Environment:
-    def __init__(self, agents):
+    def __init__(self, agents, args):
+        self.args = args
         self.register_agents(agents)
-        self.state = State(self.agents)
+        self.state = State(self.agents, args)
         self.board_size = args.board_size
     
     def register_agents(self, agents):
@@ -161,7 +160,7 @@ class Environment:
         }
 
     def reset(self):
-        self.state = State(self.agents)
+        self.state = State(self.agents, self.args)
         self.unavailable_actions = self.get_unavailable_actions()
         return self.state
     
@@ -297,7 +296,8 @@ class Environment:
         if terminal == 'out-of-ammo': # because all out of ammo
             rewards = {'blue': -1, 'red': -1}
         elif not terminal: # game not done => reward is penalty for making move
-            rewards = {'blue': -args.step_penalty, 'red': -args.step_penalty}
+            rewards = {'blue': -self.args.step_penalty,
+                       'red':  -self.args.step_penalty}
         elif terminal == 'blue':
             rewards = {'blue': 1, 'red': -1}
         elif terminal == 'red':
