@@ -17,11 +17,11 @@ from env import Environment, Agent, Action, Observation
 from sacred import Experiment
 from sacred.observers import MongoObserver
 ex = Experiment(f'QMIX')
-ex.observers.append(MongoObserver(url='ampere',
+ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
-PRINT = False
+PRINT = True
 
 class QMixModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions):
@@ -83,35 +83,6 @@ class QMixer(nn.Module):
         Qtot = QW2 + b2                 # (bs x 1 x 1)
         return Qtot.squeeze()           # (bs)
 
-class QMIXAgent(Agent):
-    def __init__(self, id, team):
-        super().__init__(id, team)
-        self.scheduler = LinearScheduler(start=1.0, stop=0.1,
-                                         steps=args.scheduler_steps)
-
-    def set_model(self, models):
-        self.model  = models['model']
-    
-    def act(self, obs):
-        unavail_actions = self.env.get_unavailable_actions()[self]
-        avail_actions = [action for action in self.actions
-                        if action not in unavail_actions]
-        
-        with torch.no_grad():
-            qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
-            # remove unavailable actions
-            for action in unavail_actions:
-                qvals[0][action.id] = -np.infty
-            action_idx = qvals.max(1)[1].item() # pick position of maximum
-
-        eps = self.scheduler()
-        if random.random() < eps:
-            return random.choice(avail_actions)
-        else:
-            return self.actions[action_idx]
-    
-    def set_hidden_state(self):
-        self.hidden_state = self.model.init_hidden()
 
 def transform_obs(observations):
     "transform observation into tensor for storage and use in model"
@@ -191,16 +162,51 @@ def generate_episode(env, render=False):
             rewards = {'blue': -1, 'red': -1}
 
         actions = torch.tensor([action.id for action in actions.values()])
+        unavail_actions = torch.zeros((args.n_agents, args.n_actions), dtype=torch.long)
+        for idx, agent in enumerate(env.agents):
+            act_ids = [act.id for act in unavailable_actions[agent]]
+            unavail_actions[idx, act_ids] = 1.
+
         episode.append(Experience(transform_state(state), actions, rewards, 
                                   transform_state(next_state), done, 
                                   observations, torch.stack(hidden), 
-                                  next_obs, unavailable_actions))
+                                  next_obs, unavail_actions))
         state = next_state
         observations = next_obs
     
     if render:
         print(f"Game won by team {env.terminal(next_state)}")
     return episode
+
+class QMIXAgent(Agent):
+    def __init__(self, id, team):
+        super().__init__(id, team)
+        self.scheduler = LinearScheduler(start=1.0, stop=0.1,
+                                         steps=args.scheduler_steps)
+
+    def set_model(self, models):
+        self.model  = models['model']
+    
+    def act(self, obs):
+        unavail_actions = self.env.get_unavailable_actions()[self]
+        avail_actions = [action for action in self.actions
+                        if action not in unavail_actions]
+        
+        with torch.no_grad():
+            qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
+            # remove unavailable actions
+            for action in unavail_actions:
+                qvals[0][action.id] = -np.infty
+            action_idx = qvals.max(1)[1].item() # pick position of maximum
+
+        eps = self.scheduler()
+        if random.random() < eps:
+            return random.choice(avail_actions)
+        else:
+            return self.actions[action_idx]
+    
+    def set_hidden_state(self):
+        self.hidden_state = self.model.init_hidden()
 
 class MultiAgentController:
     def __init__(self, env, agents, models):
@@ -228,6 +234,7 @@ class MultiAgentController:
         actions      = torch.stack(actions)[:, agent_idxs]
         rewards      = torch.tensor([reward['blue'] for reward in rewards])
         dones        = torch.tensor(dones, dtype=torch.float)
+        unavail      = torch.stack(unavailable_actions)[:, agent_idxs, :]
 
         current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
         predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
@@ -239,8 +246,9 @@ class MultiAgentController:
         current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
         current_q_vals_actions = current_q_vals[range(batch_size * len(self.agents)), actions.reshape(-1)] # select qval for action
         current_q_vals_actions = current_q_vals_actions.reshape(batch_size, -1)     # restore to (batch_size x n_agents)
-        predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
+        predicted_q_vals[unavail==1] = -1e10 # set unavailable actions to low value
+        predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
         current_q_tot   = self.mixer(current_q_vals_actions, states)
         predicted_q_tot = self.mixer(predicted_q_vals_max, next_states)
@@ -257,7 +265,6 @@ class MultiAgentController:
         self.target.load_state_dict(self.model.state_dict())
         self.target_mixer.load_state_dict(self.mixer.state_dict())
         
-
 def generate_models(input_shape, n_actions):
     model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
     target = QMixModel(input_shape=input_shape, n_actions=n_actions)
@@ -304,6 +311,12 @@ def train():
         if step_idx % args.sync_interval == 0:
             if PRINT: print('Syncing networks ...')
             mac.sync_networks()
+        
+        if args.save_model and step_idx > 0 and step_idx % args.save_model_interval == 0:
+            from os.path import expanduser
+            home = expanduser("~")
+            torch.save(models["model"].state_dict(), home+args.path+f'RUN_{get_run_id()}_MODEL.torch')
+            torch.save(mac.mixer.state_dict(), home+args.path+f'RUN_{get_run_id()}_MIXER.torch')
 
 #--------------------------------------------------------------------        
 @ex.capture
