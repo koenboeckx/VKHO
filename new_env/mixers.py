@@ -32,47 +32,32 @@ class VDNMixer(nn.Module): # Ref: Value-Decomposition Networks For Cooperative M
 
     def forward(self, agent_qs, states):
         #agent_qs = process_qs(agent_qs)
-        return -10*torch.sum(agent_qs, dim=1).unsqueeze(-1)
-
-class QMixer_NS(nn.Module):
-    """No conditioning on state information. Used for 
-    ablation experimentation."""
-    def __init__(self, embed_dim=64):
-        super().__init__()
-        self.W1 = torch.rand((args.n_friends, embed_dim)) # assumes all friends and only friends are training
-        self.b1 = torch.rand(embed_dim)
-        self.W2 = torch.rand(embed_dim, 1)
-        self.b2 = torch.rand(1)
-        
-    def forward(self, agent_qs, states):
-        #agent_qs = process_qs(agent_qs) # add 3rd dimension: (bs x n_trainers)
-        # real network updates
-        QW1 = torch.matmul(agent_qs, torch.abs(self.W1))    # (bs x embed_dim)
-        Qb1 = F.elu(QW1 + self.b1)                          # (bs x embed_dim )
-        QW2 = torch.matmul(Qb1, torch.abs(self.W2))         # (bs x 1)
-        Qtot = QW2 + self.b2                                # (bs x 1)
-        return Qtot.squeeze()                               # (bs)
+        return torch.sum(agent_qs, dim=1).unsqueeze(-1)
 
 class QMixer(nn.Module):
-    def __init__(self, embed_dim=64, n_agents=4, n_learners=2):
+    def __init__(self, args):
         super().__init__()
         # Hypernetwork
-        self.n_trainers = n_learners # assumes all friends are learning
-        self.embed_dim = embed_dim
-        self.state_dim = 5 * n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
-        self.HW1 = nn.Linear(self.state_dim, embed_dim * self.n_trainers)
-        self.Hb1 = nn.Linear(self.state_dim, embed_dim)
-        self.HW2 = nn.Linear(self.state_dim, embed_dim)
+        self.n_trainers = args.n_friends # assumes all friends are learning
+        self.embed_dim = args.embed_dim
+        self.state_dim = 5 * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
+        self.HW1 = nn.Linear(self.state_dim, self.embed_dim * self.n_trainers)
+        self.Hb1 = nn.Linear(self.state_dim, self.embed_dim)
+        self.HW2 = nn.Linear(self.state_dim, self.embed_dim)
         self.Hb2 = nn.Sequential(
-            nn.Linear(self.state_dim, embed_dim),
+            nn.Linear(self.state_dim, args.embed_dim),
             nn.ReLU(),
-            nn.Linear(embed_dim, 1)
+            nn.Linear(args.embed_dim, 1)
         )
+
+        self.qmix_ns = args.qmix_ns # no conditioning on state information
 
     def forward(self, agent_qs, states):
         # computes matrices via hypernetwork
         agent_qs = agent_qs.unsqueeze(-1) # add dimension for torch.bmm
         states = states.reshape(-1, self.state_dim)
+        if self.qmix_ns:
+            states = torch.zeros_like(states) # TODO: for testing; REMOVE!!
         W1 = torch.abs(self.HW1(states))
         W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
         
@@ -82,7 +67,7 @@ class QMixer(nn.Module):
         W2 = torch.abs(self.HW2(states))
         W2 = W2.reshape(-1, 1, self.embed_dim)
         
-        b2 = F.relu(self.Hb2(states))
+        b2 = self.Hb2(states)
         b2 = b2.reshape(-1, 1, 1)
 
         # real network updates          # agent_qs = (bs x n_trainers)

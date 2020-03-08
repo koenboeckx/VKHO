@@ -159,8 +159,8 @@ class MultiAgentController:
                 self.mixer        = VDNMixer()
                 self.target_mixer = VDNMixer()
             elif args.mixer == "QMIX":
-                self.mixer        = QMixer(embed_dim=args.embed_dim, n_agents=args.n_agents, n_learners=len(agents))
-                self.target_mixer = QMixer(embed_dim=args.embed_dim, n_agents=args.n_agents, n_learners=len(agents))
+                self.mixer        = QMixer(args)
+                self.target_mixer = QMixer(args)
             self.sync_networks()
         parameters = list(self.model.parameters())
         if args.use_mixer:
@@ -206,6 +206,13 @@ class MultiAgentController:
 
         target = rewards + args.gamma * (1. - dones) * predicted_q_tot
         
+        if args.use_mixer:
+            assert target.shape == torch.Size([args.batch_size, 1])
+            assert current_q_tot.shape == torch.Size([args.batch_size, 1])
+        else:
+            assert target.shape == torch.Size([args.batch_size, len(self.agents)])
+            assert current_q_tot.shape == torch.Size([args.batch_size, len(self.agents)])
+
         loss = F.mse_loss(current_q_tot, target.detach())
         self.optimizer.zero_grad()
         loss.backward()
@@ -269,7 +276,8 @@ def train(args):
             from os.path import expanduser
             home = expanduser("~")
             torch.save(models["model"].state_dict(), home+args.path+f'RUN_{get_run_id()}_MODEL.torch')
-            torch.save(mac.mixer.state_dict(), home+args.path+f'RUN_{get_run_id()}_MIXER.torch')
+            if args.use_mixer:
+                torch.save(mac.mixer.state_dict(), home+args.path+f'RUN_{get_run_id()}_MIXER.torch')
 
 #--------------------------------------------------------------------        
 @ex.capture
