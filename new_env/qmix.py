@@ -19,7 +19,7 @@ from sacred import Experiment
 from sacred.observers import MongoObserver
 ex = Experiment(f'QMIX')
 ex.observers.append(MongoObserver(url='localhost',
-                                db_name='my_database'))
+                                  db_name='my_database'))
 ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
 
 PRINT = True
@@ -206,6 +206,7 @@ class MultiAgentController:
 
         target = rewards + args.gamma * (1. - dones) * predicted_q_tot
         
+        # check shapes #TODO: remove when done
         if args.use_mixer:
             assert target.shape == torch.Size([args.batch_size, 1])
             assert current_q_tot.shape == torch.Size([args.batch_size, 1])
