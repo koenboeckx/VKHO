@@ -1,1 +1,0 @@
-a collection of files where I experiment with different algorithms. Not for production.
