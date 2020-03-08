@@ -20,7 +20,7 @@ from sacred.observers import MongoObserver
 ex = Experiment(f'QMIX')
 ex.observers.append(MongoObserver(url='localhost',
                                   db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML 
+ex.add_config('default_config.yaml')    # requires PyYAML 
 
 PRINT = True
 
