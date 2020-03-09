@@ -31,3 +31,4 @@ new_env/agent_dumps/*
 .ipynb_checkpoints/*
 new_env/profile_iql.txt
 new_env/iql_profile.py
+*.txt

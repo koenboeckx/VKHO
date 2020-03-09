@@ -2,36 +2,11 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-def process_qs(agent_qs):
-    """Transforms Qs into tensor to be used in network."""
-    n_agents = len(agent_qs)
-    batch_size = len(list(agent_qs.values())[0])
-    q_vals = torch.zeros(batch_size, n_agents)
-    for agent_idx, agent in enumerate(agent_qs):
-        for batch_idx, qs in enumerate(agent_qs[agent]):
-            q_vals[batch_idx, agent_idx] = qs
-    return q_vals
-
-def process_states(states):
-    """Transforms State into tensor to be used in network."""
-    batch_size = len(states)
-    n_agents = len(states[0].agents)
-    states_v = torch.zeros(batch_size, n_agents, 5) # 5 = x, y, alive, ammo, aim
-    for state_idx, state in enumerate(states):
-        for agent_idx, agent in enumerate(state.agents):
-            states_v[state_idx, agent_idx, 0] = state.position[agent][0] # x
-            states_v[state_idx, agent_idx, 1] = state.position[agent][1] # y
-            states_v[state_idx, agent_idx, 2] = state.alive[agent]
-            states_v[state_idx, agent_idx, 3] = state.ammo[agent] / args.init_ammo
-            states_v[state_idx, agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
-    return states_v
-
 class VDNMixer(nn.Module): # Ref: Value-Decomposition Networks For Cooperative Multi-Agent Learning
     def __init__(self):
         super().__init__()
 
     def forward(self, agent_qs, states):
-        #agent_qs = process_qs(agent_qs)
         return torch.sum(agent_qs, dim=1).unsqueeze(-1)
 
 class QMixer(nn.Module):
@@ -57,7 +32,7 @@ class QMixer(nn.Module):
         agent_qs = agent_qs.unsqueeze(-1) # add dimension for torch.bmm
         states = states.reshape(-1, self.state_dim)
         if self.qmix_ns:
-            states = torch.zeros_like(states) # TODO: for testing; REMOVE!!
+            states = torch.zeros_like(states) # only for testing
         W1 = torch.abs(self.HW1(states))
         W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
         

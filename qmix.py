@@ -1,9 +1,10 @@
 """
-New implementation of IQL, with one common 
+New implementation of IQL, with common 
 multi-agent controller (MAC)
 """
 
 import random
+import copy
 
 import numpy as np
 import torch
@@ -157,15 +158,14 @@ class MultiAgentController:
         if args.use_mixer:
             if args.mixer == "VDN":
                 self.mixer        = VDNMixer()
-                self.target_mixer = VDNMixer()
             elif args.mixer == "QMIX":
                 self.mixer        = QMixer(args)
-                self.target_mixer = QMixer(args)
+            self.target_mixer = copy.deepcopy(self.mixer)
             self.sync_networks()
-        parameters = list(self.model.parameters())
+        self.parameters = list(self.model.parameters())
         if args.use_mixer:
-            parameters += list(self.mixer.parameters())
-        self.optimizer = torch.optim.Adam(parameters, lr=args.lr)
+            self.parameters += list(self.mixer.parameters())
+        self.optimizer = torch.optim.Adam(self.parameters, lr=args.lr)
         
     def update(self, batch): 
         #obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
@@ -217,6 +217,7 @@ class MultiAgentController:
         loss = F.mse_loss(current_q_tot, target.detach())
         self.optimizer.zero_grad()
         loss.backward()
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters, args.clip)
         self.optimizer.step()
 
         return loss.item()
