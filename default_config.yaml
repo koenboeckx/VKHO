@@ -12,13 +12,13 @@ n_friends: 1              # number of friends (team "blue")
 n_enemies: 1              # number of enemies (team "red")
 
 # --- Logging options ---
-log_interval: 10          # logging rate
-save_model: True         # Save the models to disk
+log_interval: 1           # logging rate
+save_model: True          # Save the models to disk
 save_model_interval: 2000 # Save models after this many episodes
 path: '/Programming/VKHO/agent_dumps/'
 
 # --- general marl parameters
-n_steps: 15000            # number of episodes to generate
+n_steps: 50000            # number of episodes to generate
 gamma: 0.9                # discount factor
 
 model: 'RNN'              # type of neural network: 'FORWARD' or 'RNN
@@ -32,14 +32,14 @@ n_episodes_per_step: 25   # number of episodes to generate per update step
 
 # --- q-learning parameters
 scheduler: 'LinearScheduler'  # type of scheduler to use
-scheduler_steps: 50000        # maximum number of steps before deactivating scheduler (reduced from 100000)
+scheduler_steps: 120000        # maximum number of steps before deactivating scheduler (reduced from 100000)
 buffer_size: 500              # size of the replay buffer
 batch_size: 128               # number of samples from replay buffer per update (default = 128)
 sync_interval: 100            # number of updates before syncing target model with current model
 clip: 10                      # gradient clip rate
 
 # --- QMix parameters
-use_mixer: False               # use mixer?
+use_mixer: True               # use mixer?
 mixer: 'QMIX'                 # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
 qmix_ns: False                 # ablation: no conditioning an states
 embed_dim: 64                 # embedding size of Q-mixer 

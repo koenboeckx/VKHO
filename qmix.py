@@ -140,7 +140,7 @@ class QMIXAgent(Agent):
                 qvals[0][action.id] = -np.infty
             action_idx = qvals.max(1)[1].item() # pick position of maximum
         
-        if test_mode:
+        if test_mode: # when in test_mode, always return 'best' action
             return self.actions[action_idx]
         
         eps = self.scheduler()
@@ -210,14 +210,16 @@ class MultiAgentController:
         target = rewards + args.gamma * (1. - dones) * predicted_q_tot
         
         # check shapes #TODO: remove when done
-        if args.use_mixer:
+        if args.use_mixer: # all Q values are squashed into one Qtot
             assert target.shape == torch.Size([args.batch_size, 1])
             assert current_q_tot.shape == torch.Size([args.batch_size, 1])
         else:
             assert target.shape == torch.Size([args.batch_size, len(self.agents)])
             assert current_q_tot.shape == torch.Size([args.batch_size, len(self.agents)])
 
-        loss = F.mse_loss(current_q_tot, target.detach())
+        td_error = current_q_tot - target.detach()
+        loss = (td_error ** 2).mean()
+        
         self.optimizer.zero_grad()
         loss.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters, args.clip)
@@ -269,7 +271,10 @@ def train(args):
         ex.log_scalar('loss', loss)
 
         if step_idx % args.log_interval == 0:
-            episode = generate_episode(env, test_mode=False)
+            episode = generate_episode(env, test_mode=True)
+            if step_idx == 0:
+                episode[-1].rewards["blue"] = 0
+                episode[-1].rewards["red"]  = 1
             ex.log_scalar('length', len(episode), step=step_idx)
             ex.log_scalar('reward', episode[-1].rewards["blue"], step=step_idx)
             ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1), step=step_idx)
