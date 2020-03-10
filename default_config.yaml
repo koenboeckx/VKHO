@@ -12,6 +12,7 @@ n_friends: 1              # number of friends (team "blue")
 n_enemies: 1              # number of enemies (team "red")
 
 # --- Logging options ---
+log_interval: 10          # logging rate
 save_model: True         # Save the models to disk
 save_model_interval: 2000 # Save models after this many episodes
 path: '/Programming/VKHO/agent_dumps/'

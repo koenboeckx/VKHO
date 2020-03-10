@@ -66,7 +66,7 @@ def transform_state(state):
         states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
     return states_v
 
-def generate_episode(env, render=False):
+def generate_episode(env, render=False, test_mode=False):
     "Generate episode; store observations and states as tensors"
     episode = []
     state, done = env.reset(), False
@@ -86,7 +86,7 @@ def generate_episode(env, render=False):
         
         actions = {}
         for idx, agent in enumerate(env.agents):
-            actions[agent] = agent.act(observations[idx, :])
+            actions[agent] = agent.act(observations[idx, :], test_mode=test_mode)
 
         if render:
             print(f"Step {n_steps}")
@@ -128,7 +128,7 @@ class QMIXAgent(Agent):
     def set_model(self, models):
         self.model  = models['model']
     
-    def act(self, obs):
+    def act(self, obs, test_mode=False):
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions
                         if action not in unavail_actions]
@@ -139,7 +139,10 @@ class QMIXAgent(Agent):
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
             action_idx = qvals.max(1)[1].item() # pick position of maximum
-
+        
+        if test_mode:
+            return self.actions[action_idx]
+        
         eps = self.scheduler()
         if random.random() < eps:
             return random.choice(avail_actions)
@@ -259,20 +262,25 @@ def train(args):
         
         loss = mac.update(batch)
 
-        ex.log_scalar('length', len(episode))
-        ex.log_scalar('reward', episode[-1].rewards["blue"])
-        ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
-        ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
+        if args.use_mixer and step_idx % args.sync_interval == 0:
+            mac.sync_networks()
+        
+        ## logging
         ex.log_scalar('loss', loss)
-        ex.log_scalar('epsilon', training_agents[0].scheduler())
+
+        if step_idx % args.log_interval == 0:
+            episode = generate_episode(env, test_mode=False)
+            ex.log_scalar('length', len(episode), step=step_idx)
+            ex.log_scalar('reward', episode[-1].rewards["blue"], step=step_idx)
+            ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1), step=step_idx)
+            ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1), step=step_idx)
+            ex.log_scalar('epsilon', training_agents[0].scheduler(), step=step_idx)
 
         if PRINT and step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
             #episode = generate_episode(env, render=True)
         
-        if args.use_mixer and step_idx % args.sync_interval == 0:
-            if PRINT: print('Syncing networks ...')
-            mac.sync_networks()
+
         
         if args.save_model and step_idx > 0 and step_idx % args.save_model_interval == 0:
             from os.path import expanduser

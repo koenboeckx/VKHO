@@ -124,7 +124,7 @@ class Agent:
             actions.append(Action(id + 6, 'aim', enemy))
         return actions
   
-    def act(self, obs):
+    def act(self, obs, **kwargs):
         unavail_actions = self.env.get_unavailable_actions()[self]
         avail_actions = [action for action in self.actions if action not in unavail_actions]
         return random.choice(avail_actions)
