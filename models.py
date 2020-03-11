@@ -111,6 +111,23 @@ class QMixModel(nn.Module): # TODO: add last action as input
         q = self.fc2(h)
         return q, h
 
+class QMixForwardModel(nn.Module): # TODO: add last action as input
+    def __init__(self, input_shape, n_actions, n_hidden):
+        super().__init__()
+        self.n_hidden = n_hidden
+        self.fc1 = nn.Linear(input_shape, n_hidden) 
+        self.fc2 = nn.Linear(n_hidden, n_hidden)
+        self.fc3 = nn.Linear(n_hidden, n_actions)
+
+    def init_hidden(self):
+        return self.fc1.weight.new(1, self.n_hidden).zero_()
+    
+    def forward(self, inputs):
+        x = inputs
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        q = self.fc3(x)
+        return q
 
 def process(obs_list):
     "transform list of observations into tensor for use in model"
@@ -131,7 +148,7 @@ def process(obs_list):
                     x[obs_idx, idx:idx+3] = torch.tensor([1.,] + list(enemy))
                 else:       # enemy is dead
                     x[obs_idx, idx:idx+3] = torch.tensor([0., 0., 0.])
-                idx += 1
+                idx += 3
             x[obs_idx, idx]   = obs.ammo / args.init_ammo
             x[obs_idx, idx+1] = obs.aim.id if obs.aim is not None else -1
     else:

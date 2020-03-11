@@ -12,7 +12,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
-from models import QMixModel
+from models import QMixModel, QMixForwardModel
 from mixers import VDNMixer, QMixer
 from env import Environment, Agent, Action, Observation
 
@@ -46,7 +46,7 @@ def transform_obs(observations):
                     x[idx:idx+3] = torch.tensor([1.,] + list(enemy))
                 else:       # enemy is dead
                     x[idx:idx+3] = torch.tensor([0., 0., 0.])
-                idx += 1
+                idx += 3
             x[idx]   = obs.ammo / args.init_ammo
             x[idx+1] = obs.aim.id if obs.aim is not None else -1
             result.append(x)
@@ -134,7 +134,10 @@ class QMIXAgent(Agent):
                         if action not in unavail_actions]
         
         with torch.no_grad():
-            qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
+            if args.model == 'FORWARD':
+                qvals = self.model(obs.unsqueeze(0)) # TODO: verify is unqueeze is needed
+            elif args.model == 'RNN':
+                qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
             # remove unavailable actions
             for action in unavail_actions:
                 qvals[0][action.id] = -np.infty
@@ -186,11 +189,15 @@ class MultiAgentController:
         dones        = torch.tensor(dones, dtype=torch.float).unsqueeze(-1)
         unavail      = torch.stack(unavailable_actions)[:, agent_idxs, :]
 
-        current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
-        predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
-        for t in range(batch_size):
-            current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
-            predicted_q_vals[t, :,  :], _ = self.target(next_obs[t], h) 
+        if args.model == 'FORWARD':
+            current_q_vals   = self.model(observations)
+            predicted_q_vals = self.target(next_obs)
+        elif args.model == 'RNN':
+            current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
+            predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
+            for t in range(batch_size):
+                current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
+                predicted_q_vals[t, :,  :], _ = self.target(next_obs[t], h) 
 
         # gather q-vals corresponding to the actions taken
         current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
@@ -219,7 +226,7 @@ class MultiAgentController:
 
         td_error = current_q_tot - target.detach()
         loss = (td_error ** 2).mean()
-        
+
         self.optimizer.zero_grad()
         loss.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters, args.clip)
@@ -232,8 +239,14 @@ class MultiAgentController:
         self.target_mixer.load_state_dict(self.mixer.state_dict())
         
 def generate_models(input_shape, n_actions):
-    model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
-    target = QMixModel(input_shape=input_shape, n_actions=n_actions)
+    if args.model == 'FORWARD':
+        model  = QMixForwardModel(input_shape=input_shape,
+                                  n_actions=n_actions,
+                                  n_hidden=args.n_hidden)
+        target = copy.deepcopy(model)
+    elif args.model == 'RNN':
+        model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
+        target = QMixModel(input_shape=input_shape, n_actions=n_actions)
     return {"model": model, "target": target}
 
 PRINT_INTERVAL = 10
