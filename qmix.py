@@ -67,7 +67,10 @@ def transform_state(state):
     return states_v
 
 def generate_episode(env, render=False, test_mode=False):
-    "Generate episode; store observations and states as tensors"
+    """Generate episode; store observations and states as tensors
+        render: renders every step of episode
+        test_mode: picks best action, not based on epsilon-greedy
+    """
     episode = []
     state, done = env.reset(), False
     observations = transform_obs(env.get_all_observations())
@@ -209,7 +212,7 @@ class MultiAgentController:
 
         if args.use_mixer:
             current_q_tot   = self.mixer(current_q_vals_actions, states)
-            predicted_q_tot = self.mixer(predicted_q_vals_max, next_states)
+            predicted_q_tot = self.target_mixer(predicted_q_vals_max, next_states)
         else:
             current_q_tot   = current_q_vals_actions
             predicted_q_tot = predicted_q_vals_max

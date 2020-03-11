@@ -344,12 +344,93 @@ class Environment:
             observations[agent] = self.get_observation(agent)
         return observations
 
+class Environment2(Environment):
+    """Additional restriction: opponent must be visible when FIRING
+    Only impacts method `check_conditions"""
+    def __init__(self, agents, args):
+        super().__init__(agents, args)
+        self.visibility_dict = self._generate_vis_dict()
+    
+    def _generate_vis_dict(self):
+        """
+        Pre-compute the straight lines between all two points.
+        :return: a dict with keys = ((xi, yi), (xj, yj)) pairs
+                and values = [..., (xk, yk), ...] element along
+                line between (xi, yi) and (xj, yj).
+        """
+        size = self.board_size
+        N = 20 # number of points considered, 100 = randomly chosen value
+        los = {}
+        all_squares = [(x, y) for x in range(size) for y in range(size)]
+        for (xi, yi) in all_squares:
+            for (xj, yj) in all_squares:
+                los[((xi, yi), (xj, yj))] = []
+                dx = (xj - xi)/N
+                dy = (yj - yi)/N
+                xs = [xi+k*dx for k in range(N)]
+                ys = []
+                for k, x in zip(range(N), xs): # create list of consecutive, non-integer x values
+                    if x == xi: # move in horizontal line
+                        ys.append(yi + k*dy)
+                    else:
+                        ys.append(yi + (yj - yi) * (x - xi) /(xj - xi))
+                for x, y in zip(xs, ys):
+                    los[((xi, yi), (xj, yj))].append((int(round(x)), int(round(y))))
+
+                los[((xi, yi), (xj, yj))] = list(set(los[((xi, yi), (xj, yj))])) # remove doubles
+                # remove endpoints:
+                if (xi, yi) in los[((xi, yi), (xj, yj))]:
+                    los[((xi, yi), (xj, yj))].remove((xi, yi))
+                if (xj, yj) in los[((xi, yi), (xj, yj))]:
+                    los[((xi, yi), (xj, yj))].remove((xj, yj))
+
+        return los
+
+    def visible(self, agent, opponent):
+        x0, y0 = self.state.position[agent]
+        x1, y1 = self.state.position[opponent]
+        los = self.visibility_dict[(x0, y0), (x1, y1)]
+        for other_agent in self.agents:
+            other_pos = self.state.position[other_agent]
+            if other_pos in los:
+                return False
+        return True
+
+    def check_conditions(self, state, agent, action):
+        assert agent in self.agents
+        if action.name == 'do_nothing':
+            return True # always allowed
+        elif state.alive[agent] is False: # no actions (except 'do_nothing') allowed for dead agent
+            return False
+        elif action.name == 'fire':
+            if state.aim[agent] is None: # not allowed if not aiming
+                return False
+            elif state.ammo[agent] <= 0: # not allowed if no ammo remaining
+                return False
+            elif not self.visible(agent, state.aim[agent]):
+                return False
+            else:
+                return True
+        elif action.name in ['move_north', 'move_south', 'move_west', 'move_east']:
+            if self.free(state.position[agent], action.name):
+                return True
+            else:
+                return False
+        elif action.name == 'aim':
+            if state.aim[agent] is action.target: # not allowed if already aiming
+                return False
+            else:
+                return True
+        else:
+            return False # action not in all_actions
+
 #---------------------------------- test -------------------------------------
 def test_step():
+    from settings import args
     team_blue = [Agent(0, "blue"), Agent(1, "blue")]
     team_red  = [Agent(2, "red"),  Agent(3, "red")]
     agents = team_blue + team_red
-    env = Environment(agents)
+    env = Environment(agents, args)
     state, done = env.reset(), False
     i = 0
     while not done:
@@ -371,5 +452,25 @@ def test_step():
     print(rewards.values())
     print(f'Terminated in {i} steps')
 
+def test_visibility():
+    from settings import args
+    team_blue = [Agent(0, "blue"), Agent(1, "blue")]
+    team_red  = [Agent(2, "red"),  Agent(3, "red")]
+    agents = team_blue + team_red
+    env = Environment2(agents, args)
+        
+    agent0 = env.agents[0]
+    agent1 = env.agents[1]
+    agent3 = env.agents[3]
+    env.render()
+    print(env.visible(agent1, agent3)) # -> True
+
+    env.state.position[agent0] = (4,4)
+    env.render()
+    env.visible(agent1, agent3)
+    print(env.visible(agent1, agent3)) # -> False
+
+    
+
 if __name__ == '__main__':
-    test_step()
+    test_visibility()

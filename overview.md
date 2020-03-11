@@ -159,3 +159,5 @@
     1. [10Mar20]: error in creating tensor from observation:
         models.py line 151: `idx += 1` -> `idx += 3`
         qmix.py line 49: `idx += 1` -> `idx += 3`
+    1. [10Mar20]: on QMIX 1v1: seems to work (see runs 802 & 821); however, collapse after +/- 7000 episodes. Look into DECREASING learning rate
+    1. [10Mar20]: created Environment2(): with visibility constrained when trying to fire
