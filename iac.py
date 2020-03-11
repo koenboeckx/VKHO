@@ -211,9 +211,9 @@ def train():
 
     from os.path import expanduser
     home = expanduser("~")
-    for agent in training_agents:
-        agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
-    torch.save(models["model"].state_dict(), home+args.path+f'RUN_{get_run_id()}.torch')
+    #for agent in training_agents:
+    #    agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    torch.save(models["model"].state_dict(), home+args.path+f'RUN_{get_run_id()}_MODEL.torch')
     
 
 # -------------------------------------------------------------------------------------
