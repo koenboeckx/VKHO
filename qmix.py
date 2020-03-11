@@ -135,7 +135,7 @@ class QMIXAgent(Agent):
         
         with torch.no_grad():
             if args.model == 'FORWARD':
-                qvals = self.model(obs.unsqueeze(0)) # TODO: verify is unqueeze is needed
+                qvals = self.model(obs.unsqueeze(0))
             elif args.model == 'RNN':
                 qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
             # remove unavailable actions

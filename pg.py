@@ -12,10 +12,10 @@ from models import ForwardModel, RNNModel
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'PG-{args.n_friends}v{args.n_enemies}')
+ex = Experiment(f'PG')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-ex.add_config('new_env/default_config.yaml')    # requires PyYAML                          
+ex.add_config('default_config.yaml')    # requires PyYAML                          
 
 class PGAgent(Agent):
     def __init__(self, id, team):
@@ -118,7 +118,7 @@ def train():
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents)
+    env = Environment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies

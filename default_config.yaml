@@ -21,7 +21,7 @@ path: '/Programming/VKHO/agent_dumps/'
 n_steps: 50000            # number of episodes to generate
 gamma: 0.9                # discount factor
 
-model: 'FORWARD'              # type of neural network: 'FORWARD' or 'RNN
+model: 'RNN'              # type of neural network: 'FORWARD' or 'RNN
 n_hidden: 128             # number of hidden layers
 lr: 0.0001                # learning rate for ADAM
 n_iterations: 5           # number of iterations for transfer learning
@@ -39,7 +39,7 @@ sync_interval: 100            # number of updates before syncing target model wi
 clip: 10                      # gradient clip rate
 
 # --- QMix parameters
-use_mixer: True               # use mixer?
+use_mixer: False               # use mixer?
 mixer: 'QMIX'                 # type of mixer to use: 'VDN' or 'QMIX' or 'QMIX_NS'
 qmix_ns: False                 # ablation: no conditioning an states
 embed_dim: 64                 # embedding size of Q-mixer 

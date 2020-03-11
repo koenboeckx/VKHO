@@ -156,3 +156,6 @@
         * TODO: after transfer to opponent: keep working with current model in stead of restarting from zero
     1. [06Mar20]: reimplemented QMIX with `MultiAgentController`
     1. [08Mar20]: restructured master branch - for backup: see branch 'backup'
+    1. [10Mar20]: error in creating tensor from observation:
+        models.py line 151: `idx += 1` -> `idx += 3`
+        qmix.py line 49: `idx += 1` -> `idx += 3`
