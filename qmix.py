@@ -175,13 +175,12 @@ class MultiAgentController:
         if args.use_mixer:
             self.parameters += list(self.mixer.parameters())
         self.optimizer = torch.optim.Adam(self.parameters, lr=args.lr)
-        
-    def update(self, batch): 
-        #obs, hidden, next_obs, actions, rewards, dones = self.transform_batch(batch)
+
+    def _build_inputs(self, batch):
         agent_idxs = list(range(len(self.agents)))
-        batch_size = len(batch)
         states, actions, rewards, next_states, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
         
+        # transform all into format we require
         states       = torch.stack(states)
         next_states  = torch.stack(next_states)
         observations = torch.stack(observations)[:, agent_idxs, :]
@@ -191,6 +190,12 @@ class MultiAgentController:
         rewards      = torch.tensor([reward['blue'] for reward in rewards]).unsqueeze(-1)
         dones        = torch.tensor(dones, dtype=torch.float).unsqueeze(-1)
         unavail      = torch.stack(unavailable_actions)[:, agent_idxs, :]
+        return states, next_states, observations, next_obs, hidden, actions, rewards, dones, unavail
+
+    def update(self, batch):
+        batch_size = len(batch)
+        states, next_states, observations, next_obs, hidden, actions,\
+            rewards, dones, unavail = self._build_inputs(batch)
 
         if args.model == 'FORWARD':
             current_q_vals   = self.model(observations)

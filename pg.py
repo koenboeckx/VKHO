@@ -118,7 +118,10 @@ def train():
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents, args)
+    if args.env_type == 'normal':
+        env = Environment(agents, args)
+    elif args.env_type == 'restricted':
+        env = Environment2(agents, args)
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
@@ -169,8 +172,8 @@ def train():
 
     from os.path import expanduser
     home = expanduser("~")
-    for agent in training_agents:
-        agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
+    #for agent in training_agents:
+    #    agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
     torch.save(model.state_dict(), home+args.path+f'RUN_{get_run_id()}.torch')
 
 def train_agents(env, training_agents, args):
@@ -258,7 +261,7 @@ def test_transferability(args, filename):
     team_blue = [Agent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [PGAgent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
     agents = team_blue + team_red
-    env = Environment(agents)
+    env = Environment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
