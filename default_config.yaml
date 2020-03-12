@@ -35,7 +35,7 @@ n_episodes_per_step: 25   # number of episodes to generate per update step
 scheduler: 'LinearScheduler'  # type of scheduler to use
 scheduler_steps: 120000        # maximum number of steps before deactivating scheduler (reduced from 100000)
 buffer_size: 500              # size of the replay buffer
-batch_size: 128               # number of samples from replay buffer per update (default = 128)
+batch_size: 7 #128               # number of samples from replay buffer per update (default = 128)
 sync_interval: 100            # number of updates before syncing target model with current model
 clip: 10                      # gradient clip rate
 

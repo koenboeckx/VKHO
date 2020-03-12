@@ -5,13 +5,14 @@ multi-agent controller (MAC)
 
 import random
 import copy
+from collections import namedtuple
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from utilities import LinearScheduler, ReplayBuffer, Experience, get_args
+from utilities import LinearScheduler, ReplayBuffer, get_args
 from models import QMixModel, QMixForwardModel
 from mixers import VDNMixer, QMixer
 from env import Environment, Agent, Action, Observation
@@ -24,6 +25,11 @@ ex.observers.append(MongoObserver(url='localhost',
 ex.add_config('default_config.yaml')    # requires PyYAML 
 
 PRINT = True
+
+Experience = namedtuple('Experience', field_names = [
+    'state', 'actions', 'rewards', 'next_state', 'done', 'observations',
+    'hidden', 'next_obs', 'next_hidden','unavailable_actions'
+])
 
 def transform_obs(observations):
     "transform observation into tensor for storage and use in model"
@@ -82,14 +88,12 @@ def generate_episode(env, render=False, test_mode=False):
     while not done:
         unavailable_actions = env.get_unavailable_actions()
         
-        # keep record of hidden state of the agents to store in experience
-        hidden = []
-        for agent in env.agents:
-            hidden.append(agent.get_hidden_state())
-        
-        actions = {}
+        # compute action, keep record of hidden state of the agents to store in experience
+        actions, hidden, next_hidden = {}, [], []
         for idx, agent in enumerate(env.agents):
+            hidden.append(agent.get_hidden_state())
             actions[agent] = agent.act(observations[idx, :], test_mode=test_mode)
+            next_hidden.append(agent.get_hidden_state())
 
         if render:
             print(f"Step {n_steps}")
@@ -114,7 +118,8 @@ def generate_episode(env, render=False, test_mode=False):
         episode.append(Experience(transform_state(state), actions, rewards, 
                                   transform_state(next_state), done, 
                                   observations, torch.stack(hidden), 
-                                  next_obs, unavail_actions))
+                                  next_obs, torch.stack(next_hidden),
+                                  unavail_actions))
         state = next_state
         observations = next_obs
     
@@ -178,34 +183,40 @@ class MultiAgentController:
 
     def _build_inputs(self, batch):
         agent_idxs = list(range(len(self.agents)))
-        states, actions, rewards, next_states, dones, observations, hidden, next_obs, unavailable_actions = zip(*batch)
+        states, actions, rewards, next_states, dones, observations,\
+            hidden, next_obs, next_hidden, unavailable_actions = zip(*batch)
         
         # transform all into format we require
         states       = torch.stack(states)
         next_states  = torch.stack(next_states)
         observations = torch.stack(observations)[:, agent_idxs, :]
         next_obs     = torch.stack(next_obs)[:, agent_idxs, :]
-        hidden       = torch.stack(hidden)[:, agent_idxs, :]
+        hidden       = torch.stack(hidden).squeeze()[:, agent_idxs, :]
+        next_hidden  = torch.stack(next_hidden).squeeze()[:, agent_idxs, :]
         actions      = torch.stack(actions)[:, agent_idxs]
         rewards      = torch.tensor([reward['blue'] for reward in rewards]).unsqueeze(-1)
         dones        = torch.tensor(dones, dtype=torch.float).unsqueeze(-1)
         unavail      = torch.stack(unavailable_actions)[:, agent_idxs, :]
-        return states, next_states, observations, next_obs, hidden, actions, rewards, dones, unavail
+        return states, next_states, observations, next_obs, hidden, next_hidden,\
+             actions, rewards, dones, unavail
 
     def update(self, batch):
         batch_size = len(batch)
-        states, next_states, observations, next_obs, hidden, actions,\
+        states, next_states, observations, next_obs, hidden, next_hidden, actions,\
             rewards, dones, unavail = self._build_inputs(batch)
 
         if args.model == 'FORWARD':
             current_q_vals   = self.model(observations)
             predicted_q_vals = self.target(next_obs)
         elif args.model == 'RNN':
-            current_q_vals   = torch.zeros((batch_size, len(self.agents), args.n_actions))
-            predicted_q_vals = torch.zeros((batch_size, len(self.agents), args.n_actions))
-            for t in range(batch_size):
-                current_q_vals[t, :, :],    h = self.model(observations[t], hidden[t])
-                predicted_q_vals[t, :,  :], _ = self.target(next_obs[t], h) 
+            observations = observations.reshape(batch_size * len(self.agents), -1)
+            next_obs = next_obs.reshape(batch_size * len(self.agents), -1)
+            hidden = hidden.reshape(batch_size * len(self.agents), -1)
+            next_hidden = next_hidden.reshape(batch_size * len(self.agents), -1)
+            current_q_vals,   _ = self.model(observations, hidden)
+            predicted_q_vals, _ = self.target(next_obs, next_hidden)
+            current_q_vals = current_q_vals.reshape(batch_size, len(self.agents), -1)
+            predicted_q_vals = predicted_q_vals.reshape(batch_size, len(self.agents), -1)
 
         # gather q-vals corresponding to the actions taken
         current_q_vals = current_q_vals.reshape(len(self.agents)*batch_size, -1)    # interweave agents: (batch_size x n_agents, n_actions)
