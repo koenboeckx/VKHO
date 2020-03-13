@@ -14,15 +14,15 @@ class QMixer(nn.Module):
         super().__init__()
         # Hypernetwork
         self.n_trainers = args.n_friends # assumes all friends are learning
-        self.embed_dim = args.embed_dim
+        self.embed_dim  = args.embed_dim
         self.state_dim = 5 * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
         self.HW1 = nn.Linear(self.state_dim, self.embed_dim * self.n_trainers)
         self.Hb1 = nn.Linear(self.state_dim, self.embed_dim)
         self.HW2 = nn.Linear(self.state_dim, self.embed_dim)
         self.Hb2 = nn.Sequential(
-            nn.Linear(self.state_dim, args.embed_dim),
+            nn.Linear(self.state_dim, self.embed_dim),
             nn.ReLU(),
-            nn.Linear(args.embed_dim, 1)
+            nn.Linear(self.embed_dim, 1)
         )
 
         self.qmix_ns = args.qmix_ns # no conditioning on state information
@@ -33,14 +33,16 @@ class QMixer(nn.Module):
         states = states.reshape(-1, self.state_dim)
         if self.qmix_ns:
             states = torch.zeros_like(states) # only for testing
-        W1 = torch.abs(self.HW1(states))
-        W1 = W1.reshape(-1, self.embed_dim, self.n_trainers)
+        W1 = self.HW1(states)
+        #W1 = W1 - W1.mean(dim=1).unsqueeze(1) # normalize
+        W1 = torch.abs(W1).reshape(-1, self.embed_dim, self.n_trainers)
         
         b1 = self.Hb1(states)
         b1 = b1.reshape(-1, self.embed_dim, 1)
         
-        W2 = torch.abs(self.HW2(states))
-        W2 = W2.reshape(-1, 1, self.embed_dim)
+        W2 = self.HW2(states)
+        #W2 = W2 - W2.mean(dim=1).unsqueeze(1) # normalize
+        W2 = torch.abs(W2).reshape(-1, 1, self.embed_dim)
         
         b2 = self.Hb2(states)
         b2 = b2.reshape(-1, 1, 1)

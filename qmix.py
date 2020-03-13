@@ -180,6 +180,7 @@ class MultiAgentController:
         if args.use_mixer:
             self.parameters += list(self.mixer.parameters())
         self.optimizer = torch.optim.Adam(self.parameters, lr=args.lr)
+        self.normalize_states = args.normalize_states
 
     def _build_inputs(self, batch):
         agent_idxs = list(range(len(self.agents)))
@@ -189,6 +190,9 @@ class MultiAgentController:
         # transform all into format we require
         states       = torch.stack(states)
         next_states  = torch.stack(next_states)
+        if self.normalize_states:
+            states = states - states.mean(dim=0)
+            next_states = next_states - next_states.mean(dim=0)
         observations = torch.stack(observations)[:, agent_idxs, :]
         next_obs     = torch.stack(next_obs)[:, agent_idxs, :]
         hidden       = torch.stack(hidden).squeeze()[:, agent_idxs, :]
@@ -242,6 +246,8 @@ class MultiAgentController:
         else:
             assert target.shape == torch.Size([args.batch_size, len(self.agents)])
             assert current_q_tot.shape == torch.Size([args.batch_size, len(self.agents)])
+        
+        ex.log_scalar('mean_q', current_q_tot.mean().item())
 
         td_error = current_q_tot - target.detach()
         loss = (td_error ** 2).mean()
@@ -255,7 +261,8 @@ class MultiAgentController:
     
     def sync_networks(self):
         self.target.load_state_dict(self.model.state_dict())
-        self.target_mixer.load_state_dict(self.mixer.state_dict())
+        if args.use_mixer:
+            self.target_mixer.load_state_dict(self.mixer.state_dict())
         
 def generate_models(input_shape, n_actions):
     if args.model == 'FORWARD':
@@ -296,7 +303,7 @@ def train(args):
         
         loss = mac.update(batch)
 
-        if args.use_mixer and step_idx % args.sync_interval == 0:
+        if step_idx % args.sync_interval == 0:
             mac.sync_networks()
         
         ## logging
@@ -316,8 +323,6 @@ def train(args):
         if PRINT and step_idx > 0 and step_idx % PRINT_INTERVAL == 0:
             print(f"Step {step_idx}: loss = {loss}, reward = {episode[-1].rewards['blue']}")
             #episode = generate_episode(env, render=True)
-        
-
         
         if args.save_model and step_idx > 0 and step_idx % args.save_model_interval == 0:
             from os.path import expanduser
