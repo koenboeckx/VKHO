@@ -20,13 +20,13 @@ path: '/Programming/VKHO/agent_dumps/'
 
 # --- general marl parameters
 n_steps: 20000            # number of episodes to generate
-gamma: 0.9                # discount factor
+gamma: 0.99               # discount factor
 
 model: 'RNN'              # type of neural network: 'FORWARD' or 'RNN
 n_hidden: 128             # number of hidden layers
 lr: 0.0001                # learning rate for ADAM
-n_iterations: 5           # number of iterations for transfer learning
-normalize_states: True    # shpuld state vectors be normalized?
+n_iterations: 5            # number of iterations for transfer learning
+normalize_states: False    # should state vectors be normalized?
 
 # --- policy gradient parameters
 beta: 0.01                # entropy loss coefficient

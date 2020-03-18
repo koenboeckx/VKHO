@@ -33,6 +33,7 @@ class QMixer(nn.Module):
         states = states.reshape(-1, self.state_dim)
         if self.qmix_ns:
             states = torch.zeros_like(states) # only for testing
+        
         W1 = self.HW1(states)
         #W1 = W1 - W1.mean(dim=1).unsqueeze(1) # normalize
         W1 = torch.abs(W1).reshape(-1, self.embed_dim, self.n_trainers)
