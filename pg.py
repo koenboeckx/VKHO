@@ -261,7 +261,11 @@ def test_transferability(args, filename):
     team_blue = [Agent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [PGAgent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
     agents = team_blue + team_red
-    env = Environment(agents, args)
+    
+    if args.env_type == 'normal':
+        env = Environment(agents, args)
+    if args.env_type == 'restricted':
+        env = Environment2(agents, args)
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies

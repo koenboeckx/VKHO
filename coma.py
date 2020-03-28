@@ -151,7 +151,7 @@ class ComaActor(nn.Module): # TODO: add last action as input
 
 class ComaCritic(nn.Module):
     def __init__(self):
-        
+        pass
 
 class COMAAgent(Agent):
     def __init__(self, id, team):

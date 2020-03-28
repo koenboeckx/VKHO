@@ -1,5 +1,5 @@
 """
-New implementation of IQL, with common 
+New implementation of QMIX, with common 
 multi-agent controller (MAC)
 """
 
@@ -15,7 +15,8 @@ from torch.nn import functional as F
 from utilities import LinearScheduler, ReplayBuffer, get_args
 from models import QMixModel, QMixForwardModel
 from mixers import VDNMixer, QMixer
-from env import Environment, Agent, Action, Observation
+from env import Agent, Action, Observation
+from env import Environment, Environment2
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -284,7 +285,10 @@ def train(args):
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents, args)
+    if args.env_type == 'normal':
+        env = Environment(agents, args)
+    if args.env_type == 'restricted':
+        env = Environment2(agents, args)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
     args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies # see process function in models.py

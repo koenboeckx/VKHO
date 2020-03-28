@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from env import Action, Agent, Environment
+from env import Action, Agent, Environment, Environment2
 from utilities import LinearScheduler, ReplayBuffer, Experience, generate_episode, get_args
 from models import ForwardModel, RNNModel
 
@@ -117,7 +117,10 @@ def train(args):
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents, args)
+    if args.env_type == 'normal':
+        env = Environment(agents, args)
+    if args.env_type == 'restricted':
+        env = Environment2(agents, args)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
     args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies # see process function in models.py

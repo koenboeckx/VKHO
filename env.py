@@ -10,6 +10,15 @@ import torch
 
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
+def generate_terrain(size):
+    "An example terrain with blockages in the middle"
+    terrain = np.zeros((size, size))
+    terrain[size//2-1, size//2-1] = 1.
+    terrain[size//2,   size//2-1] = 1.
+    terrain[size//2-1, size//2]   = 1.
+    terrain[size//2,   size//2]   = 1.
+    return terrain
+
 class State:
     def __init__(self, agents, args):
         self.agents = agents
@@ -39,6 +48,7 @@ class State:
             self.alive[agent] = True
             self.ammo[agent]  = args.init_ammo
             self.aim[agent]   = None
+        self.terrain = generate_terrain(args.board_size)
 
     def __str__(self):
         s = f""
@@ -85,6 +95,7 @@ class Observation:
                         self.enemies.append(False)
                     else:
                         self.enemies.append(rel_pos)
+        self.terrain = state.terrain
 
     def __str__(self):
         s  = f"Observation for agent {self.agent}: "
@@ -389,11 +400,34 @@ class Environment2(Environment):
     def visible(self, agent, opponent):
         x0, y0 = self.state.position[agent]
         x1, y1 = self.state.position[opponent]
-        los = self.visibility_dict[(x0, y0), (x1, y1)]
+        los = self.visibility_dict[(x0, y0), (x1, y1)] # Line-Of-Sight dictionary between two points
         for other_agent in self.agents:
             other_pos = self.state.position[other_agent]
             if other_pos in los:
                 return False
+        for x in range(self.board_size):
+            for y in range(self.board_size):
+                if self.state.terrain[x, y] == 1.: # means: object blocks visibility in terrain
+                    if (x, y) in los:
+                        return False
+        return True
+
+    def free(self, position, direction):
+        """check if position in 'direction' from 'position' is free
+        subclassing to take terrain into account"""
+        new_position = self.get_new_position(position, direction)
+        # 1. check if new position is still on the board
+        if new_position[0] < 0 or new_position[0] >= self.board_size:
+            return False
+        if new_position[1] < 0 or new_position[1] >= self.board_size:
+            return False
+        # 2. check  if nobody else occupies the new position
+        for agent in self.agents:
+            if self.state.position[agent] == new_position:
+                return False
+        # 3. check if nothing blocks new position in terrain
+        if self.state.terrain[new_position] == 1.:
+            return False
         return True
 
     def check_conditions(self, state, agent, action):
@@ -470,7 +504,10 @@ def test_visibility():
     env.visible(agent1, agent3)
     print(env.visible(agent1, agent3)) # -> False
 
+def test_terrain():
+    print(generate_terrain(10))
+
     
 
 if __name__ == '__main__':
-    test_visibility()
+    test_terrain()

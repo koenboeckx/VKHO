@@ -157,7 +157,10 @@ def train():
     training_agents = team_blue
 
     agents = team_blue + team_red
-    env = Environment(agents, args)
+    if args.env_type == 'normal':
+        env = Environment(agents, args)
+    if args.env_type == 'restricted':
+        env = Environment2(agents, args)
 
     args.n_actions = 6 + args.n_enemies
     args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
