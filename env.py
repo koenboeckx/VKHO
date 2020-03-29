@@ -1,5 +1,6 @@
 """
 [13Feb20] More complex Environment: two-vs-two
+[25Mar20] Add visibility information to state
 """
 
 import random, copy, pickle
@@ -11,13 +12,15 @@ import torch
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
 def generate_terrain(size):
-    "An example terrain with blockages in the middle"
-    terrain = np.zeros((size, size))
-    terrain[size//2-1, size//2-1] = 1.
-    terrain[size//2,   size//2-1] = 1.
-    terrain[size//2-1, size//2]   = 1.
-    terrain[size//2,   size//2]   = 1.
+    """returns list with position of obstacles.
+    An obstacle blocks both passage and visibility"""
+    terrain = []
+    terrain.append((size//2-1, size//2-1))
+    terrain.append((size//2, size//2-1))
+    terrain.append((size//2-1, size//2))
+    terrain.append((size//2, size//2))
     return terrain
+
 
 class State:
     def __init__(self, agents, args):
@@ -48,7 +51,9 @@ class State:
             self.alive[agent] = True
             self.ammo[agent]  = args.init_ammo
             self.aim[agent]   = None
+        
         self.terrain = generate_terrain(args.board_size)
+        self.visible = dict()
 
     def __str__(self):
         s = f""
@@ -70,6 +75,7 @@ class Observation:
         (2) friends:  relative position of friendly (living) forces in self.friends
         (3) enemies:  relative position of enemy (living) forces in self.enemies
     """
+    # TODO: add visibility indicator for enemies
     def __init__(self, state, agent):
         self.agent = agent
         self.own_position = state.position[agent]
@@ -80,6 +86,7 @@ class Observation:
 
         self.friends = []
         self.enemies = []
+        self.enemy_visibility = []
         own_pos = self.own_position
         for other in state.position:
             if other is not agent:
@@ -94,9 +101,9 @@ class Observation:
                     if not state.alive[other]:
                         self.enemies.append(False)
                     else:
-                        self.enemies.append(rel_pos)
-        self.terrain = state.terrain
-
+                        self.enemies.append(rel_pos)    
+                    self.enemy_visibility.append(state.visible[(agent, other)])  
+        
     def __str__(self):
         s  = f"Observation for agent {self.agent}: "
         s += f"{'alive' if self.alive else 'dead'}, ammo = {self.ammo}, aim = {self.aim} @ postion {self.own_position}\n"
@@ -334,11 +341,16 @@ class Environment:
             x, y = state.position[agent]
             arr[x, y] = agent.id
         s = '_' * (self.board_size + 2) + '\n'
+        for obstacle in self.state.terrain:
+            x, y = obstacle
+            arr[x, y] = -2
         for x in range(self.board_size):
             s += '|'
             for y in range(self.board_size):
                 if arr[x, y] == -1:
                     s += '.'
+                elif arr[x, y] == -2:
+                    s += 'x'
                 else:
                     s += str(int(arr[x, y]))
             s += '|\n'
@@ -355,12 +367,13 @@ class Environment:
             observations[agent] = self.get_observation(agent)
         return observations
 
-class Environment2(Environment):
+class RestrictedEnvironment(Environment):
     """Additional restriction: opponent must be visible when FIRING
     Only impacts method `check_conditions"""
     def __init__(self, agents, args):
         super().__init__(agents, args)
         self.visibility_dict = self._generate_vis_dict()
+        self.set_state_visibility()
     
     def _generate_vis_dict(self):
         """
@@ -397,17 +410,34 @@ class Environment2(Environment):
 
         return los
 
+    def set_state_visibility(self):
+        # add visibility
+        for agent in self.agents:
+            for other in self.agents:
+                if agent.team == other.team: # agens belong to same team
+                    continue
+                else:
+                    self.state.visible[(agent, other)] = self.visible(agent, other)
+
+    def step(self, actions):
+        "extend .step method of parent class"
+        self.state, rewards, done, info = super().step(actions)
+        self.set_state_visibility()
+        return self.get_state(), rewards, done, info
+
     def visible(self, agent, opponent):
         x0, y0 = self.state.position[agent]
         x1, y1 = self.state.position[opponent]
         los = self.visibility_dict[(x0, y0), (x1, y1)] # Line-Of-Sight dictionary between two points
+        # check agents
         for other_agent in self.agents:
             other_pos = self.state.position[other_agent]
             if other_pos in los:
                 return False
+        # check terrain obstacles
         for x in range(self.board_size):
             for y in range(self.board_size):
-                if self.state.terrain[x, y] == 1.: # means: object blocks visibility in terrain
+                if (x,y) in self.state.terrain: # means: obstacle blocks visibility in terrain
                     if (x, y) in los:
                         return False
         return True
@@ -426,7 +456,7 @@ class Environment2(Environment):
             if self.state.position[agent] == new_position:
                 return False
         # 3. check if nothing blocks new position in terrain
-        if self.state.terrain[new_position] == 1.:
+        if new_position in self.state.terrain:
             return False
         return True
 
@@ -491,13 +521,15 @@ def test_visibility():
     team_blue = [Agent(0, "blue"), Agent(1, "blue")]
     team_red  = [Agent(2, "red"),  Agent(3, "red")]
     agents = team_blue + team_red
-    env = Environment2(agents, args)
+    env = RestrictedEnvironment(agents, args)
         
     agent0 = env.agents[0]
     agent1 = env.agents[1]
     agent3 = env.agents[3]
     env.render()
     print(env.visible(agent1, agent3)) # -> True
+
+    observations = env.get_all_observations()
 
     env.state.position[agent0] = (4,4)
     env.render()
@@ -510,4 +542,4 @@ def test_terrain():
     
 
 if __name__ == '__main__':
-    test_terrain()
+    test_visibility()

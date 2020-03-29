@@ -16,7 +16,7 @@ from utilities import LinearScheduler, ReplayBuffer, get_args
 from models import QMixModel, QMixForwardModel
 from mixers import VDNMixer, QMixer
 from env import Agent, Action, Observation
-from env import Environment, Environment2
+from env import Environment, RestrictedEnvironment
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -34,6 +34,7 @@ Experience = namedtuple('Experience', field_names = [
 
 def transform_obs(observations):
     "transform observation into tensor for storage and use in model"
+    
     result = []
     for agent in observations:
         obs = observations[agent]
@@ -54,6 +55,10 @@ def transform_obs(observations):
                 else:       # enemy is dead
                     x[idx:idx+3] = torch.tensor([0., 0., 0.])
                 idx += 3
+            # add enemy visibility                
+            for visible in obs.enemy_visibility:
+                x[idx] = torch.tensor(int(visible))
+                idx += 1
             x[idx]   = obs.ammo / args.init_ammo
             x[idx+1] = obs.aim.id if obs.aim is not None else -1
             result.append(x)
@@ -288,10 +293,10 @@ def train(args):
     if args.env_type == 'normal':
         env = Environment(agents, args)
     if args.env_type == 'restricted':
-        env = Environment2(agents, args)
+        env = RestrictedEnvironment(agents, args)
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
-    args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies # see process function in models.py
+    args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies + args.n_enemies# see process function in models.py
     models = generate_models(args.n_inputs, args.n_actions)
     for agent in training_agents:
         agent.set_model(models)
