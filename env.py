@@ -424,6 +424,12 @@ class RestrictedEnvironment(Environment):
         self.state, rewards, done, info = super().step(actions)
         self.set_state_visibility()
         return self.get_state(), rewards, done, info
+    
+    def reset(self):
+        "extend .reset method of parent class"
+        self.state = super().reset()
+        self.set_state_visibility()
+        return self.state
 
     def visible(self, agent, opponent):
         x0, y0 = self.state.position[agent]

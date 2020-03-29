@@ -34,12 +34,11 @@ Experience = namedtuple('Experience', field_names = [
 
 def transform_obs(observations):
     "transform observation into tensor for storage and use in model"
-    
     result = []
     for agent in observations:
         obs = observations[agent]
         if isinstance(obs, Observation):
-            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) # own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1)
+            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility)# own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1), enemy_visibility (Ne)
             x = torch.zeros((N)) 
             x[0:2] = torch.tensor(obs.own_position)
             idx = 2
@@ -68,14 +67,19 @@ def transform_obs(observations):
 
 def transform_state(state):
     """Transforms State into tensor"""
-    n_agents = len(state.agents)
-    states_v = torch.zeros(n_agents, 5) # 5 = x, y, alive, ammo, aim
+    # TODO: automate n_enemies calculation -> only valid fot n_enemies = n_friends
+    n_agents  = len(state.agents)
+    #n_enemies = len(state.visible[state.agents[0]])
+    n_enemies = 0
+    states_v = torch.zeros(n_agents, 5 + n_enemies) # 5 = x, y, alive, ammo, aim, enemy visible ? (x n_enemies)
     for agent_idx, agent in enumerate(state.agents):
         states_v[agent_idx, 0] = state.position[agent][0] # x
         states_v[agent_idx, 1] = state.position[agent][1] # y
         states_v[agent_idx, 2] = state.alive[agent]
         states_v[agent_idx, 3] = state.ammo[agent] / args.init_ammo
         states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
+        #for idx, value in enumerate(state.visible):
+        #    states_v[agent_idx, 4+idx] = int(value)
     return states_v
 
 def generate_episode(env, render=False, test_mode=False):
