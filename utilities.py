@@ -102,6 +102,8 @@ def get_args(config):
             for key in config:
                 setattr(self, key, config[key])
             self.n_agents = self.n_enemies + self.n_friends
+            self.n_actions = 6 + self.n_enemies # 6 fixed actions + 1 aim action per enemy
+            self.n_inputs  = 4 + 3*(self.n_friends - 1) + 3*self.n_enemies + self.n_enemies# see process function in models.py
     return Args()
 
 if __name__ == '__main__':

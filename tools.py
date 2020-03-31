@@ -8,8 +8,21 @@ import pygame
 import time
 import imageio # for generation of gifs
 import numpy as np
+import torch
 
 from settings import args
+
+action_names = {
+    0: 'do nothing',
+    1: 'fire',
+    2: 'move north',
+    3: 'move south',
+    4: 'move west',
+    5: 'move east',
+    6: 'aim 0',
+    7: 'aim 1',
+
+}
 
 def plot(ids, keys, filename=None, show=True):
     #client = MongoClient('localhost', 27017)
@@ -29,18 +42,23 @@ def plot(ids, keys, filename=None, show=True):
         plt.savefig(args.path+filename)
     if show: plt.show()
 
-def plot_window(runs, keys, window_size=100, filename=None, show=True):
+def plot_window(runs, keys, window_size=100, filename=None, show=True, limit_length=None):
     "Plot values averaged over a window"
-    #client = MongoClient('localhost', 27017)
-    client = MongoClient('ampere.elte.rma.ac.be', 27017)
+    client = MongoClient('localhost', 27017)
+    #client = MongoClient('ampere.elte.rma.ac.be', 27017)
     db = client["my_database"]
     metrics = db.metrics
     fig, ax = plt.subplots()
     for key in keys:
         for run in runs:
             result = metrics.find_one({'run_id': run, 'name' : key})
+            if result is None:
+                continue
             x = np.array(result['steps'])
             y = np.array(result['values'])
+            if limit_length is not None:
+                x = x[:limit_length//x[0]] # takes into account step size > 1
+                y = y[:limit_length//x[0]]
             y_mean = np.array([np.mean(y[idx-window_size:idx]) for idx in range(window_size, len(y))])
             # TODO: remove term "0.1" below - variance should be taken over multiple runs
             y_std  = 0.2*np.array([np.std(y[idx-window_size:idx])  for idx in range(window_size, len(y))])
@@ -73,10 +91,10 @@ def visualize(env, episode, period=None):
     GRAY  = (128, 128, 128)
 
     class Tank(pygame.sprite.Sprite):
-        def __init__(self, agent, init_pos):
+        def __init__(self, agent_id, init_pos):
             super(Tank, self).__init__()
-            self.id = agent.id
-            self.team = agent.team
+            self.id = agent_id
+            self.team = "blue" if agent_id in [0, 1] else "red"
             self.font = pygame.font.Font('freesansbold.ttf', 28)
 
             if self.team == 'blue':
@@ -97,16 +115,27 @@ def visualize(env, episode, period=None):
                 self.surf = self.font.render('T'+str(self.id), True, GRAY, BLUE)
             elif self.team == 'red':
                 self.surf = self.font.render('T'+str(self.id), True, GRAY, RED)
+    
+    class Obstacle(pygame.sprite.Sprite):
+        def __init__(self, position):
+            super(Obstacle, self).__init__()
+            self.position = position
+            x, y = position
+            self.rect = pygame.rect.Rect((x*STEP, y*STEP, STEP, STEP))
+        
+        def draw(self):
+            pygame.draw.rect(screen, BLACK, self.rect)
+
 
     if period is None:
         period = 75 # ms
     else:
         period = int(period * 1000) # in ms
 
-    def show_aiming(state, agent, action):
-        start = list(reversed([x*STEP+STEP//3 for x in state.position[agent]]))
-        stop  = list(reversed([x*STEP+STEP//3 for x in state.position[opponent]]))
-        line = pygame.draw.line(screen, WHITE, start, stop)
+    def show_aiming(state, agent, opponent):
+        start = list(reversed([x*STEP+STEP//3 for x in state[agent,    :2]]))
+        stop  = list(reversed([x*STEP+STEP//3 for x in state[opponent, :2]]))
+        line = pygame.draw.line(screen, BLACK, start, stop)
         pygame.display.flip()
 
         return line
@@ -126,10 +155,16 @@ def visualize(env, episode, period=None):
     
     # get the initial game state and initialze objects
     state = episode[0].state
+    n_agents = state.size(0) # n_rows == n_agents
     tanks = []
-    for agent in state.agents:
-        init_pos = state.position[agent]
-        tanks.append(Tank(agent, init_pos))
+    for agent_idx in range(n_agents):
+        init_pos = state[agent_idx, :2]
+        tanks.append(Tank(agent_idx, init_pos))
+    
+    # create terrain
+    obstacles = []
+    for x, y in env.terrain:
+        obstacles.append(Obstacle((x, y)))
 
     running = True
     idx, lines = 0, [None,] * len(env.agents)
@@ -145,29 +180,32 @@ def visualize(env, episode, period=None):
                 
                 exp = episode[idx]
                 state = exp.state
-                agents = exp.state.agents
-                actions = list((exp.actions.values()))
+                #agents = exp.state.agents
+                actions = [int(a) for a in exp.actions]
 
-                text = font.render(f'{[action.name for action in actions]} ', True, WHITE, BLUE)
+                text = font.render(f'{[action_names[action] for action in actions]} ', True, WHITE, BLUE)
                 
                 # draw lines between agents when aiming
-                for agent, action in zip(agents, actions):
-                    if state.alive[agent] == 0:
-                        tanks[agent.id].set_dead()
-                    if state.aim[agent] is not None:
-                        opponent = state.aim[agent]
-                        lines[agent.id] = show_aiming(state, agent, opponent) # uncomment to see aim lines
+                for agent_id in range(n_agents):
+                    if state[agent_id, 2] == 0:
+                        tanks[agent_id].set_dead()
+                    if state[agent_id, 4] > -1:
+                        opponent = state[agent_id, 4]
+                        lines[agent_id] = show_aiming(state, agent_id, int(opponent.item())) # uncomment to see aim lines
                     else:
-                        lines[agent.id] = None
+                        lines[agent_id] = None
 
                 for tank in tanks:
-                    agent = agents[tank.id]
-                    pos = state.position[agent]
+                    pos = state[tank.id, :2]
                     tank.update(pos)
+                
 
         screen.fill(WHITE)
         for tank in tanks:
             screen.blit(tank.surf, tank.rect)
+        for obstacle in obstacles:
+            obstacle.draw()
+        #    screen.blit(obstacle.surf, obstacle.rect) 
         screen.blit(text, text_rect)
         
         # update the display
@@ -176,11 +214,12 @@ def visualize(env, episode, period=None):
     
     # generate final screen
     print('game over')
-    for agent in exp.state.agents:
-        if exp.state.alive[agent] == 0:
-            tanks[agent.id].set_dead()
+    for agent_id in range(n_agents):
+        if exp.state[agent_id, 2] == 0:
+            tanks[agent_id].set_dead()
     for tank in tanks:
-        screen.blit(tank.surf, tank.rect)          
+        screen.blit(tank.surf, tank.rect)
+     
     pygame.display.update()
     input('Press any key to continue...')
 
@@ -192,7 +231,7 @@ def create_gif(path):
         images.append(imageio.imread(path+filename))
     imageio.mimsave(path+'movie.gif', images, 'GIF', duration=1)
 
-if __name__ == '__main__':
+def test_run():
     #plot(ids=[672, 675], keys=['length', 'reward'], filename='test')
     #plot_window(ids=[672, 675], keys=['reward', 'win_blue'], filename='test', window_size=200)
 
@@ -202,17 +241,30 @@ if __name__ == '__main__':
         713:    'REINFORCE'
     }
     runs = {31: 'IQL'}
-    plot_window(runs=runs, keys=['reward'], filename='test', window_size=500)
+    runs = {396: 'PG', 419: 'QMIX'}
+    plot_window(runs=runs, keys=['reward'], filename='pg_v_qmix_simple', window_size=200, limit_length=21000)
 
-    """
-    from utilities import generate_episode
-    from env import Environment, Agent
+def test_replay(model_file, mixer_file=None):
+    import yaml
+    from utilities import get_args
+    args = get_args(yaml.load(open('default_config.yaml', 'r')))
+    path = '/home/koen' + args.path
+    #from utilities import generate_episode
+    from env import RestrictedEnvironment, Agent
+    from qmix import QMIXAgent, generate_models, generate_episode
 
-    team_blue = [Agent(idx, "blue") for idx in range(args.n_friends)]
+    models = generate_models(args.n_inputs, args.n_actions, args)
+    models['model'].load_state_dict(torch.load(path+model_file))
+
+    team_blue = [QMIXAgent(idx, "blue", args) for idx in range(args.n_friends)]
+    for agent in team_blue:
+        agent.set_model(models)
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
     agents = team_blue + team_red
-    env = Environment(agents)
-    episode = generate_episode(env)
+    env = RestrictedEnvironment(agents, args)
+    episode = generate_episode(env, args)
     print(len(episode))
     visualize(env, episode)
-    """
+
+if __name__ == '__main__':
+    test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')

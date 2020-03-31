@@ -58,7 +58,7 @@ def transform_obs(observations):
             for visible in obs.enemy_visibility:
                 x[idx] = torch.tensor(int(visible))
                 idx += 1
-            x[idx]   = obs.ammo / args.init_ammo
+            x[idx]   = obs.ammo # / args.init_ammo
             x[idx+1] = obs.aim.id if obs.aim is not None else -1
             result.append(x)
         else:
@@ -76,13 +76,13 @@ def transform_state(state):
         states_v[agent_idx, 0] = state.position[agent][0] # x
         states_v[agent_idx, 1] = state.position[agent][1] # y
         states_v[agent_idx, 2] = state.alive[agent]
-        states_v[agent_idx, 3] = state.ammo[agent] / args.init_ammo
+        states_v[agent_idx, 3] = state.ammo[agent] #/ args.init_ammo
         states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
         #for idx, value in enumerate(state.visible):
         #    states_v[agent_idx, 4+idx] = int(value)
     return states_v
 
-def generate_episode(env, render=False, test_mode=False):
+def generate_episode(env, args, render=False, test_mode=False):
     """Generate episode; store observations and states as tensors
         render: renders every step of episode
         test_mode: picks best action, not based on epsilon-greedy
@@ -138,10 +138,11 @@ def generate_episode(env, render=False, test_mode=False):
     return episode
 
 class QMIXAgent(Agent):
-    def __init__(self, id, team):
+    def __init__(self, id, team, args):
         super().__init__(id, team)
         self.scheduler = LinearScheduler(start=1.0, stop=0.1,
                                          steps=args.scheduler_steps)
+        self.args = args                                        
 
     def set_model(self, models):
         self.model  = models['model']
@@ -152,9 +153,9 @@ class QMIXAgent(Agent):
                         if action not in unavail_actions]
         
         with torch.no_grad():
-            if args.model == 'FORWARD':
+            if self.args.model == 'FORWARD':
                 qvals = self.model(obs.unsqueeze(0))
-            elif args.model == 'RNN':
+            elif self.args.model == 'RNN':
                 qvals, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
             # remove unavailable actions
             for action in unavail_actions:
@@ -179,10 +180,10 @@ class MultiAgentController:
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
-        if args.use_mixer:
-            if args.mixer == "VDN":
+        if self.args.use_mixer:
+            if self.args.mixer == "VDN":
                 self.mixer        = VDNMixer()
-            elif args.mixer == "QMIX":
+            elif self.args.mixer == "QMIX":
                 self.mixer        = QMixer(args)
             self.target_mixer = copy.deepcopy(self.mixer)
             self.sync_networks()
@@ -240,7 +241,7 @@ class MultiAgentController:
         predicted_q_vals[unavail==1] = -1e10 # set unavailable actions to low value
         predicted_q_vals_max = predicted_q_vals.max(2)[0]
 
-        if args.use_mixer:
+        if self.args.use_mixer:
             current_q_tot   = self.mixer(current_q_vals_actions, states)
             predicted_q_tot = self.target_mixer(predicted_q_vals_max, next_states)
         else:
@@ -271,10 +272,10 @@ class MultiAgentController:
     
     def sync_networks(self):
         self.target.load_state_dict(self.model.state_dict())
-        if args.use_mixer:
+        if self.args.use_mixer:
             self.target_mixer.load_state_dict(self.mixer.state_dict())
         
-def generate_models(input_shape, n_actions):
+def generate_models(input_shape, n_actions, args):
     if args.model == 'FORWARD':
         model  = QMixForwardModel(input_shape=input_shape,
                                   n_actions=n_actions,
@@ -288,7 +289,7 @@ def generate_models(input_shape, n_actions):
 PRINT_INTERVAL = 10
 
 def train(args):
-    team_blue = [QMIXAgent(idx, "blue") for idx in range(args.n_friends)] 
+    team_blue = [QMIXAgent(idx, "blue", args) for idx in range(args.n_friends)] 
     team_red  = [Agent(idx + args.n_friends, "red") for idx in range(args.n_enemies)] 
 
     training_agents = team_blue
@@ -301,14 +302,14 @@ def train(args):
 
     args.n_actions = 6 + args.n_enemies # 6 fixed actions + 1 aim action per enemy
     args.n_inputs  = 4 + 3*(args.n_friends - 1) + 3*args.n_enemies + args.n_enemies# see process function in models.py
-    models = generate_models(args.n_inputs, args.n_actions)
+    models = generate_models(args.n_inputs, args.n_actions, args)
     for agent in training_agents:
         agent.set_model(models)
 
     buffer = ReplayBuffer(size=args.buffer_size)
     mac = MultiAgentController(env, training_agents, models)
     for step_idx in range(args.n_steps):
-        episode = generate_episode(env)
+        episode = generate_episode(env, args)
         buffer.insert_list(episode)
         if len(buffer) < args.batch_size:
             continue
@@ -323,7 +324,7 @@ def train(args):
         ex.log_scalar('loss', loss)
 
         if step_idx % args.log_interval == 0:
-            episode = generate_episode(env, test_mode=True)
+            episode = generate_episode(env, args, test_mode=True)
             if step_idx == 0:
                 episode[-1].rewards["blue"] = 0
                 episode[-1].rewards["red"]  = 1

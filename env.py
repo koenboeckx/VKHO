@@ -167,6 +167,7 @@ class Environment:
         self.register_agents(agents)
         self.state = State(self.agents, args)
         self.board_size = args.board_size
+        self.terrain = generate_terrain(self.board_size)
     
     def register_agents(self, agents):
         self.agents = agents

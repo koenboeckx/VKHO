@@ -5,7 +5,7 @@ env_type: 'restricted'        # 'normal' or 'restricted' (-> requires visibility
 board_size: 7             # size of the board
 init_ammo: 5              # initial ammo of a tank
 max_range: 5              # maximum firing range of a tank
-step_penalty: 0 #0.01        # penalty for taking a step
+step_penalty: 0.01        # penalty for taking a step
 max_episode_length: 100   # maximum length of an episode
 gamma: 0.9                # discount factor
 fixed_init_position: True # start from fixed initial position for all agents?

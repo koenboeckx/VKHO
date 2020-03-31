@@ -25,7 +25,7 @@ class Args:
     mixer =                 'QMIX'       # 'VDN' or 'QMIX' or 'QMIX_NS'
     model =                 'RNN'       # 'FORWARD' or 'RNN'
 
-    path = '/home/koen/Programming/VKHO/new_env/agent_dumps/'
+    path = '/home/koen/Programming/VKHO/agent_dumps/'
     fixed_init_position =   True
 
     n_iterations =          5
