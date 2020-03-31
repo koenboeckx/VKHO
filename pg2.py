@@ -7,15 +7,36 @@ from torch.nn import functional as F
 from torch.distributions import Categorical
 
 from env import *
-from utilities import Experience, generate_episode, get_args
-from models import ForwardModel, RNNModel
+from utilities import get_args
+from new_utilities import generate_episode, Experience
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment(f'PG')
+ex = Experiment(f'PG2')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
 ex.add_config('default_config.yaml')    # requires PyYAML                          
+
+class RNNModel(nn.Module): # TODO: add last action as input
+    def __init__(self, input_shape, n_actions):
+        super().__init__()
+        self.rnn_hidden_dim = args.n_hidden
+        self.fc1 = nn.Linear(input_shape, args.n_hidden) 
+        self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
+        self.fc2 = nn.Linear(args.n_hidden, n_actions)
+
+        self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
+    
+    def init_hidden(self):
+        return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
+    
+    def forward(self, inputs, hidden_state):
+        x = process(inputs)
+        x = F.relu(self.fc1(x))
+        h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
+        h = self.rnn(x, h_in)
+        q = self.fc2(h)
+        return q, h
 
 class PGAgent(Agent):
     def __init__(self, id, team):
@@ -175,131 +196,6 @@ def train():
     #for agent in training_agents:
     #    agent.save(home+args.path+f'RUN_{get_run_id()}_AGENT{agent.id}.p')
     torch.save(model.state_dict(), home+args.path+f'RUN_{get_run_id()}.torch')
-
-def train_agents(env, training_agents, args):
-    epi_len, nwins = 0, 0
-    n_episodes = 0
-    for step_idx in range(int(args.n_steps/args.n_episodes_per_step)):
-        batch = []
-        for _ in range(args.n_episodes_per_step):
-            episode = generate_episode(env)
-            n_episodes += 1 
-            batch.extend(episode)
-
-            epi_len += len(episode)
-            reward = episode[-1].rewards["blue"]
-
-            ex.log_scalar('length', len(episode))
-            ex.log_scalar('reward', reward)
-            ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
-            ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
-
-            if episode[-1].rewards["blue"] == 1:
-                nwins += 1
-
-        for agent in training_agents:
-            loss = agent.update(batch)
-            ex.log_scalar(f'loss{agent.id}', loss)
-
-        s  = f"Step {step_idx}: "
-        s += f"Average length: {epi_len/args.n_episodes_per_step:5.2f} - "
-        s += f"win ratio: {nwins/args.n_episodes_per_step:4.3f} - "
-        print(s)
-        epi_len, nwins = 0, 0
-
-    return training_agents
-
-def train_iteratively(args):
-    # iteration 1
-    team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
-    team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
-
-    training_agents = team_blue
-
-    agents = team_blue + team_red
-    env = Environment(agents)
-
-    args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
-    
-    model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-    
-    for agent in training_agents:
-        agent.set_model(model)
-
-    training_agents = train_agents(env, training_agents, args)
-    trained_model = copy.deepcopy(training_agents[0].model)
-    
-    for iteration in range(args.n_iterations):
-        args.n_steps = 10000 * (iteration + 2)
-        team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
-        team_red  = [PGAgent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
-
-        training_agents = team_blue
-
-        agents = team_blue + team_red
-        env = Environment(agents, args)
-
-        model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-        model.load_state_dict(trained_model.state_dict())
-        model.eval()
-        for agent in team_red:
-            agent.set_model(model)
-        
-        model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-        for agent in team_blue:
-            agent.set_model(model)
-        
-        training_agents = train_agents(env, training_agents, args)
-        trained_model = copy.deepcopy(training_agents[0].model)
-    torch.save(trained_model.state_dict(), args.path+f'RUN_{get_run_id()}.torch')
-
-
-
-def test_transferability(args, filename):
-    
-    team_blue = [Agent(idx, "blue") for idx in range(args.n_friends)]
-    team_red  = [PGAgent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
-    agents = team_blue + team_red
-    
-    if args.env_type == 'normal':
-        env = Environment(agents, args)
-    if args.env_type == 'restricted':
-        env = Environment2(agents, args)
-
-    args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
-    model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-    model.load_state_dict(torch.load(args.path + filename))
-    model.eval()
-    for agent in team_red:
-        agent.set_model(model)
-
-    epi_len, nwins = 0, 0
-    n_episodes = 0
-    for step_idx in range(40):
-        batch = []
-        for _ in range(args.n_episodes_per_step):
-            episode = generate_episode(env)
-            n_episodes += 1 
-            batch.extend(episode)
-
-            epi_len += len(episode)
-            reward = episode[-1].rewards["blue"]
-
-            ex.log_scalar('length', len(episode))
-            ex.log_scalar('reward', reward)
-            ex.log_scalar(f'win_blue', int(episode[-1].rewards["blue"] == 1))
-            ex.log_scalar(f'win_red', int(episode[-1].rewards["red"] == 1))
-
-            if episode[-1].rewards["blue"] == 1:
-                nwins += 1
-
-        s  = f"Step {step_idx}: "
-        s += f"Average length: {epi_len/args.n_episodes_per_step:5.2f} - "
-        s += f"win ratio: {nwins/args.n_episodes_per_step:4.3f} - "
-        print(s)
-        epi_len, nwins = 0, 0
 
 # -------------------------------------------------------------------------------------
 PRINT_INTERVAL = 100

@@ -199,7 +199,6 @@ def visualize(env, episode, period=None):
                     pos = state[tank.id, :2]
                     tank.update(pos)
                 
-
         screen.fill(WHITE)
         for tank in tanks:
             screen.blit(tank.surf, tank.rect)

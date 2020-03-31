@@ -13,6 +13,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from utilities import LinearScheduler, ReplayBuffer, get_args
+from new_utilities import generate_episode, Experience, transform_obs, transform_state
 from models import QMixModel, QMixForwardModel
 from mixers import VDNMixer, QMixer
 from env import Agent, Action, Observation
@@ -26,116 +27,6 @@ ex.observers.append(MongoObserver(url='localhost',
 ex.add_config('default_config.yaml')    # requires PyYAML 
 
 PRINT = True
-
-Experience = namedtuple('Experience', field_names = [
-    'state', 'actions', 'rewards', 'next_state', 'done', 'observations',
-    'hidden', 'next_obs', 'next_hidden','unavailable_actions'
-])
-
-def transform_obs(observations):
-    "transform observation into tensor for storage and use in model"
-    result = []
-    for agent in observations:
-        obs = observations[agent]
-        if isinstance(obs, Observation):
-            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility)# own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1), enemy_visibility (Ne)
-            x = torch.zeros((N)) 
-            x[0:2] = torch.tensor(obs.own_position)
-            idx = 2
-            for friend in obs.friends:
-                if friend:  # friend is alive
-                    x[idx:idx+3] = torch.tensor([1.,] + list(friend))
-                else:       # friend is dead
-                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
-                idx += 3
-            for enemy in obs.enemies:
-                if enemy:   # enemy is alive
-                    x[idx:idx+3] = torch.tensor([1.,] + list(enemy))
-                else:       # enemy is dead
-                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
-                idx += 3
-            # add enemy visibility                
-            for visible in obs.enemy_visibility:
-                x[idx] = torch.tensor(int(visible))
-                idx += 1
-            x[idx]   = obs.ammo # / args.init_ammo
-            x[idx+1] = obs.aim.id if obs.aim is not None else -1
-            result.append(x)
-        else:
-            raise ValueError(f"'obs' should be an Observation, and is a {type(obs)}")
-    return torch.stack(result)
-
-def transform_state(state):
-    """Transforms State into tensor"""
-    # TODO: automate n_enemies calculation -> only valid fot n_enemies = n_friends
-    n_agents  = len(state.agents)
-    #n_enemies = len(state.visible[state.agents[0]])
-    n_enemies = 0
-    states_v = torch.zeros(n_agents, 5 + n_enemies) # 5 = x, y, alive, ammo, aim, enemy visible ? (x n_enemies)
-    for agent_idx, agent in enumerate(state.agents):
-        states_v[agent_idx, 0] = state.position[agent][0] # x
-        states_v[agent_idx, 1] = state.position[agent][1] # y
-        states_v[agent_idx, 2] = state.alive[agent]
-        states_v[agent_idx, 3] = state.ammo[agent] #/ args.init_ammo
-        states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
-        #for idx, value in enumerate(state.visible):
-        #    states_v[agent_idx, 4+idx] = int(value)
-    return states_v
-
-def generate_episode(env, args, render=False, test_mode=False):
-    """Generate episode; store observations and states as tensors
-        render: renders every step of episode
-        test_mode: picks best action, not based on epsilon-greedy
-    """
-    episode = []
-    state, done = env.reset(), False
-    observations = transform_obs(env.get_all_observations())
-    n_steps = 0
-
-    for agent in env.agents:        # for agents where it matters,
-        agent.set_hidden_state()    # set the init hidden state of the RNN
-
-    while not done:
-        unavailable_actions = env.get_unavailable_actions()
-        
-        # compute action, keep record of hidden state of the agents to store in experience
-        actions, hidden, next_hidden = {}, [], []
-        for idx, agent in enumerate(env.agents):
-            hidden.append(agent.get_hidden_state())
-            actions[agent] = agent.act(observations[idx, :], test_mode=test_mode)
-            next_hidden.append(agent.get_hidden_state())
-
-        if render:
-            print(f"Step {n_steps}")
-            env.render()
-            print([action.name for action in actions.values()])
-
-        next_state, rewards, done, _ = env.step(actions)
-        next_obs = transform_obs(env.get_all_observations())
-        
-        # episodes that take long are not allowed and penalized for both agents
-        n_steps += 1
-        if n_steps > args.max_episode_length:
-            done = True
-            rewards = {'blue': -1, 'red': -1}
-
-        actions = torch.tensor([action.id for action in actions.values()])
-        unavail_actions = torch.zeros((args.n_agents, args.n_actions), dtype=torch.long)
-        for idx, agent in enumerate(env.agents):
-            act_ids = [act.id for act in unavailable_actions[agent]]
-            unavail_actions[idx, act_ids] = 1.
-
-        episode.append(Experience(transform_state(state), actions, rewards, 
-                                  transform_state(next_state), done, 
-                                  observations, torch.stack(hidden), 
-                                  next_obs, torch.stack(next_hidden),
-                                  unavail_actions))
-        state = next_state
-        observations = next_obs
-    
-    if render:
-        print(f"Game won by team {env.terminal(next_state)}")
-    return episode
 
 class QMIXAgent(Agent):
     def __init__(self, id, team, args):
@@ -175,11 +66,12 @@ class QMIXAgent(Agent):
         self.hidden_state = self.model.init_hidden()
 
 class MultiAgentController:
-    def __init__(self, env, agents, models):
+    def __init__(self, env, agents, models, args):
         self.env = env # check needed here?
         self.agents = agents
         self.model  = models["model"]
         self.target = models["target"]
+        self.args = args
         if self.args.use_mixer:
             if self.args.mixer == "VDN":
                 self.mixer        = VDNMixer()
@@ -307,7 +199,7 @@ def train(args):
         agent.set_model(models)
 
     buffer = ReplayBuffer(size=args.buffer_size)
-    mac = MultiAgentController(env, training_agents, models)
+    mac = MultiAgentController(env, training_agents, models, args)
     for step_idx in range(args.n_steps):
         episode = generate_episode(env, args)
         buffer.insert_list(episode)
