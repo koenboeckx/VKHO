@@ -31,78 +31,84 @@ class RNNModel(nn.Module): # TODO: add last action as input
         return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
     
     def forward(self, inputs, hidden_state):
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
         q = self.fc2(h)
         return q, h
 
 class PGAgent(Agent):
-    def __init__(self, id, team):
+    def __init__(self, id, team, args):
         super().__init__(id, team)
-        
+        self.args = args
+
     def set_model(self, model):
         self.model = model
     
-    def act(self, obs):
+    def act(self, obs, test_mode):
         unavail_actions = self.env.get_unavailable_actions()[self]
-        avail_actions = [action for action in self.actions
-                        if action not in unavail_actions]
                         
         with torch.no_grad():
-            if args.model == 'RNN':
-                logits, self.hidden_state = self.model([obs], self.hidden_state)
-                logits = logits[0]
-            else:
-                logits = self.model([obs])[0]
-            
-            for action in unavailable_actions:
+            logits, self.hidden_state = self.model(obs.unsqueeze(0), self.hidden_state)
+            logits = logits[0]
+            for action in unavail_actions:
                 logits[action.id] = -np.infty
-
             action_idx = Categorical(logits=logits).sample().item()
         return self.actions[action_idx]
-    
+
+    def set_hidden_state(self):
+        self.hidden_state = self.model.init_hidden()
+
+    def _build_inputs(self, batch):
+        states, actions, rewards, next_states, dones, observations,\
+            hidden, next_obs, next_hidden, unavailable_actions = zip(*batch)
+        
+        # transform all into format we require
+        states       = torch.stack(states)
+        next_states  = torch.stack(next_states)
+
+        observations = torch.stack(observations)[:, self.id, :]
+        next_obs     = torch.stack(next_obs)[:, self.id, :]
+        hidden       = torch.stack(hidden).squeeze()[:, self.id, :]
+        next_hidden  = torch.stack(next_hidden).squeeze()[:, self.id, :]
+        actions      = torch.stack(actions)[:, self.id]
+        rewards      = torch.tensor([reward['blue'] for reward in rewards]).unsqueeze(-1)
+        dones        = torch.tensor(dones, dtype=torch.float).unsqueeze(-1)
+        unavail      = torch.stack(unavailable_actions)[:, self.id, :]
+        return states, next_states, observations, next_obs, hidden, next_hidden,\
+             actions, rewards, dones, unavail
+
     def compute_returns(self, batch):
-        _, _, rewards, _, dones, _, _, _, _ = zip(*batch)
+        _, _, rewards, _, dones, _, _, _, _, _ = zip(*batch)
         rewards = [reward[self.team] for reward in rewards]
         returns, R = [], 0.0
         for reward, done in reversed(list(zip(rewards, dones))):
             if done:
                 R = 0.0
-            R = reward + args.gamma * R
+            R = reward + self.args.gamma * R
             returns.insert(0, R)
         return returns
 
-    def set_hidden_state(self):
-        self.hidden_state = self.model.init_hidden()
-
     def update(self, batch):
-        _, actions, rewards, _, _, observations, hidden, _, unavail = zip(*batch)
+        batch_size = len(batch)
+        states, next_states, observations, next_obs, hidden, next_hidden, actions,\
+            rewards, dones, unavail = self._build_inputs(batch)
+        expected_returns = torch.tensor(self.compute_returns(batch))
         
         # only perform updates on actions performed while alive
-        self_alive_idx = [idx for idx, obs in enumerate(observations) if obs[self].alive]
-        observations = [obs[self] for obs in observations]
+        alive_idx = observations[:, 2] == 1.
+        observations = observations[alive_idx]
+        hidden = hidden[alive_idx]
+        unavail = unavail[alive_idx]
+        actions = actions[alive_idx]
+        expected_returns = expected_returns[alive_idx]
 
-        rewards = [reward[self.team] for reward in rewards]
-        expected_returns = torch.tensor(self.compute_returns(batch))[self_alive_idx]
-        actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
-        hidden = [hidden_state[self] for hidden_state in hidden]
-
-        if args.model == 'RNN':
-            logits = torch.zeros(len(batch), args.n_actions)
-            for t in range(len(batch)):
-                logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
-        else:
-            logits = self.model(observations)
-
-        for idx in self_alive_idx:
-            unavail_actions = unavail[idx][self]
-            unavail_ids = [action.id for action in unavail_actions]
-            logits[idx][unavail_ids] = -999
+        logits, _ = self.model(observations, hidden) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+        # set unavailable actions to a very low value
+        logits[unavail == 1.] = -999
 
         log_prob = F.log_softmax(logits, dim=-1)
-        log_prob_act = log_prob[self_alive_idx, actions]
-        #log_prob_act_val = expected_returns * log_prob_act
+        log_prob_act = log_prob[range(len(observations)), actions]
         log_prob_act_val = (expected_returns - expected_returns.mean()) * log_prob_act
         loss = -log_prob_act_val.mean()
 
@@ -119,20 +125,8 @@ class PGAgent(Agent):
                 'grads_var':    np.var(grads),
         }
 
-def play_from_file(filename):
-    model = ForwardModel(input_shape=13, n_actions=7)
-    model.load_state_dict(torch.load(filename))
-
-    team_red  = [PGAgent(2, "red", model), PGAgent(3, "red", model)]
-    team_blue = [Agent(0, "blue"),  Agent(1, "blue")]
-
-    agents = team_blue + team_red
-
-    env = Environment(agents)
-    _ = generate_episode(env, render=True)
-
-def train():
-    team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
+def train(args):
+    team_blue = [PGAgent(idx, "blue", args) for idx in range(args.n_friends)]
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
     training_agents = team_blue
@@ -144,13 +138,10 @@ def train():
         env = RestrictedEnvironment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
+    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies + + args.n_enemies
     
     # setup model
-    if args.model == 'FORWARD':
-        model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
-    elif args.model == 'RNN':
-        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+    model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
     
     for agent in training_agents:
         agent.set_model(model)
@@ -161,7 +152,7 @@ def train():
     for step_idx in range(int(args.n_steps/args.n_episodes_per_step)):
         batch = []
         for _ in range(args.n_episodes_per_step):
-            episode = generate_episode(env)
+            episode = generate_episode(env, args)
             n_episodes += 1 
             batch.extend(episode)
 
@@ -207,13 +198,14 @@ def get_run_id(_run): # enables saving model with run id
 def run(_config):
     global args
     args = get_args(_config)
-    train()
+    train(args)
     #train_iteratively(args)
     #test_transferability(args, 'RUN_667.torch')
 
 """
 if __name__ == '__main__':
-    #filename = '/home/koen/Programming/VKHO/new_env/REINFORCE-2v2_7x7.torch'
-    #play_from_file(filename)
-    train_iteratively(args)
+    import yaml
+    from utilities import get_args
+    args = get_args(yaml.load(open('default_config.yaml', 'r')))
+    train(args)
 """
