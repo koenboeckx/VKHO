@@ -18,7 +18,7 @@ ex.observers.append(MongoObserver(url='localhost',
 ex.add_config('default_config.yaml')    # requires PyYAML                          
 
 class RNNModel(nn.Module): # TODO: add last action as input
-    def __init__(self, input_shape, n_actions):
+    def __init__(self, input_shape, n_actions, args):
         super().__init__()
         self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden) 
@@ -31,7 +31,6 @@ class RNNModel(nn.Module): # TODO: add last action as input
         return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
     
     def forward(self, inputs, hidden_state):
-        x = process(inputs)
         x = F.relu(self.fc1(x))
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
@@ -46,10 +45,10 @@ class PGAgent(Agent):
         self.model = model
     
     def act(self, obs):
-        if not obs.alive: # if not alive, do nothing
-            return Action(0, 'do_nothing', target=None)
-        
-        unavailable_actions = self.env.get_unavailable_actions()[self]
+        unavail_actions = self.env.get_unavailable_actions()[self]
+        avail_actions = [action for action in self.actions
+                        if action not in unavail_actions]
+                        
         with torch.no_grad():
             if args.model == 'RNN':
                 logits, self.hidden_state = self.model([obs], self.hidden_state)
