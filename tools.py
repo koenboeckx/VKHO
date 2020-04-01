@@ -15,7 +15,8 @@ from settings import args
 from env import RestrictedEnvironment, Agent
 from new_utilities import generate_episode
 from qmix import QMIXAgent, generate_models as gen_qmix_models
-from pg2 import PGAgent, RNNModel
+from pg import PGAgent
+from models import RNNModel
 
 action_names = {
     0: 'do nothing',
@@ -274,4 +275,4 @@ def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
 
 if __name__ == '__main__':
     #test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
-    test_replay('RUN_448_MODEL.torch', mixer_file=None, agent_type='reinforce', period=1)
+    test_replay('RUN_510_MODEL.torch', mixer_file=None, agent_type='reinforce', period=1)

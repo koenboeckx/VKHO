@@ -1,3 +1,4 @@
+import copy
 from collections import namedtuple
 import torch
 
@@ -19,11 +20,12 @@ def transform_obs(observations):
     for agent in observations:
         obs = observations[agent]
         if isinstance(obs, Observation):
-            N = 5 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility) 
+            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility) 
             x = torch.zeros((N)) 
             x[0:2] = torch.tensor(obs.own_position)
-            x[2]   = obs.alive
-            idx = 3
+            #x[2]   = obs.alive
+            #idx = 3
+            idx = 2
             for friend in obs.friends:
                 if friend:  # friend is alive
                     x[idx:idx+3] = torch.tensor([1.,] + list(friend[:2]))

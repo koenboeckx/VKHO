@@ -23,8 +23,7 @@ class RNNModel(nn.Module): # TODO: add last action as input
         self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden) 
         self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
-        self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
-        self.fc3 = nn.Linear(args.n_hidden, n_actions)
+        self.fc2 = nn.Linear(args.n_hidden, n_actions)
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
@@ -35,8 +34,7 @@ class RNNModel(nn.Module): # TODO: add last action as input
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
-        q = F.relu(self.fc2(h))
-        q = self.fc3(q)
+        q = self.fc2(h)
         return q, h
 
 class PGAgent(Agent):
@@ -48,8 +46,8 @@ class PGAgent(Agent):
         self.model = model
     
     def act(self, obs, test_mode):
-        if obs[2] == 0: # player is dead
-            return self.actions[0]
+        #if obs[2] == 0: # player is dead, thus do_nothing
+        #    return self.actions[0]
 
         unavail_actions = self.env.get_unavailable_actions()[self]
                         
@@ -97,24 +95,22 @@ class PGAgent(Agent):
     def update(self, batch):
         _, _, observations, _, hidden, _, actions,\
             _, _, unavail = self._build_inputs(batch)
-        expected_returns = torch.tensor(self.compute_returns(batch))
 
-        
+        logits, _ = self.model(observations, hidden)
+        # set unavailable actions to a very low value
+        logits[unavail == 1.] = -999
+
         # only perform updates on actions performed while alive
         alive_idx = observations[:, 2] == 1.
-        observations = observations[alive_idx]
-        hidden = hidden[alive_idx]
-        unavail = unavail[alive_idx]
         actions = actions[alive_idx]
-        expected_returns = expected_returns[alive_idx]
-        
-        logits, _ = self.model(observations, hidden)
 
+        expected_returns =  torch.tensor(self.compute_returns(batch))[alive_idx]
+        
         # set unavailable actions to a very low value
         logits[unavail == 1.] = -999
 
         log_prob = F.log_softmax(logits, dim=-1)
-        log_prob_act = log_prob[range(len(observations)), actions]
+        log_prob_act = log_prob[alive_idx, actions]
         log_prob_act_val = (expected_returns - expected_returns.mean()) * log_prob_act
         loss = -log_prob_act_val.mean()
 
@@ -144,7 +140,7 @@ def train(args):
         env = RestrictedEnvironment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 5 + 3*(args.n_friends-1) + 3*args.n_enemies + args.n_enemies
+    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies + args.n_enemies
     
     # setup model
     model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)

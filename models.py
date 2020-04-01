@@ -72,7 +72,7 @@ class IACRNNModel(nn.Module): # TODO: add last action as input
         return value, logits, h
 
 class RNNModel(nn.Module): # TODO: add last action as input
-    def __init__(self, input_shape, n_actions):
+    def __init__(self, input_shape, n_actions, args):
         super().__init__()
         self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden) 
@@ -131,24 +131,30 @@ class QMixForwardModel(nn.Module): # TODO: add last action as input
 
 def process(obs_list):
     "transform list of observations into tensor for use in model"
-    N = 4 + 3 * len(obs_list[0].friends) + 3 * len(obs_list[0].enemies) # own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1)
+    N = 4 + 3 * len(obs_list[0].friends) + 4 * len(obs_list[0].enemies)# own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1)
     x = torch.zeros((len(obs_list), N)) 
     if isinstance(obs_list[0], Observation):
         for obs_idx, obs in enumerate(obs_list):
             x[obs_idx, 0:2] = torch.tensor(obs.own_position)
+            #x[obs_idx, 2]   = obs.alive
             idx = 2
             for friend in obs.friends:
                 if friend:  # friend is alive
-                    x[obs_idx, idx:idx+3] = torch.tensor([1.,] + list(friend))
+                    x[obs_idx, idx:idx+3] = torch.tensor([1.,] + list(friend[:2]))
                 else:       # friend is dead
-                    x[obs_idx, idx:idx+3] = torch.tensor([0., 0., 0.])
+                    x[obs_idx, idx:idx+3] = torch.tensor([0.,] + list(friend[:2]))
                 idx += 3
             for enemy in obs.enemies:
-                if enemy:   # enemy is alive
-                    x[obs_idx, idx:idx+3] = torch.tensor([1.,] + list(enemy))
+                if enemy[2]:   # enemy is alive
+                    x[obs_idx, idx:idx+3] = torch.tensor([1.,] + list(enemy[:2]))
                 else:       # enemy is dead
-                    x[obs_idx, idx:idx+3] = torch.tensor([0., 0., 0.])
+                    x[obs_idx, idx:idx+3] = torch.tensor([0.,] + list(enemy[:2]))
                 idx += 3
+            
+            # add enemy visibility                
+            for visible in obs.enemy_visibility:
+                x[obs_idx, idx] = torch.tensor(int(visible))
+                idx += 1
             x[obs_idx, idx]   = obs.ammo / args.init_ammo
             x[obs_idx, idx+1] = obs.aim.id if obs.aim is not None else -1
     else:

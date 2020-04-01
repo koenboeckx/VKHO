@@ -20,11 +20,12 @@ ex.add_config('default_config.yaml')    # requires PyYAML
 class PGAgent(Agent):
     def __init__(self, id, team):
         super().__init__(id, team)
+        self.args = args
         
     def set_model(self, model):
         self.model = model
     
-    def act(self, obs):
+    def act(self, obs, test_mode=False):
         if not obs.alive: # if not alive, do nothing
             return Action(0, 'do_nothing', target=None)
         
@@ -68,7 +69,7 @@ class PGAgent(Agent):
         actions = torch.tensor([action[self].id for action in actions])[self_alive_idx]
         hidden = [hidden_state[self] for hidden_state in hidden]
 
-        if args.model == 'RNN':
+        if self.args.model == 'RNN':
             #logits = torch.zeros(len(batch), args.n_actions)
             #for t in range(len(batch)):
             #    logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
@@ -125,13 +126,13 @@ def train(args):
         env = RestrictedEnvironment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies
+    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies + args.n_enemies
     
     # setup model
     if args.model == 'FORWARD':
         model = ForwardModel(input_shape=args.n_inputs, n_actions=args.n_actions)
     elif args.model == 'RNN':
-        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions)
+        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
     
     for agent in training_agents:
         agent.set_model(model)
