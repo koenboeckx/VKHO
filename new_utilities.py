@@ -13,32 +13,36 @@ Experience = namedtuple('Experience', field_names = [
 ])
 
 def transform_obs(observations):
-    "transform observation into tensor for storage and use in model"
+    """transform observation into tensor  of size N for storage and use in model
+    N = own pos (2), alive, friends alive + pos (3*Nf) , enemies alive + pos (3*Ne), ammo (1), aim (1), enemy_visibility (Ne)"""
     result = []
     for agent in observations:
         obs = observations[agent]
         if isinstance(obs, Observation):
-            N = 4 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility)# own pos (2), friends alive + pos (3*Nf) , friends alive + pos (3*Ne), ammo (1), aim (1), enemy_visibility (Ne)
+            N = 5 + 3 * len(obs.friends) + 3 * len(obs.enemies) + len(obs.enemy_visibility) 
             x = torch.zeros((N)) 
             x[0:2] = torch.tensor(obs.own_position)
-            idx = 2
+            x[2]   = obs.alive
+            idx = 3
             for friend in obs.friends:
                 if friend:  # friend is alive
-                    x[idx:idx+3] = torch.tensor([1.,] + list(friend))
+                    x[idx:idx+3] = torch.tensor([1.,] + list(friend[:2]))
                 else:       # friend is dead
-                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                    x[idx:idx+3] = torch.tensor([0.,] + list(friend[:2]))
                 idx += 3
             for enemy in obs.enemies:
-                if enemy:   # enemy is alive
-                    x[idx:idx+3] = torch.tensor([1.,] + list(enemy))
+                if enemy[2]:   # enemy is alive
+                    x[idx:idx+3] = torch.tensor([1.,] + list(enemy[:2]))
                 else:       # enemy is dead
-                    x[idx:idx+3] = torch.tensor([0., 0., 0.])
+                    x[idx:idx+3] = torch.tensor([0.,] + list(enemy[:2]))
                 idx += 3
+            
             # add enemy visibility                
             for visible in obs.enemy_visibility:
                 x[idx] = torch.tensor(int(visible))
                 idx += 1
-            x[idx]   = obs.ammo # / args.init_ammo
+            
+            x[idx]   = obs.ammo / 5. #args.init_ammo
             x[idx+1] = obs.aim.id if obs.aim is not None else -1
             result.append(x)
         else:

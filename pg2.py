@@ -23,7 +23,8 @@ class RNNModel(nn.Module): # TODO: add last action as input
         self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden) 
         self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
-        self.fc2 = nn.Linear(args.n_hidden, n_actions)
+        self.fc2 = nn.Linear(args.n_hidden, args.n_hidden)
+        self.fc3 = nn.Linear(args.n_hidden, n_actions)
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
     
@@ -34,7 +35,8 @@ class RNNModel(nn.Module): # TODO: add last action as input
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
-        q = self.fc2(h)
+        q = F.relu(self.fc2(h))
+        q = self.fc3(q)
         return q, h
 
 class PGAgent(Agent):
@@ -46,6 +48,9 @@ class PGAgent(Agent):
         self.model = model
     
     def act(self, obs, test_mode):
+        if obs[2] == 0: # player is dead
+            return self.actions[0]
+
         unavail_actions = self.env.get_unavailable_actions()[self]
                         
         with torch.no_grad():
@@ -90,10 +95,10 @@ class PGAgent(Agent):
         return returns
 
     def update(self, batch):
-        batch_size = len(batch)
-        states, next_states, observations, next_obs, hidden, next_hidden, actions,\
-            rewards, dones, unavail = self._build_inputs(batch)
+        _, _, observations, _, hidden, _, actions,\
+            _, _, unavail = self._build_inputs(batch)
         expected_returns = torch.tensor(self.compute_returns(batch))
+
         
         # only perform updates on actions performed while alive
         alive_idx = observations[:, 2] == 1.
@@ -102,8 +107,9 @@ class PGAgent(Agent):
         unavail = unavail[alive_idx]
         actions = actions[alive_idx]
         expected_returns = expected_returns[alive_idx]
+        
+        logits, _ = self.model(observations, hidden)
 
-        logits, _ = self.model(observations, hidden) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
         # set unavailable actions to a very low value
         logits[unavail == 1.] = -999
 
@@ -138,7 +144,7 @@ def train(args):
         env = RestrictedEnvironment(agents, args)
 
     args.n_actions = 6 + args.n_enemies
-    args.n_inputs  = 4 + 3*(args.n_friends-1) + 3*args.n_enemies + + args.n_enemies
+    args.n_inputs  = 5 + 3*(args.n_friends-1) + 3*args.n_enemies + args.n_enemies
     
     # setup model
     model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
@@ -162,7 +168,7 @@ def train(args):
             ex.log_scalar('length', len(episode), step=n_episodes)
             ex.log_scalar('reward', reward, step=n_episodes)
             ex.log_scalar(f'win', int(episode[-1].rewards["blue"] == 1), step=n_episodes + 1)
-
+            
             if episode[-1].rewards["blue"] == 1:
                 nwins += 1
 
@@ -199,8 +205,6 @@ def run(_config):
     global args
     args = get_args(_config)
     train(args)
-    #train_iteratively(args)
-    #test_transferability(args, 'RUN_667.torch')
 
 """
 if __name__ == '__main__':

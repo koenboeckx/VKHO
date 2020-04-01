@@ -54,7 +54,7 @@ class ReplayBuffer:
         assert self.can_sample(N)
         return random.sample(self.content, N)
     
-def generate_episode(env, render=False):
+def generate_episode(env, args, render=False):
     episode = []
     state, done = env.reset(), False
     observations = env.get_all_observations()
@@ -83,7 +83,7 @@ def generate_episode(env, render=False):
         
         # episodes that take long are not allowed and penalized for both agents
         n_steps += 1
-        if n_steps > settings.Args.max_episode_length:
+        if n_steps > args.max_episode_length:
             done = True
             rewards = {'blue': -1, 'red': -1}
 

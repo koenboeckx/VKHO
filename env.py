@@ -72,10 +72,11 @@ class State:
         return position
 
 class Observation: 
-    """An Observation has 3 components:
+    """An Observation has 4 components:
         (1) own data: positions, alive, ammo, aim
         (2) friends:  relative position of friendly (living) forces in self.friends
         (3) enemies:  relative position of enemy (living) forces in self.enemies
+        (4) enemy_visibility: for each enemy, is he visible or not
     """
     # TODO: add visibility indicator for enemies
     def __init__(self, state, agent):
@@ -96,14 +97,14 @@ class Observation:
                 rel_pos = other_pos[0]-own_pos[0], other_pos[1]-own_pos[1]
                 if other.team == agent.team:    # same team -> friends
                     if not state.alive[other]:
-                        self.friends.append(False)
+                        self.friends.append(rel_pos + (False,))
                     else:
-                        self.friends.append(rel_pos)
+                        self.friends.append(rel_pos + (True,))
                 else:                           # other team -> enemies
                     if not state.alive[other]:
-                        self.enemies.append(False)
+                        self.enemies.append(rel_pos + (False,))
                     else:
-                        self.enemies.append(rel_pos)    
+                        self.enemies.append(rel_pos + (True,))    
                     self.enemy_visibility.append(state.visible[(agent, other)])  
         
     def __str__(self):

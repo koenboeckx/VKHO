@@ -12,6 +12,11 @@ import torch
 
 from settings import args
 
+from env import RestrictedEnvironment, Agent
+from new_utilities import generate_episode
+from qmix import QMIXAgent, generate_models as gen_qmix_models
+from pg2 import PGAgent, RNNModel
+
 action_names = {
     0: 'do nothing',
     1: 'fire',
@@ -243,19 +248,21 @@ def test_run():
     runs = {396: 'PG', 419: 'QMIX'}
     plot_window(runs=runs, keys=['reward'], filename='pg_v_qmix_simple', window_size=200, limit_length=21000)
 
-def test_replay(model_file, mixer_file=None):
+def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
     import yaml
     from utilities import get_args
     args = get_args(yaml.load(open('default_config.yaml', 'r')))
     path = '/home/koen' + args.path
     #from utilities import generate_episode
-    from env import RestrictedEnvironment, Agent
-    from qmix import QMIXAgent, generate_models, generate_episode
 
-    models = generate_models(args.n_inputs, args.n_actions, args)
-    models['model'].load_state_dict(torch.load(path+model_file))
-
-    team_blue = [QMIXAgent(idx, "blue", args) for idx in range(args.n_friends)]
+    if agent_type == 'qmix':
+        models = gen_qmix_models(args.n_inputs, args.n_actions, args)
+        models['model'].load_state_dict(torch.load(path+model_file))
+        team_blue = [QMIXAgent(idx, "blue", args) for idx in range(args.n_friends)]
+    elif agent_type == 'reinforce':
+        models = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
+        team_blue = [PGAgent(idx, "blue", args) for idx in range(args.n_friends)]
+    
     for agent in team_blue:
         agent.set_model(models)
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
@@ -263,7 +270,8 @@ def test_replay(model_file, mixer_file=None):
     env = RestrictedEnvironment(agents, args)
     episode = generate_episode(env, args)
     print(len(episode))
-    visualize(env, episode)
+    visualize(env, episode, period=period)
 
 if __name__ == '__main__':
-    test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
+    #test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
+    test_replay('RUN_448_MODEL.torch', mixer_file=None, agent_type='reinforce', period=1)

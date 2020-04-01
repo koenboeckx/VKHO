@@ -69,9 +69,10 @@ class PGAgent(Agent):
         hidden = [hidden_state[self] for hidden_state in hidden]
 
         if args.model == 'RNN':
-            logits = torch.zeros(len(batch), args.n_actions)
-            for t in range(len(batch)):
-                logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+            #logits = torch.zeros(len(batch), args.n_actions)
+            #for t in range(len(batch)):
+            #    logits[t, :], _ = self.model([observations[t]], hidden[t]) # TODO: since batch is sequence of episodes, is this the best use of hidden state?
+            logits, _ = self.model(observations, torch.stack(hidden).squeeze()) # works as well
         else:
             logits = self.model(observations)
 
@@ -109,9 +110,9 @@ def play_from_file(filename):
     agents = team_blue + team_red
 
     env = Environment(agents)
-    _ = generate_episode(env, render=True)
+    _ = generate_episode(env, args, render=True)
 
-def train():
+def train(args):
     team_blue = [PGAgent(idx, "blue") for idx in range(args.n_friends)]
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
 
@@ -141,7 +142,7 @@ def train():
     for step_idx in range(int(args.n_steps/args.n_episodes_per_step)):
         batch = []
         for _ in range(args.n_episodes_per_step):
-            episode = generate_episode(env)
+            episode = generate_episode(env, args)
             n_episodes += 1 
             batch.extend(episode)
 
@@ -254,8 +255,6 @@ def train_iteratively(args):
         trained_model = copy.deepcopy(training_agents[0].model)
     torch.save(trained_model.state_dict(), args.path+f'RUN_{get_run_id()}.torch')
 
-
-
 def test_transferability(args, filename):
     
     team_blue = [Agent(idx, "blue") for idx in range(args.n_friends)]
@@ -312,7 +311,7 @@ def get_run_id(_run): # enables saving model with run id
 def run(_config):
     global args
     args = get_args(_config)
-    train()
+    train(args)
     #train_iteratively(args)
     #test_transferability(args, 'RUN_667.torch')
 
