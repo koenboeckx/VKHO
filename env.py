@@ -11,7 +11,7 @@ import torch
 
 Action = namedtuple('Action', field_names = ['id', 'name', 'target'])
 
-def generate_terrain_(size):
+def generate_terrain(size):
     """returns list with position of obstacles.
     An obstacle blocks both passage and visibility"""
     terrain = []
@@ -21,7 +21,7 @@ def generate_terrain_(size):
     terrain.append((size//2, size//2))
     return terrain
 
-def generate_terrain(size):
+def generate_terrain_(size):
     return []
 
 class State:
