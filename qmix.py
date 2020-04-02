@@ -25,6 +25,7 @@ ex = Experiment(f'QMIX')
 ex.observers.append(MongoObserver(url='localhost',
                                   db_name='my_database'))
 ex.add_config('default_config.yaml')    # requires PyYAML 
+from profilehooks import profile
 
 PRINT = True
 
@@ -112,10 +113,10 @@ class MultiAgentController:
         states, next_states, observations, next_obs, hidden, next_hidden, actions,\
             rewards, dones, unavail = self._build_inputs(batch)
 
-        if args.model == 'FORWARD':
+        if self.args.model == 'FORWARD':
             current_q_vals   = self.model(observations)
             predicted_q_vals = self.target(next_obs)
-        elif args.model == 'RNN':
+        elif self.args.model == 'RNN':
             observations = observations.reshape(batch_size * len(self.agents), -1)
             next_obs = next_obs.reshape(batch_size * len(self.agents), -1)
             hidden = hidden.reshape(batch_size * len(self.agents), -1)
@@ -140,15 +141,15 @@ class MultiAgentController:
             current_q_tot   = current_q_vals_actions
             predicted_q_tot = predicted_q_vals_max
 
-        target = rewards + args.gamma * (1. - dones) * predicted_q_tot
+        target = rewards + self.args.gamma * (1. - dones) * predicted_q_tot
         
         # check shapes #TODO: remove when done
-        if args.use_mixer: # all Q values are squashed into one Qtot
-            assert target.shape == torch.Size([args.batch_size, 1])
-            assert current_q_tot.shape == torch.Size([args.batch_size, 1])
+        if self.args.use_mixer: # all Q values are squashed into one Qtot
+            assert target.shape == torch.Size([self.args.batch_size, 1])
+            assert current_q_tot.shape == torch.Size([self.args.batch_size, 1])
         else:
-            assert target.shape == torch.Size([args.batch_size, len(self.agents)])
-            assert current_q_tot.shape == torch.Size([args.batch_size, len(self.agents)])
+            assert target.shape == torch.Size([self.args.batch_size, len(self.agents)])
+            assert current_q_tot.shape == torch.Size([self.args.batch_size, len(self.agents)])
         
         ex.log_scalar('mean_q', current_q_tot.mean().item())
 
@@ -243,6 +244,7 @@ def get_run_id(_run): # enables saving model with run id
     return _run._id
 
 @ex.automain
+@profile
 def run(_config):
     global args
     args = get_args(_config)

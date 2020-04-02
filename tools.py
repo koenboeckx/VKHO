@@ -141,10 +141,8 @@ def visualize(env, episode, period=None):
     def show_aiming(state, agent, opponent):
         start = list(reversed([x*STEP+STEP//3 for x in state[agent,    :2]]))
         stop  = list(reversed([x*STEP+STEP//3 for x in state[opponent, :2]]))
-        line = pygame.draw.line(screen, BLACK, start, stop)
-        pygame.display.flip()
 
-        return line
+        return start, stop
     
     SCREEN_HEIGHT = STEP * env.board_size
     SCREEN_WIDTH  = STEP * env.board_size
@@ -173,7 +171,7 @@ def visualize(env, episode, period=None):
         obstacles.append(Obstacle((x, y)))
 
     running = True
-    idx, lines = 0, [None,] * len(env.agents)
+    idx, lines = 0, []
     while running:
         for event in pygame.event.get():    # global event handling loop
             if event.type == pygame.QUIT:   # did the user click the window close button?
@@ -192,14 +190,13 @@ def visualize(env, episode, period=None):
                 text = font.render(f'{[action_names[action] for action in actions]} ', True, WHITE, BLUE)
                 
                 # draw lines between agents when aiming
+                lines = []
                 for agent_id in range(n_agents):
                     if state[agent_id, 2] == 0:
                         tanks[agent_id].set_dead()
-                    if state[agent_id, 4] > -1:
+                    elif state[agent_id, 4] > -1:
                         opponent = state[agent_id, 4]
-                        lines[agent_id] = show_aiming(state, agent_id, int(opponent.item())) # uncomment to see aim lines
-                    else:
-                        lines[agent_id] = None
+                        lines.append(show_aiming(state, agent_id, int(opponent.item()))) # uncomment to see aim lines
 
                 for tank in tanks:
                     pos = state[tank.id, :2]
@@ -210,6 +207,10 @@ def visualize(env, episode, period=None):
             screen.blit(tank.surf, tank.rect)
         for obstacle in obstacles:
             obstacle.draw()
+        for start, stop in lines:
+            line = pygame.draw.line(screen, BLACK, start, stop)
+            pygame.display.flip()
+       
         #    screen.blit(obstacle.surf, obstacle.rect) 
         screen.blit(text, text_rect)
         
@@ -275,4 +276,4 @@ def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
 
 if __name__ == '__main__':
     #test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
-    test_replay('RUN_526_MODEL.torch', mixer_file=None, agent_type='reinforce', period=.2)
+    test_replay('RUN_536_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)

@@ -15,7 +15,9 @@ from sacred.observers import MongoObserver
 ex = Experiment(f'PG2')
 ex.observers.append(MongoObserver(url='localhost',
                                 db_name='my_database'))
-ex.add_config('default_config.yaml')    # requires PyYAML                          
+ex.add_config('default_config.yaml')    # requires PyYAML 
+
+from profilehooks import profile
 
 class RNNModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions, args):
@@ -197,6 +199,7 @@ def get_run_id(_run): # enables saving model with run id
     return _run._id
 
 @ex.automain
+@profile
 def run(_config):
     global args
     args = get_args(_config)
