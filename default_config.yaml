@@ -25,8 +25,11 @@ gamma: 0.99               # discount factor
 model: 'RNN'              # type of neural network: 'FORWARD' or 'RNN
 n_hidden: 128             # number of hidden layers
 lr: 0.0001                # learning rate for ADAM
-n_iterations: 5            # number of iterations for transfer learning
 normalize_states: False    # should state vectors be normalized?
+
+# --- transfer learning
+n_iterations: 5           # number of iterations for transfer learning
+reset_model: False        # reset model of learners to random model        
 
 # --- policy gradient parameters
 beta: 0.01                # entropy loss coefficient

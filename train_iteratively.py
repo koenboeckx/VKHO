@@ -90,12 +90,11 @@ def train_iteratively(args, agent_type):
         for agent in team_red:
             agent.set_model(opponent_model)
         
-        """
-        model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions,
-                         args=args)
-        for agent in team_blue:
-            agent.set_model(model)
-        """
+        if args.reset_model:
+            model = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions,
+                            args=args)
+            for agent in team_blue:
+                agent.set_model(model)
         
         training_agents = train_agents(env, training_agents, args)
         trained_model = copy.deepcopy(training_agents[0].model)
