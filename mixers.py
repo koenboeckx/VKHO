@@ -15,7 +15,7 @@ class QMixer(nn.Module):
         # Hypernetwork
         self.n_trainers = args.n_friends # assumes all friends are learning
         self.embed_dim  = args.embed_dim
-        self.state_dim = 5 * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
+        self.state_dim = (5 + args.n_enemies) * args.n_agents # every agent is represented by 5 values: x, y, alive, ammo, aim
         self.HW1 = nn.Linear(self.state_dim, self.embed_dim * self.n_trainers)
         self.Hb1 = nn.Linear(self.state_dim, self.embed_dim)
         self.HW2 = nn.Linear(self.state_dim, self.embed_dim)

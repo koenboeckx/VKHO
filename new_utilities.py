@@ -55,17 +55,19 @@ def transform_state(state):
     """Transforms State into tensor"""
     # TODO: automate n_enemies calculation -> only valid fot n_enemies = n_friends
     n_agents  = len(state.agents)
-    #n_enemies = len(state.visible[state.agents[0]])
-    n_enemies = 0
+    n_enemies = n_agents // 2 # TODO: improve this
     states_v = torch.zeros(n_agents, 5 + n_enemies) # 5 = x, y, alive, ammo, aim, enemy visible ? (x n_enemies)
     for agent_idx, agent in enumerate(state.agents):
         states_v[agent_idx, 0] = state.position[agent][0] # x
         states_v[agent_idx, 1] = state.position[agent][1] # y
         states_v[agent_idx, 2] = state.alive[agent]
-        states_v[agent_idx, 3] = state.ammo[agent] #/ args.init_ammo
+        states_v[agent_idx, 3] = state.ammo[agent] / 5 # args.ammo
         states_v[agent_idx, 4] = -1 if state.aim[agent] is None else state.aim[agent].id
-        #for idx, value in enumerate(state.visible):
-        #    states_v[agent_idx, 4+idx] = int(value)
+        idx = 5
+        for other in state.agents:
+            if (agent, other) in state.visible:
+                states_v[agent_idx, idx] = int(state.visible[(agent, other)])
+                idx += 1
     return states_v
 
 def generate_episode(env, args, render=False, test_mode=False):
