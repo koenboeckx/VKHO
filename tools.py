@@ -276,4 +276,4 @@ def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
 
 if __name__ == '__main__':
     #test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
-    test_replay('RUN_536_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)
+    test_replay('RUN_890_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)

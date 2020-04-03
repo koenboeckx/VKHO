@@ -199,7 +199,7 @@ def get_run_id(_run): # enables saving model with run id
     return _run._id
 
 @ex.automain
-@profile
+#@profile
 def run(_config):
     global args
     args = get_args(_config)
