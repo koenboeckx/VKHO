@@ -151,14 +151,14 @@ class MultiAgentController:
             assert target.shape == torch.Size([self.args.batch_size, len(self.agents)])
             assert current_q_tot.shape == torch.Size([self.args.batch_size, len(self.agents)])
         
-        ex.log_scalar('mean_q', current_q_tot.mean().item())
+        #ex.log_scalar('mean_q', current_q_tot.mean().item())
 
         td_error = current_q_tot - target.detach()
         loss = (td_error ** 2).mean()
 
         self.optimizer.zero_grad()
         loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters, args.clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters, self.args.clip)
         self.optimizer.step()
 
         return loss.item()
