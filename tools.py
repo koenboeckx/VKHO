@@ -248,7 +248,8 @@ def test_run():
     }
     runs = {31: 'IQL'}
     runs = {396: 'PG', 419: 'QMIX'}
-    plot_window(runs=runs, keys=['reward'], filename='pg_v_qmix_simple', window_size=200, limit_length=21000)
+    runs = {908: 'PG'}
+    plot_window(runs=runs, keys=['win_blue', 'win_red'], filename='iterative', window_size=400)
 
 def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
     import yaml
@@ -275,5 +276,5 @@ def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
     visualize(env, episode, period=period)
 
 if __name__ == '__main__':
-    #test_replay('RUN_428_MODEL.torch', mixer_file='RUN_428_MIXER.torch')
-    test_replay('RUN_890_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)
+    #test_replay('RUN_890_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)
+    test_run()

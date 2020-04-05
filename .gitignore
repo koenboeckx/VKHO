@@ -32,3 +32,5 @@ new_env/agent_dumps/*
 new_env/profile_iql.txt
 new_env/iql_profile.py
 *.txt
+agent_dumps/*
+
