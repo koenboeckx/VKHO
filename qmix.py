@@ -175,8 +175,8 @@ def generate_models(input_shape, n_actions, args):
                                   n_hidden=args.n_hidden)
         target = copy.deepcopy(model)
     elif args.model == 'RNN':
-        model  = QMixModel(input_shape=input_shape, n_actions=n_actions)
-        target = QMixModel(input_shape=input_shape, n_actions=n_actions)
+        model  = QMixModel(input_shape=input_shape, n_actions=n_actions, args=args)
+        target = QMixModel(input_shape=input_shape, n_actions=n_actions, args=args)
     return {"model": model, "target": target}
 
 PRINT_INTERVAL = 10
