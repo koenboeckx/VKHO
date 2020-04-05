@@ -22,17 +22,27 @@ from profilehooks import profile
 class RNNModel(nn.Module): # TODO: add last action as input
     def __init__(self, input_shape, n_actions, args):
         super().__init__()
+        self.add_terrain = args.add_terrain
+        if args.add_terrain:
+            terrain = generate_terrain(args.board_size)
+            self.terrain = torch.zeros(args.board_size**2)
+            for x, y in terrain:
+                self.terrain[y + args.board_size*x] = 1.0
+            input_shape += args.board_size**2
         self.rnn_hidden_dim = args.n_hidden
         self.fc1 = nn.Linear(input_shape, args.n_hidden) 
         self.rnn = nn.GRUCell(args.n_hidden, args.n_hidden)
         self.fc2 = nn.Linear(args.n_hidden, n_actions)
 
         self.optimizer = torch.optim.Adam(self.parameters(), args.lr)
-    
+        
     def init_hidden(self):
         return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_()
     
     def forward(self, inputs, hidden_state):
+        if self.add_terrain:
+            bs = inputs.size(0)
+            inputs = torch.cat((inputs, self.terrain.repeat(bs, 1)), dim=1)
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
