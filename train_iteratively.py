@@ -133,10 +133,10 @@ def train_iteratively(args, agent_type):
             opponent_model.load_state_dict(trained_model.state_dict())
             opponent_model.eval()                                
         elif agent_type == 'qmix':
-            model = QMixModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
-            model.load_state_dict(trained_model.state_dict())
+            model_ = QMixModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
+            model_.load_state_dict(trained_model.state_dict())
             target = QMixModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
-            opponent_model = {"model": model, "target": target}                            
+            opponent_model = {"model": model_, "target": target}                            
         
 
         for agent in team_red:
