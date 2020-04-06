@@ -7,7 +7,7 @@ init_ammo: 5              # initial ammo of a tank
 max_range: 5              # maximum firing range of a tank
 step_penalty: 0.01        # penalty for taking a step
 max_episode_length: 100   # maximum length of an episode
-gamma: 0.99               # discount factor
+gamma: 0.8               # discount factor
 fixed_init_position: True # start from fixed initial position for all agents?
 n_friends: 2              # number of friends (team "blue")
 n_enemies: 2              # number of enemies (team "red")

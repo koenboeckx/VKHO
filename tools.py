@@ -14,7 +14,7 @@ from settings import args
 
 from env import RestrictedEnvironment, Agent
 from new_utilities import generate_episode
-from qmix import QMIXAgent, generate_models as gen_qmix_models
+from qmix import QMIXAgent, QMixModel
 from pg2 import PGAgent, RNNModel
 #from models import RNNModel
 
@@ -73,7 +73,7 @@ def plot_window(runs, keys, window_size=100, filename=None, show=True, limit_len
             ax.fill_between(x, y_mean-y_std, y_mean+y_std, alpha=0.2)
 
             plt.xlabel('episode')
-    plt.legend(loc='lower right')
+    plt.legend(loc='upper left')
     plt.grid()
     if filename is not None:
         plt.savefig(args.path+filename)
@@ -203,13 +203,13 @@ def visualize(env, episode, period=None):
                     tank.update(pos)
                 
         screen.fill(WHITE)
+        for start, stop in lines:
+            line = pygame.draw.line(screen, BLACK, start, stop)
+            pygame.display.flip()
         for tank in tanks:
             screen.blit(tank.surf, tank.rect)
         for obstacle in obstacles:
             obstacle.draw()
-        for start, stop in lines:
-            line = pygame.draw.line(screen, BLACK, start, stop)
-            pygame.display.flip()
        
         #    screen.blit(obstacle.surf, obstacle.rect) 
         screen.blit(text, text_rect)
@@ -248,22 +248,30 @@ def test_run():
     }
     runs = {31: 'IQL'}
     runs = {396: 'PG', 419: 'QMIX'}
-    runs = {908: 'PG'}
-    plot_window(runs=runs, keys=['win_blue', 'win_red'], filename='iterative', window_size=400)
+    runs = {600: 'QMIX'}
+    plot_window(runs=runs, keys=['win_blue', 'win_red'], filename='iterative_qmix', window_size=400)
 
-def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
+def test_replay(model_file, agent_type='qmix', period=None):
     import yaml
     from utilities import get_args
     args = get_args(yaml.load(open('default_config.yaml', 'r')))
     path = '/home/koen' + args.path
-    #from utilities import generate_episode
+
+    args.gamma = 0.8
+    args.max_episode_length = 30
+    args.step_penalty = 0.05
+    args.a_terrain = True
 
     if agent_type == 'qmix':
-        models = gen_qmix_models(args.n_inputs, args.n_actions, args)
-        models['model'].load_state_dict(torch.load(path+model_file))
+        model  = QMixModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
+        target = QMixModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
+        model.load_state_dict(torch.load(path+model_file))
+        target.load_state_dict(torch.load(path+model_file))
+        models = {"model": model, "target": target}
         team_blue = [QMIXAgent(idx, "blue", args) for idx in range(args.n_friends)]
     elif agent_type == 'reinforce':
         models = RNNModel(input_shape=args.n_inputs, n_actions=args.n_actions, args=args)
+        models.load_state_dict(torch.load(path+model_file))
         team_blue = [PGAgent(idx, "blue", args) for idx in range(args.n_friends)]
     
     for agent in team_blue:
@@ -273,8 +281,17 @@ def test_replay(model_file, mixer_file=None, agent_type='qmix', period=None):
     env = RestrictedEnvironment(agents, args)
     episode = generate_episode(env, args)
     print(len(episode))
-    visualize(env, episode, period=period)
+    if len(episode) < 6:
+        visualize(env, episode, period=period)
+    winner = 'blue' if episode[-1].rewards['blue'] == 1 else 'red'
+    return winner
 
 if __name__ == '__main__':
-    #test_replay('RUN_890_MODEL.torch', mixer_file=None, agent_type='qmix', period=.2)
-    test_run()
+    n_steps = 100
+    n_wins = 0
+    for _ in range(n_steps):
+        winner = test_replay('RUN_597_MODEL.torch', agent_type='reinforce', period=1.0)
+        if winner == 'blue':
+            n_wins += 1
+    print(f'win percentage = {n_wins/n_steps * 100}')
+    #test_run()
