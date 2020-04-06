@@ -49,7 +49,15 @@ def transform_obs(observations):
             result.append(x)
         else:
             raise ValueError(f"'obs' should be an Observation, and is a {type(obs)}")
-    return torch.stack(result)
+    try:
+        result = torch.stack(result)
+    except: # TODO: this is an emergency solution to handle n_friends != n_enemies
+        agents = list(observations.keys())
+        obs = observations[agents[0]]
+        result =  result[:len(obs.friends)+1]
+        result += [torch.zeros_like(result[0]), ] * len(obs.enemies)
+        result = torch.stack(result)
+    return result
 
 def transform_state(state):
     """Transforms State into tensor"""
@@ -112,12 +120,19 @@ def generate_episode(env, args, render=False, test_mode=False):
         for idx, agent in enumerate(env.agents):
             act_ids = [act.id for act in unavailable_actions[agent]]
             unavail_actions[idx, act_ids] = 1.
-
+        
         episode.append(Experience(transform_state(state), actions, rewards, 
                                   transform_state(next_state), done, 
                                   observations, torch.stack(hidden), 
                                   next_obs, torch.stack(next_hidden),
                                   unavail_actions))
+        """
+        episode.append(Experience(None, actions, rewards, 
+                                None, done, 
+                                observations, torch.stack(hidden), 
+                                next_obs, torch.stack(next_hidden),
+                                unavail_actions))
+        """                                  
         state = next_state
         observations = next_obs
     

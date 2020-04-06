@@ -73,7 +73,7 @@ def plot_window(runs, keys, window_size=100, filename=None, show=True, limit_len
             ax.fill_between(x, y_mean-y_std, y_mean+y_std, alpha=0.2)
 
             plt.xlabel('episode')
-    plt.legend(loc='upper left')
+    plt.legend(loc='lower left')
     plt.grid()
     if filename is not None:
         plt.savefig(args.path+filename)
@@ -141,8 +141,9 @@ def visualize(env, episode, period=None):
     def show_aiming(state, agent, opponent):
         start = list(reversed([x*STEP+STEP//3 for x in state[agent,    :2]]))
         stop  = list(reversed([x*STEP+STEP//3 for x in state[opponent, :2]]))
+        color = BLUE if agent in range(args.n_friends) else RED
 
-        return start, stop
+        return start, stop, color
     
     SCREEN_HEIGHT = STEP * env.board_size
     SCREEN_WIDTH  = STEP * env.board_size
@@ -171,7 +172,7 @@ def visualize(env, episode, period=None):
         obstacles.append(Obstacle((x, y)))
 
     running = True
-    idx, lines = 0, []
+    idx, lines = -1, []
     while running:
         for event in pygame.event.get():    # global event handling loop
             if event.type == pygame.QUIT:   # did the user click the window close button?
@@ -203,8 +204,8 @@ def visualize(env, episode, period=None):
                     tank.update(pos)
                 
         screen.fill(WHITE)
-        for start, stop in lines:
-            line = pygame.draw.line(screen, BLACK, start, stop)
+        for start, stop, color in lines:
+            line = pygame.draw.line(screen, color, start, stop)
             pygame.display.flip()
         for tank in tanks:
             screen.blit(tank.surf, tank.rect)
@@ -216,7 +217,7 @@ def visualize(env, episode, period=None):
         
         # update the display
         pygame.display.update()
-        pygame.image.save(screen, f"{args.path}screenshot0{idx}.png")
+        pygame.image.save(screen, f"{args.path}screenshot0{idx+1}.png")
     
     # generate final screen
     print('game over')
@@ -249,7 +250,11 @@ def test_run():
     runs = {31: 'IQL'}
     runs = {396: 'PG', 419: 'QMIX'}
     runs = {600: 'QMIX'}
-    plot_window(runs=runs, keys=['win_blue', 'win_red'], filename='iterative_qmix', window_size=400)
+    runs = {619: 'PG'}
+    runs = {582: 'QMix'}
+    runs = {534: 'PG', 626: 'QMix'}
+    runs = {642: 'PG'}
+    plot_window(runs=runs, keys=['length'], filename='pg_length_2v3', window_size=400)
 
 def test_replay(model_file, agent_type='qmix', period=None):
     import yaml
@@ -279,19 +284,14 @@ def test_replay(model_file, agent_type='qmix', period=None):
     team_red  = [Agent(args.n_friends + idx, "red") for idx in range(args.n_enemies)]
     agents = team_blue + team_red
     env = RestrictedEnvironment(agents, args)
-    episode = generate_episode(env, args)
-    print(len(episode))
-    if len(episode) < 6:
-        visualize(env, episode, period=period)
-    winner = 'blue' if episode[-1].rewards['blue'] == 1 else 'red'
-    return winner
+    while True:
+        episode = generate_episode(env, args)
+        print(len(episode))
+        if len(episode) < 6:
+            visualize(env, episode, period=period)
+            break
+
 
 if __name__ == '__main__':
-    n_steps = 100
-    n_wins = 0
-    for _ in range(n_steps):
-        winner = test_replay('RUN_597_MODEL.torch', agent_type='reinforce', period=1.0)
-        if winner == 'blue':
-            n_wins += 1
-    print(f'win percentage = {n_wins/n_steps * 100}')
-    #test_run()
+    #test_replay('RUN_597_MODEL.torch', agent_type='reinforce', period=1.0) 
+    test_run()
