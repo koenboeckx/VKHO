@@ -10,7 +10,7 @@ max_episode_length: 100   # maximum length of an episode
 gamma: 0.8               # discount factor
 fixed_init_position: True # start from fixed initial position for all agents?
 n_friends: 2              # number of friends (team "blue")
-n_enemies: 3              # number of enemies (team "red")
+n_enemies: 2              # number of enemies (team "red")
 add_terrain: True         # add terrain information to input tensor
 
 # --- Logging options ---

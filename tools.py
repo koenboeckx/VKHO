@@ -217,7 +217,7 @@ def visualize(env, episode, period=None):
         
         # update the display
         pygame.display.update()
-        pygame.image.save(screen, f"{args.path}screenshot0{idx+1}.png")
+        pygame.image.save(screen, f"{args.path}screenshot0{idx+2}.png")
     
     # generate final screen
     print('game over')
@@ -228,6 +228,7 @@ def visualize(env, episode, period=None):
         screen.blit(tank.surf, tank.rect)
      
     pygame.display.update()
+    pygame.image.save(screen, f"{args.path}screenshot0{idx+1}.png")
     input('Press any key to continue...')
 
 def create_gif(path):
